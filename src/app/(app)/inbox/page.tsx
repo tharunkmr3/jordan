@@ -177,13 +177,6 @@ function DetailSection({ title, children, defaultOpen = true, action }: { title:
   )
 }
 
-function DetailPanel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="rounded-lg bg-white ring-1 ring-[#ebebeb] overflow-hidden divide-y divide-[#f0f0f0]">
-      {children}
-    </div>
-  )
-}
 
 // ---------------------------------------------------------------------------
 // Component
@@ -385,11 +378,11 @@ export default function InboxPage() {
 
 
   return (
-    <div className="flex h-full bg-white overflow-hidden">
+    <div className="flex h-full bg-[#f5f5f5] overflow-hidden gap-3 p-3">
       {/* ============================================================= */}
       {/* LEFT: Conversation List */}
       {/* ============================================================= */}
-      <div className="flex w-[320px] flex-shrink-0 flex-col border-r border-[#ebebeb] bg-white">
+      <div className="flex w-[320px] flex-shrink-0 flex-col bg-white rounded-xl ring-1 ring-[#ebebeb] overflow-hidden">
         {/* Filter tabs */}
         <div className="flex items-center gap-1 px-3 py-2.5 border-b border-[#ebebeb]">
           {(['all', 'active', 'escalated'] as const).map((t) => (
@@ -499,7 +492,7 @@ export default function InboxPage() {
       {/* ============================================================= */}
       {/* CENTER: Conversation */}
       {/* ============================================================= */}
-      <div className="flex flex-1 flex-col bg-white min-w-0 min-h-0 h-full">
+      <div className="flex flex-1 flex-col bg-white min-w-0 min-h-0 rounded-xl ring-1 ring-[#ebebeb] overflow-hidden">
         {!selectedId ? (
           <div className="flex flex-1 items-center justify-center">
             <div className="text-center">
@@ -671,7 +664,7 @@ export default function InboxPage() {
       {/* RIGHT: Details */}
       {/* ============================================================= */}
       {detail?.contact && (
-        <div className="flex w-[320px] flex-shrink-0 flex-col border-l border-[#ebebeb] bg-[#f5f5f5]">
+        <div className="flex w-[320px] flex-shrink-0 flex-col bg-white rounded-xl ring-1 ring-[#ebebeb] overflow-hidden">
           {/* Tabs */}
           <div className="flex bg-white border-b border-[#ebebeb]">
             {(['details', 'copilot'] as const).map((t) => (
@@ -689,9 +682,7 @@ export default function InboxPage() {
 
           {rightTab === 'details' ? (
             <ScrollArea className="flex-1">
-              <div className="p-3 space-y-3">
-                {/* Panel 1: Conversation */}
-                <DetailPanel>
+              <div className="divide-y divide-[#f0f0f0]">
                   <DetailSection title="Assignee">
                     <div className="flex items-center gap-2 py-1">
                       <Avatar className="h-6 w-6"><AvatarFallback className="bg-[#0a0a0a] text-[9px] text-white">{getInitials(userName)}</AvatarFallback></Avatar>
@@ -725,10 +716,6 @@ export default function InboxPage() {
                       </div>
                     </div>
                   </DetailSection>
-                </DetailPanel>
-
-                {/* Panel 2: Contact */}
-                <DetailPanel>
                   <DetailSection title="Contact" action={<Plus size={12} className="text-[#a3a3a3]" />}>
                     <div className="space-y-2">
                       {detail.contact.email && (
@@ -768,10 +755,6 @@ export default function InboxPage() {
                   <DetailSection title="Recent conversations" defaultOpen={false}>
                     <div className="text-[11px] text-[#737373]">{detail.conversation_count} total with this contact</div>
                   </DetailSection>
-                </DetailPanel>
-
-                {/* Panel 3: Notes */}
-                <DetailPanel>
                   <DetailSection title="Notes">
                     <Textarea
                       placeholder="Add notes about this contact..."
@@ -790,7 +773,6 @@ export default function InboxPage() {
                       {savingNotes ? 'Saving...' : 'Save notes'}
                     </Button>
                   </DetailSection>
-                </DetailPanel>
               </div>
             </ScrollArea>
           ) : (
