@@ -517,7 +517,7 @@ export default function InboxPage() {
           </div>
         ) : detailLoading ? (
           <div className="flex flex-1 flex-col">
-            <div className="flex items-center justify-between border-b border-[#ebebeb] px-5 py-3">
+            <div className="flex h-12 items-center justify-between border-b border-[#ebebeb] px-5 flex-shrink-0">
               <div className="flex items-center gap-3">
                 <Skeleton className="h-8 w-8 rounded-full" />
                 <Skeleton className="h-4 w-32" />
@@ -534,7 +534,7 @@ export default function InboxPage() {
         ) : detail ? (
           <>
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-[#ebebeb] px-5 py-3">
+            <div className="flex h-12 items-center justify-between border-b border-[#ebebeb] px-5 flex-shrink-0">
               <div className="flex items-center gap-3">
                 <Avatar className="h-8 w-8">
                   <AvatarFallback className="bg-[#0a0a0a] text-[10px] text-white">{getInitials(detail.contact?.name)}</AvatarFallback>
@@ -678,12 +678,12 @@ export default function InboxPage() {
       {detail?.contact && (
         <div className="flex w-[320px] flex-shrink-0 flex-col bg-white rounded-xl ring-1 ring-[#ebebeb] overflow-hidden">
           {/* Tabs */}
-          <div className="flex bg-white border-b border-[#ebebeb]">
+          <div className="flex h-12 bg-white border-b border-[#ebebeb] flex-shrink-0">
             {(['details', 'copilot'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setRightTab(t)}
-                className={`flex-1 px-4 py-3 text-[12px] font-medium transition-colors border-b-2 ${
+                className={`flex-1 px-4 text-[12px] font-medium transition-colors border-b-2 ${
                   rightTab === t ? 'border-[#0a0a0a] text-[#0a0a0a]' : 'border-transparent text-[#737373] hover:text-[#0a0a0a]'
                 }`}
               >
