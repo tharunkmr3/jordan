@@ -87,7 +87,7 @@ export async function processChatMessage(
 
   // 4. Build prompt
   const kbContextStr = kbContext.length > 0 ? kbContext.join('\n\n') : ''
-  const messages = buildPrompt(agent, history, input.message, kbContextStr)
+  const messages = buildPrompt(agent, history, input.message, kbContextStr, input.channel)
 
   // 5. Call AI model
   const modelConfig: ModelConfig = {
@@ -168,7 +168,7 @@ export async function* streamChatMessage(
   ])
 
   const kbContextStr = kbContext.length > 0 ? kbContext.join('\n\n') : ''
-  const messages = buildPrompt(agent, history, input.message, kbContextStr)
+  const messages = buildPrompt(agent, history, input.message, kbContextStr, input.channel)
 
   const modelConfig: ModelConfig = {
     provider: agent.model_provider,
@@ -307,12 +307,17 @@ async function loadHistory(supabase: SupabaseAdmin, conversationId: string, limi
     .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
 }
 
-function buildPrompt(agent: Agent, history: ChatMessage[], currentMessage: string, kbContext: string): ChatMessage[] {
+function buildPrompt(agent: Agent, history: ChatMessage[], currentMessage: string, kbContext: string, channel?: string): ChatMessage[] {
   const messages: ChatMessage[] = []
   let systemPrompt = agent.system_prompt || 'You are a helpful assistant.'
 
   if (kbContext) {
     systemPrompt += `\n\n--- Relevant Knowledge Base Context ---\n${kbContext}\n--- End Context ---\n\nUse the above context to answer the user's question when relevant. If the context doesn't help, answer from your general knowledge.`
+  }
+
+  // For voice calls, instruct the AI to avoid markdown and keep responses short
+  if (channel === 'phone') {
+    systemPrompt += `\n\n--- Voice Call Mode ---\nYou are on a phone call. Respond conversationally in 1-3 short sentences. Do NOT use markdown, bullet points, asterisks, or headings — these will be read aloud literally. Speak naturally as if you were talking.`
   }
 
   messages.push({ role: 'system', content: systemPrompt })

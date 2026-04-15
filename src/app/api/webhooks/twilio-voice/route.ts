@@ -20,18 +20,39 @@ function escapeXml(str: string): string {
 }
 
 /**
+ * Strip markdown and formatting for TTS — voice should not read asterisks, hashes, etc.
+ */
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '$1')      // bold **text**
+    .replace(/\*(.+?)\*/g, '$1')          // italic *text*
+    .replace(/__(.+?)__/g, '$1')          // bold __text__
+    .replace(/_(.+?)_/g, '$1')            // italic _text_
+    .replace(/`([^`]+)`/g, '$1')          // inline code
+    .replace(/^#{1,6}\s+/gm, '')          // headings
+    .replace(/^[-*+]\s+/gm, '')           // bullet lists
+    .replace(/^\d+\.\s+/gm, '')           // numbered lists
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // links [text](url)
+    .replace(/\n{2,}/g, '. ')             // collapse paragraphs into sentences
+    .replace(/\n/g, ' ')                  // single newlines to spaces
+    .replace(/\s+/g, ' ')                 // collapse whitespace
+    .trim()
+}
+
+/**
  * Generate a TwiML speech element — <Play> for ElevenLabs, <Say> for Polly fallback
  */
 async function speak(text: string, voiceProvider: string | null, voiceId: string | null, pollyVoice: string): Promise<string> {
+  const cleanText = stripMarkdown(text)
   if (voiceProvider === 'elevenlabs' && voiceId) {
     try {
-      const audioUrl = await generateAndHostAudio(text, voiceId)
+      const audioUrl = await generateAndHostAudio(cleanText, voiceId)
       return `<Play>${escapeXml(audioUrl)}</Play>`
     } catch (err) {
       console.error('[twilio-voice] ElevenLabs failed, falling back to Polly:', err)
     }
   }
-  return `<Say voice="${pollyVoice}">${escapeXml(text)}</Say>`
+  return `<Say voice="${pollyVoice}">${escapeXml(cleanText)}</Say>`
 }
 
 // ---------------------------------------------------------------------------

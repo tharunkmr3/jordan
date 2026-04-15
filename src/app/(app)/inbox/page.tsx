@@ -379,7 +379,7 @@ export default function InboxPage() {
   const openCount = conversations.filter(c => c.status === 'active' || c.status === 'waiting' || c.status === 'escalated').length
 
   return (
-    <div className="flex h-full bg-white">
+    <div className="flex h-[calc(100vh-49px)] bg-white overflow-hidden">
       {/* ============================================================= */}
       {/* LEFT: Conversation List */}
       {/* ============================================================= */}
@@ -515,21 +515,12 @@ export default function InboxPage() {
           )}
         </ScrollArea>
 
-        {/* Bottom layout icons */}
-        <div className="flex items-center gap-1 px-3 py-2 border-t border-[#ebebeb]">
-          <button className="p-1.5 rounded hover:bg-[#f5f5f5]">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="5" height="12" rx="1" stroke="currentColor" strokeWidth="1.2" className="text-[#737373]"/><rect x="8" y="1" width="5" height="12" rx="1" stroke="currentColor" strokeWidth="1.2" className="text-[#737373]"/></svg>
-          </button>
-          <button className="p-1.5 rounded hover:bg-[#f5f5f5]">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="12" height="12" rx="1" stroke="currentColor" strokeWidth="1.2" className="text-[#737373]"/></svg>
-          </button>
-        </div>
       </div>
 
       {/* ============================================================= */}
       {/* CENTER: Conversation */}
       {/* ============================================================= */}
-      <div className="flex flex-1 flex-col bg-white min-w-0">
+      <div className="flex flex-1 flex-col bg-white min-w-0 min-h-0 h-full">
         {!selectedId ? (
           <div className="flex flex-1 items-center justify-center">
             <div className="text-center">
@@ -586,7 +577,7 @@ export default function InboxPage() {
             </div>
 
             {/* Messages */}
-            <ScrollArea className="flex-1 px-5 py-4 bg-[#fafafa]">
+            <ScrollArea className="flex-1 min-h-0 px-5 py-4 bg-white">
               <div className="mx-auto max-w-2xl space-y-3">
                 {detail.messages.length === 0 ? (
                   <div className="flex items-center justify-center py-16">

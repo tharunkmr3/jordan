@@ -37,9 +37,9 @@ export async function generateAndHostAudio(
     }
   }
 
-  // Generate audio via ElevenLabs
+  // Generate audio via ElevenLabs — flash v2.5 is 2x faster than turbo_v2
   const ttsRes = await fetch(
-    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_22050_32`,
     {
       method: 'POST',
       headers: {
@@ -49,7 +49,7 @@ export async function generateAndHostAudio(
       },
       body: JSON.stringify({
         text,
-        model_id: 'eleven_turbo_v2',
+        model_id: 'eleven_flash_v2_5',
         voice_settings: {
           stability: 0.5,
           similarity_boost: 0.75,
