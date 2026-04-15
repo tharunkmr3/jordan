@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   Select,
   SelectContent,
@@ -425,8 +426,19 @@ export default function InboxPage() {
         {/* Conversation list */}
         <ScrollArea className="flex-1">
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="text-[12px] text-[#a3a3a3]">Loading...</div>
+            <div className="py-1">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="flex items-start gap-3 px-3 py-2.5">
+                  <Skeleton className="h-8 w-8 flex-shrink-0 rounded-full" />
+                  <div className="flex-1 min-w-0 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <Skeleton className="h-3 w-24" />
+                      <Skeleton className="h-2.5 w-8" />
+                    </div>
+                    <Skeleton className="h-2.5 w-full" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : filteredConversations.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12">
@@ -515,8 +527,25 @@ export default function InboxPage() {
             </div>
           </div>
         ) : detailLoading ? (
-          <div className="flex flex-1 items-center justify-center">
-            <div className="text-[12px] text-[#a3a3a3]">Loading conversation...</div>
+          <div className="flex flex-1 flex-col">
+            <div className="flex items-center justify-between border-b border-[#ebebeb] px-4 py-2.5">
+              <div className="flex items-center gap-3">
+                <Skeleton className="h-7 w-7 rounded-full" />
+                <div className="space-y-1.5">
+                  <Skeleton className="h-3 w-32" />
+                  <Skeleton className="h-2.5 w-20" />
+                </div>
+              </div>
+            </div>
+            <div className="flex-1 px-4 py-4">
+              <div className="mx-auto max-w-2xl space-y-3">
+                {[60, 80, 50, 90, 70].map((w, i) => (
+                  <div key={i} className="flex justify-start">
+                    <Skeleton className="h-14 rounded-lg" style={{ width: `${w}%` }} />
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         ) : detail ? (
           <>

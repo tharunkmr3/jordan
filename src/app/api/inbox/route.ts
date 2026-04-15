@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
@@ -32,6 +33,7 @@ export async function GET(request: NextRequest) {
     `)
     .eq('org_id', orgId)
     .order('updated_at', { ascending: false })
+    .limit(100)
 
   if (status && status !== 'all') {
     query = query.eq('status', status)
@@ -47,33 +49,40 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  // For each conversation, fetch last message and unread count
-  const enriched = await Promise.all(
-    (conversations || []).map(async (conv) => {
-      // Last message
-      const { data: lastMsg } = await supabase
-        .from('messages')
-        .select('content, role, created_at')
-        .eq('conversation_id', conv.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
+  if (!conversations || conversations.length === 0) {
+    return NextResponse.json([])
+  }
 
-      // Message count
-      const { count } = await supabase
-        .from('messages')
-        .select('id', { count: 'exact', head: true })
-        .eq('conversation_id', conv.id)
+  // Fetch last messages for all conversations in a SINGLE query using admin client
+  // (Admin bypasses RLS, which is fine since we already scoped by org above)
+  const conversationIds = conversations.map((c) => c.id)
+  const admin = createAdminClient()
 
-      return {
-        ...conv,
-        last_message: lastMsg || null,
-        message_count: count || 0,
-      }
-    })
-  )
+  const { data: lastMessages } = await admin
+    .from('messages')
+    .select('conversation_id, content, role, created_at')
+    .in('conversation_id', conversationIds)
+    .order('created_at', { ascending: false })
 
-  // Filter by search term (contact name) if provided
+  // Map: conversation_id → latest message
+  const lastMsgMap = new Map<string, { content: string; role: string; created_at: string }>()
+  for (const msg of lastMessages || []) {
+    if (!lastMsgMap.has(msg.conversation_id)) {
+      lastMsgMap.set(msg.conversation_id, {
+        content: msg.content,
+        role: msg.role,
+        created_at: msg.created_at,
+      })
+    }
+  }
+
+  const enriched = conversations.map((conv) => ({
+    ...conv,
+    last_message: lastMsgMap.get(conv.id) || null,
+    message_count: 0, // Computed on-demand in detail view
+  }))
+
+  // Filter by search term if provided
   let results = enriched
   if (search) {
     const term = search.toLowerCase()

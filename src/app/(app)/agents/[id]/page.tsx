@@ -16,6 +16,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Message, MessageAvatar, MessageContent } from "@/components/ui/message"
 import { PromptInput, PromptInputTextarea, PromptInputActions, PromptInputAction } from "@/components/ui/prompt-input"
 import { Loader } from "@/components/ui/loader"
+import { Skeleton } from "@/components/ui/skeleton"
 import { ArrowUp, Copy, Check, Trash2, Pencil, Phone, Mail, Globe, Upload, FileText, X, Plus } from "lucide-react"
 import { WhatsappLogo, MessengerLogo } from "@phosphor-icons/react"
 
@@ -381,7 +382,35 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
     setCopied(true); setTimeout(() => setCopied(false), 2000)
   }
 
-  if (loading) return <div className="p-6 text-sm text-muted-foreground">Loading...</div>
+  if (loading) return (
+    <div className="flex h-[calc(100vh-48px)]">
+      <div className="flex-1 overflow-y-auto border-r border-[#ebebeb] p-6">
+        <div className="max-w-xl mx-auto space-y-5">
+          <div className="flex items-start justify-between">
+            <div className="space-y-2">
+              <Skeleton className="h-5 w-32" />
+              <Skeleton className="h-3 w-48" />
+            </div>
+            <Skeleton className="h-8 w-20" />
+          </div>
+          {[1, 2, 3, 4, 5].map(i => (
+            <Card key={i}>
+              <CardHeader className="pb-2"><Skeleton className="h-4 w-32" /></CardHeader>
+              <CardContent className="space-y-2">
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-5/6" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+      <div className="w-[400px] border-l border-[#ebebeb] p-4 space-y-3">
+        {[1, 2, 3].map(i => (
+          <Skeleton key={i} className="h-16 rounded-2xl" />
+        ))}
+      </div>
+    </div>
+  )
   if (!agent) return <div className="p-6 text-sm text-red-600">Agent not found</div>
 
   return (

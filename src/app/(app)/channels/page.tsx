@@ -23,6 +23,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { MessageSquare, Phone, Globe, MessageCircle, Copy, Check, Loader2 } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
 
 interface Agent {
   id: string
@@ -228,8 +229,27 @@ export default function ChannelsPage() {
 
   if (loading) {
     return (
-      <div className="p-6 flex items-center justify-center py-24">
-        <Loader2 className="h-5 w-5 animate-spin text-[#a3a3a3]" />
+      <div className="p-6">
+        <div className="mb-6 space-y-1">
+          <Skeleton className="h-5 w-28" />
+          <Skeleton className="h-3 w-64" />
+        </div>
+        <div className="grid gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i}>
+              <CardContent className="p-5">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-10 w-10 rounded-lg" />
+                  <div className="flex-1 space-y-1.5">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-56" />
+                  </div>
+                  <Skeleton className="h-6 w-11 rounded-full" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
     )
   }

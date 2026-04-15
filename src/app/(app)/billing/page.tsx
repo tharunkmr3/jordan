@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
+import { Skeleton } from '@/components/ui/skeleton'
 import type { Subscription } from '@/types/database'
 
 interface OrgData {
@@ -140,8 +141,31 @@ export default function BillingPage() {
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-[15px] font-semibold text-[#0a0a0a]">Billing</h1>
         </div>
-        <div className="flex items-center justify-center py-24">
-          <div className="text-[13px] text-[#a3a3a3]">Loading...</div>
+        <Card className="mb-6">
+          <CardHeader>
+            <Skeleton className="h-4 w-24 mb-2" />
+            <Skeleton className="h-3 w-48" />
+          </CardHeader>
+        </Card>
+        <Separator className="mb-6" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[1, 2].map(i => (
+            <Card key={i}>
+              <CardHeader>
+                <Skeleton className="h-4 w-20 mb-2" />
+                <Skeleton className="h-6 w-32" />
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-5/6" />
+                <Skeleton className="h-3 w-4/6" />
+                <Skeleton className="h-3 w-full" />
+              </CardContent>
+              <CardFooter>
+                <Skeleton className="h-9 w-full" />
+              </CardFooter>
+            </Card>
+          ))}
         </div>
       </div>
     )
