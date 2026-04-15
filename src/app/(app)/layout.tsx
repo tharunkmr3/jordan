@@ -107,7 +107,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen bg-[#f5f5f5]">
       {/* Sidebar */}
       <aside className={cn(
-        "flex flex-col border-r border-[#ebebeb] bg-[#f5f5f5] transition-all duration-200",
+        "flex flex-col bg-[#f5f5f5] transition-all duration-200",
         collapsed ? "w-[60px]" : "w-[220px]"
       )}>
         {/* Logo */}
@@ -167,25 +167,31 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* User */}
         <div className="relative border-t border-[#ebebeb] px-2 py-2">
-          <button
-            onClick={() => setShowUserMenu(!showUserMenu)}
-            className={cn(
-              "flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-[13px] hover:bg-[#ebebeb]",
-              collapsed && "justify-center px-0"
-            )}
-          >
-            <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-[#0a0a0a] text-[11px] font-medium text-white">
-              {userName ? userName.charAt(0).toUpperCase() : "U"}
-            </div>
-            {!collapsed && (
-              <>
-                <div className="flex-1 min-w-0">
-                  <div className="truncate text-[13px] font-[500] text-[#0a0a0a]">{userName || "Loading..."}</div>
-                </div>
-                <CaretDown size={12} weight="bold" className="text-[#a3a3a3]" />
-              </>
-            )}
-          </button>
+          <div className={cn("flex items-center gap-1", collapsed && "flex-col")}>
+            <button
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              className={cn(
+                "flex flex-1 items-center gap-2.5 rounded-md px-3 py-2 text-left text-[13px] hover:bg-[#ebebeb]",
+                collapsed && "justify-center px-0 flex-none"
+              )}
+            >
+              <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-[#0a0a0a] text-[11px] font-medium text-white">
+                {userName ? userName.charAt(0).toUpperCase() : "U"}
+              </div>
+              {!collapsed && (
+                <>
+                  <div className="flex-1 min-w-0">
+                    <div className="truncate text-[13px] font-[500] text-[#0a0a0a]">{userName || "Loading..."}</div>
+                  </div>
+                  <CaretDown size={12} weight="bold" className="text-[#a3a3a3]" />
+                </>
+              )}
+            </button>
+            <button className="relative rounded-md p-2 text-[#737373] hover:bg-[#ebebeb] hover:text-[#0a0a0a] flex-shrink-0" title="Notifications">
+              <Bell size={16} weight="regular" />
+              <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[#0a0a0a]" />
+            </button>
+          </div>
           {showUserMenu && (
             <div className={cn(
               "absolute bottom-full mb-1 rounded-lg border border-[#e0e0e0] bg-white p-1 shadow-lg",
@@ -221,12 +227,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </button>
               <span className="text-[13px] font-[500] text-[#0a0a0a]">{pageTitle}</span>
             </div>
-            <div className="flex items-center gap-1">
-              <button className="relative rounded-md p-1.5 text-[#737373] hover:bg-[#f5f5f5] hover:text-[#0a0a0a]">
-                <Bell size={16} weight="regular" />
-                <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-[#0a0a0a]" />
-              </button>
-            </div>
+            <div />
+
           </header>
 
           {/* Page content */}
