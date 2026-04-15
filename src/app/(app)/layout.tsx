@@ -114,10 +114,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       } catch { /* ignore */ }
     }
     loadAgents()
-    // Reload when navigating to agents list/new
-    const handler = () => loadAgents()
-    window.addEventListener("refresh-agents", handler)
-    return () => window.removeEventListener("refresh-agents", handler)
+    // Refetch when a page signals it needs a fresh list
+    const refreshHandler = () => loadAgents()
+    window.addEventListener("refresh-agents", refreshHandler)
+
+    // Optimistic updates: merge partial updates into the current list
+    const updateHandler = (e: Event) => {
+      const detail = (e as CustomEvent<{ id: string; name?: string; status?: string; avatar_url?: string | null }>).detail
+      if (!detail?.id) return
+      setAgents(prev => prev.map(a => a.id === detail.id ? { ...a, ...detail } : a))
+    }
+    window.addEventListener("agent-updated", updateHandler)
+
+    return () => {
+      window.removeEventListener("refresh-agents", refreshHandler)
+      window.removeEventListener("agent-updated", updateHandler)
+    }
   }, [pathname])
 
   async function handleSignOut() {

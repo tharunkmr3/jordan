@@ -124,13 +124,23 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
   }, [id, loadChannels, loadKnowledgeBases])
 
   async function handleSave() {
+    // Optimistic: update UI + sidebar immediately
+    setAgent(prev => prev ? { ...prev, ...editData } as Agent : prev)
+    window.dispatchEvent(new CustomEvent("agent-updated", { detail: { id, name: editData.name, status: editData.status, avatar_url: editData.avatar_url } }))
+    setEditing(false)
+
     setSaving(true)
     const res = await fetch(`/api/agents/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editData) })
-    if (res.ok) { const updated = await res.json(); setAgent(updated); setEditing(false) }
+    if (res.ok) { const updated = await res.json(); setAgent(updated); window.dispatchEvent(new CustomEvent("agent-updated", { detail: { id, name: updated.name, status: updated.status, avatar_url: updated.avatar_url } })) }
     setSaving(false)
   }
 
-  async function handleDelete() { await fetch(`/api/agents/${id}`, { method: "DELETE" }); router.push("/agents") }
+  async function handleDelete() {
+    // Optimistic removal from sidebar
+    window.dispatchEvent(new CustomEvent("refresh-agents"))
+    await fetch(`/api/agents/${id}`, { method: "DELETE" })
+    router.push("/dashboard")
+  }
 
   async function sendChat() {
     if (!chatInput.trim() || chatLoading) return
@@ -366,6 +376,12 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
   }
 
   async function uploadAvatar(file: File) {
+    // Optimistic: show local preview immediately
+    const localUrl = URL.createObjectURL(file)
+    setAgent(prev => prev ? { ...prev, avatar_url: localUrl } : prev)
+    setEditData(prev => ({ ...prev, avatar_url: localUrl }))
+    window.dispatchEvent(new CustomEvent("agent-updated", { detail: { id, avatar_url: localUrl } }))
+
     setUploadingAvatar(true)
     const formData = new FormData()
     formData.append("file", file)
@@ -373,18 +389,24 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
       const res = await fetch(`/api/agents/${id}/avatar`, { method: "POST", body: formData })
       const data = await res.json()
       if (data.avatar_url) {
+        // Replace blob URL with real URL
         setAgent(prev => prev ? { ...prev, avatar_url: data.avatar_url } : prev)
         setEditData(prev => ({ ...prev, avatar_url: data.avatar_url }))
+        window.dispatchEvent(new CustomEvent("agent-updated", { detail: { id, avatar_url: data.avatar_url } }))
       }
     } finally {
       setUploadingAvatar(false)
+      URL.revokeObjectURL(localUrl)
     }
   }
 
   async function removeAvatar() {
-    await fetch(`/api/agents/${id}/avatar`, { method: "DELETE" })
+    // Optimistic
     setAgent(prev => prev ? { ...prev, avatar_url: null } : prev)
     setEditData(prev => ({ ...prev, avatar_url: null }))
+    window.dispatchEvent(new CustomEvent("agent-updated", { detail: { id, avatar_url: null } }))
+
+    await fetch(`/api/agents/${id}/avatar`, { method: "DELETE" })
   }
 
   async function uploadDocument(file: File) {
