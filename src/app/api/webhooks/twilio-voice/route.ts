@@ -1,16 +1,37 @@
 // ============================================================================
 // Jordon AI Platform — Twilio Voice Webhook
 // Handles incoming calls: greeting → listen → AI response → loop
+// Uses ElevenLabs TTS when configured, falls back to Twilio Polly
 // ============================================================================
 
 import { NextRequest } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { processChatMessage } from '@/lib/ai/chat-pipeline'
+import { generateAndHostAudio } from '@/lib/tts/elevenlabs'
 
 function twiml(xml: string) {
   return new Response(`<?xml version="1.0" encoding="UTF-8"?><Response>${xml}</Response>`, {
     headers: { 'Content-Type': 'text/xml' },
   })
+}
+
+function escapeXml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;')
+}
+
+/**
+ * Generate a TwiML speech element — <Play> for ElevenLabs, <Say> for Polly fallback
+ */
+async function speak(text: string, voiceProvider: string | null, voiceId: string | null, pollyVoice: string): Promise<string> {
+  if (voiceProvider === 'elevenlabs' && voiceId) {
+    try {
+      const audioUrl = await generateAndHostAudio(text, voiceId)
+      return `<Play>${escapeXml(audioUrl)}</Play>`
+    } catch (err) {
+      console.error('[twilio-voice] ElevenLabs failed, falling back to Polly:', err)
+    }
+  }
+  return `<Say voice="${pollyVoice}">${escapeXml(text)}</Say>`
 }
 
 // ---------------------------------------------------------------------------
@@ -30,10 +51,10 @@ export async function POST(request: NextRequest) {
 
   const supabase = createAdminClient()
 
-  // Load agent
+  // Load agent with voice config
   const { data: agent } = await supabase
     .from('agents')
-    .select('id, name, greeting_message, language, org_id')
+    .select('id, name, greeting_message, language, org_id, voice_provider, voice_id')
     .eq('id', agentId)
     .eq('status', 'active')
     .single()
@@ -42,12 +63,12 @@ export async function POST(request: NextRequest) {
     return twiml('<Say voice="Polly.Aditi">Sorry, this agent is not available right now. Goodbye.</Say><Hangup/>')
   }
 
-  // Pick Twilio voice based on agent language
-  const voiceMap: Record<string, string> = {
+  // Polly voice fallback by language
+  const pollyMap: Record<string, string> = {
     en: 'Polly.Joanna', hi: 'Polly.Aditi', ta: 'Polly.Aditi',
     te: 'Polly.Aditi', kn: 'Polly.Aditi', bn: 'Polly.Aditi',
   }
-  const voice = voiceMap[agent.language] || 'Polly.Joanna'
+  const pollyVoice = pollyMap[agent.language] || 'Polly.Joanna'
   const langMap: Record<string, string> = {
     en: 'en-US', hi: 'hi-IN', ta: 'ta-IN', te: 'te-IN',
     kn: 'kn-IN', bn: 'bn-IN', mr: 'mr-IN', gu: 'gu-IN',
@@ -57,12 +78,15 @@ export async function POST(request: NextRequest) {
   // First call — no speech result yet, greet and listen
   if (!speechResult) {
     const greeting = agent.greeting_message || `Hi, you've reached ${agent.name}. How can I help you?`
+    const greetingSpeech = await speak(greeting, agent.voice_provider, agent.voice_id, pollyVoice)
+    const listenPrompt = await speak("I'm listening.", agent.voice_provider, agent.voice_id, pollyVoice)
+
     return twiml(
-      `<Say voice="${voice}">${escapeXml(greeting)}</Say>` +
+      greetingSpeech +
       `<Gather input="speech" action="/api/webhooks/twilio-voice?agentId=${agentId}" method="POST" speechTimeout="auto" language="${speechLang}" speechModel="phone_call">` +
-      `<Say voice="${voice}">I'm listening.</Say>` +
+      listenPrompt +
       `</Gather>` +
-      `<Say voice="${voice}">I didn't hear anything. Goodbye.</Say><Hangup/>`
+      `<Say voice="${pollyVoice}">I didn't hear anything. Goodbye.</Say><Hangup/>`
     )
   }
 
@@ -71,7 +95,7 @@ export async function POST(request: NextRequest) {
     const result = await processChatMessage({
       agentId: agent.id,
       message: speechResult,
-      conversationId: callSid, // Use call SID as conversation identifier
+      conversationId: callSid,
       channel: 'phone',
       contactInfo: {
         phone: from,
@@ -79,22 +103,23 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Respond with AI answer and listen for next input
+    // Generate TTS for the AI response
+    const responseSpeech = await speak(result.response, agent.voice_provider, agent.voice_id, pollyVoice)
+    const followUp = await speak("Is there anything else I can help with?", agent.voice_provider, agent.voice_id, pollyVoice)
+
     return twiml(
-      `<Say voice="${voice}">${escapeXml(result.response)}</Say>` +
+      responseSpeech +
       `<Gather input="speech" action="/api/webhooks/twilio-voice?agentId=${agentId}" method="POST" speechTimeout="auto" language="${speechLang}" speechModel="phone_call">` +
-      `<Say voice="${voice}">Is there anything else I can help with?</Say>` +
+      followUp +
       `</Gather>` +
-      `<Say voice="${voice}">Thank you for calling. Goodbye.</Say><Hangup/>`
+      `<Say voice="${pollyVoice}">Thank you for calling. Goodbye.</Say><Hangup/>`
     )
   } catch (err) {
     console.error('[twilio-voice] Pipeline error:', err)
-    return twiml(
-      `<Say voice="${voice}">I'm sorry, I'm having trouble right now. Please try again later. Goodbye.</Say><Hangup/>`
+    const errorSpeech = await speak(
+      "I'm sorry, I'm having trouble right now. Please try again later. Goodbye.",
+      agent.voice_provider, agent.voice_id, pollyVoice
     )
+    return twiml(errorSpeech + '<Hangup/>')
   }
-}
-
-function escapeXml(str: string): string {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;')
 }
