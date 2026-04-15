@@ -477,7 +477,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                           <Switch
                             checked={isActive}
                             disabled={channelSaving === type}
-                            onCheckedChange={(v) => { toggleChannel(type, v) }}
+                            onCheckedChange={(v: boolean) => void toggleChannel(type, v)}
                           />
                         </div>
                       </div>
