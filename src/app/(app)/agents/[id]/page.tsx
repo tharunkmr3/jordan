@@ -458,7 +458,26 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                     <div><Label>Temperature ({editData.temperature ?? 0.7})</Label><Input type="range" min={0} max={1} step={0.1} value={editData.temperature ?? 0.7} onChange={e => setEditData({...editData, temperature: parseFloat(e.target.value)})} className="mt-1.5" /></div>
                   </TabsContent>
                   <TabsContent value="voice" className="space-y-4 pt-4">
-                    <div><Label>Voice Provider</Label><Select value={editData.voice_provider || "none"} onValueChange={v => v && setEditData({...editData, voice_provider: v})}><SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem><SelectItem value="sarvam">Sarvam Bulbul</SelectItem><SelectItem value="elevenlabs">ElevenLabs</SelectItem></SelectContent></Select></div>
+                    <div><Label>Voice Provider</Label><Select value={editData.voice_provider || "none"} onValueChange={v => v && setEditData({...editData, voice_provider: v})}><SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Twilio Polly (Default)</SelectItem><SelectItem value="elevenlabs">ElevenLabs (Requires Paid Plan)</SelectItem></SelectContent></Select></div>
+                    {editData.voice_provider === "elevenlabs" && (
+                      <div>
+                        <Label>Voice</Label>
+                        <Select value={editData.voice_id || ""} onValueChange={v => v && setEditData({...editData, voice_id: v})}>
+                          <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select a voice" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="21m00Tcm4TlvDq8ikWAM">Rachel — Calm, Narration</SelectItem>
+                            <SelectItem value="EXAVITQu4vr4xnSDxMaL">Sarah — Mature, Reassuring</SelectItem>
+                            <SelectItem value="FGY2WhTYpPnrIDTdsKH5">Laura — Enthusiast, Quirky</SelectItem>
+                            <SelectItem value="IKne3meq5aSn9XLyUdCD">Charlie — Deep, Confident</SelectItem>
+                            <SelectItem value="JBFqnCBsd6RMkjVDRZzb">George — Warm Storyteller</SelectItem>
+                            <SelectItem value="TX3LPaxmHKxFdv7VOQHJ">Liam — Energetic Creator</SelectItem>
+                            <SelectItem value="Xb7hH8MSUJpSbSDYk0k2">Alice — Clear Educator</SelectItem>
+                            <SelectItem value="pFZP5JQG7iQjIQuC4Bku">Lily — Warm, Calm</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-[11px] text-muted-foreground mt-1.5">Falls back to Twilio Polly if ElevenLabs fails. <a href="https://elevenlabs.io/pricing" target="_blank" className="underline">Upgrade your plan</a> to use voices via API.</p>
+                      </div>
+                    )}
                     <div><Label>Primary Language</Label><Select value={editData.language || "en"} onValueChange={v => v && setEditData({...editData, language: v})}><SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent>{["en","hi","ta","te","kn","bn","mr","gu","ml","pa"].map(l => <SelectItem key={l} value={l}>{({en:"English",hi:"Hindi",ta:"Tamil",te:"Telugu",kn:"Kannada",bn:"Bengali",mr:"Marathi",gu:"Gujarati",ml:"Malayalam",pa:"Punjabi"} as Record<string,string>)[l]}</SelectItem>)}</SelectContent></Select></div>
                   </TabsContent>
                   <TabsContent value="escalation" className="space-y-4 pt-4">
