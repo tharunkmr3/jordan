@@ -204,30 +204,34 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
         login: (cb: (res: { authResponse?: { accessToken: string } }) => void, opts: Record<string, unknown>) => void
       }
       FB.init({ appId, cookie: true, xfbml: false, version: "v21.0" })
-      FB.login(async (response) => {
+      FB.login((response) => {
         if (response.authResponse?.accessToken) {
           const token = response.authResponse.accessToken
-          // Exchange token and get pages/numbers
-          const res = await fetch("/api/channels/facebook-connect", {
+          // Handle async work outside the callback
+          fetch("/api/channels/facebook-connect", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ accessToken: token, agentId: id, channelType }),
           })
-          const data = await res.json()
-          if (channelType === "facebook" && data.pages) {
-            setFbPages(data.pages)
-            setSetupStep(1)
-          } else if (channelType === "whatsapp" && data.phoneNumbers) {
-            setWaNumbers(data.phoneNumbers)
-            setSetupStep(1)
-          } else {
-            alert(data.error || "No accounts found. Make sure you have a Facebook Page or WhatsApp Business number.")
-            setSetupChannel(null)
-          }
+            .then(res => res.json())
+            .then(data => {
+              if (channelType === "facebook" && data.pages) {
+                setFbPages(data.pages)
+                setSetupStep(1)
+              } else if (channelType === "whatsapp" && data.phoneNumbers) {
+                setWaNumbers(data.phoneNumbers)
+                setSetupStep(1)
+              } else {
+                alert(data.error || "No accounts found. Make sure you have a Facebook Page or WhatsApp Business number.")
+                setSetupChannel(null)
+              }
+              setFbConnecting(false)
+            })
+            .catch(() => { setSetupChannel(null); setFbConnecting(false) })
         } else {
           setSetupChannel(null)
+          setFbConnecting(false)
         }
-        setFbConnecting(false)
       }, { scope: scopes, auth_type: "rerequest" })
     }
 
