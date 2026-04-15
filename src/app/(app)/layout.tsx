@@ -74,6 +74,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const [collapsed, setCollapsed] = useState(false)
+
+  // Listen for toggle events from child pages (e.g., inbox)
+  useEffect(() => {
+    const handler = () => setCollapsed((c) => !c)
+    window.addEventListener("toggle-sidebar", handler)
+    return () => window.removeEventListener("toggle-sidebar", handler)
+  }, [])
   const [userName, setUserName] = useState("")
   const [userEmail, setUserEmail] = useState("")
   const [showUserMenu, setShowUserMenu] = useState(false)

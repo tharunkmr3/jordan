@@ -22,6 +22,7 @@ import {
   PaperPlaneTilt,
   Star,
   DotsThreeVertical,
+  SidebarSimple,
   UserCircle,
   Plus,
   CaretDown,
@@ -385,6 +386,12 @@ export default function InboxPage() {
       <div className="flex w-[320px] flex-shrink-0 flex-col bg-white rounded-xl ring-1 ring-[#ebebeb] overflow-hidden">
         {/* Header */}
         <div className="flex h-12 items-center gap-3 px-4 border-b border-[#ebebeb] flex-shrink-0">
+          <button
+            onClick={() => window.dispatchEvent(new Event("toggle-sidebar"))}
+            className="rounded-md p-1 text-[#737373] hover:bg-[#f5f5f5] hover:text-[#0a0a0a]"
+          >
+            <SidebarSimple size={18} weight="duotone" />
+          </button>
           <span className="text-[15px] font-semibold text-[#0a0a0a]">Inbox</span>
         </div>
 
