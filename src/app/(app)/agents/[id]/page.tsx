@@ -77,6 +77,9 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
   const [setupChannel, setSetupChannel] = useState<string | null>(null)
   const [setupStep, setSetupStep] = useState(0)
   const [setupData, setSetupData] = useState<Record<string, string>>({})
+  const [fbPages, setFbPages] = useState<{ id: string; name: string; access_token: string }[]>([])
+  const [waNumbers, setWaNumbers] = useState<{ phone_number_id: string; display_phone_number: string; verified_name: string; waba_id: string }[]>([])
+  const [fbConnecting, setFbConnecting] = useState(false)
 
   // Knowledge base state
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([])
@@ -144,11 +147,14 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
     if (active && channelType !== "website") {
       const existing = channels.find(c => c.channel_type === channelType)
       const config = existing?.channel_config as Record<string, string> | undefined
-      // If not configured yet, open setup wizard
       if (!config || !isChannelConfigured(channelType, config)) {
-        setSetupChannel(channelType)
-        setSetupStep(0)
-        setSetupData({})
+        if (channelType === "facebook" || channelType === "whatsapp") {
+          connectWithFacebook(channelType)
+        } else {
+          setSetupChannel(channelType)
+          setSetupStep(0)
+          setSetupData({})
+        }
         return
       }
     }
@@ -169,6 +175,101 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
     if (type === "facebook") return !!(config.page_id && config.page_access_token)
     if (type === "phone") return !!(config.twilio_phone_number)
     return false
+  }
+
+  function connectWithFacebook(channelType: "facebook" | "whatsapp") {
+    setFbConnecting(true)
+    setSetupChannel(channelType)
+    setSetupStep(0)
+    setFbPages([])
+    setWaNumbers([])
+
+    const appId = "3857136404420755"
+    const scopes = channelType === "facebook"
+      ? "pages_messaging,pages_show_list,pages_manage_metadata"
+      : "whatsapp_business_management,whatsapp_business_messaging,business_management"
+
+    // Load Facebook SDK and trigger login
+    const script = document.getElementById("fb-sdk") || document.createElement("script")
+    if (!document.getElementById("fb-sdk")) {
+      script.id = "fb-sdk"
+      ;(script as HTMLScriptElement).src = "https://connect.facebook.net/en_US/sdk.js"
+      script.setAttribute("crossorigin", "anonymous")
+      document.body.appendChild(script)
+    }
+
+    const doLogin = () => {
+      const FB = (window as unknown as Record<string, unknown>).FB as {
+        init: (opts: Record<string, unknown>) => void
+        login: (cb: (res: { authResponse?: { accessToken: string } }) => void, opts: Record<string, unknown>) => void
+      }
+      FB.init({ appId, cookie: true, xfbml: false, version: "v21.0" })
+      FB.login(async (response) => {
+        if (response.authResponse?.accessToken) {
+          const token = response.authResponse.accessToken
+          // Exchange token and get pages/numbers
+          const res = await fetch("/api/channels/facebook-connect", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ accessToken: token, agentId: id, channelType }),
+          })
+          const data = await res.json()
+          if (channelType === "facebook" && data.pages) {
+            setFbPages(data.pages)
+            setSetupStep(1)
+          } else if (channelType === "whatsapp" && data.phoneNumbers) {
+            setWaNumbers(data.phoneNumbers)
+            setSetupStep(1)
+          } else {
+            alert(data.error || "No accounts found. Make sure you have a Facebook Page or WhatsApp Business number.")
+            setSetupChannel(null)
+          }
+        } else {
+          setSetupChannel(null)
+        }
+        setFbConnecting(false)
+      }, { scope: scopes, auth_type: "rerequest" })
+    }
+
+    if ((window as unknown as Record<string, unknown>).FB) {
+      doLogin()
+    } else {
+      script.addEventListener("load", doLogin)
+    }
+  }
+
+  async function selectFacebookPage(page: { id: string; name: string; access_token: string }) {
+    setChannelSaving("facebook")
+    await fetch("/api/channels/save-connection", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agentId: id,
+        channelType: "facebook",
+        config: { page_id: page.id, page_name: page.name, page_access_token: page.access_token },
+      }),
+    })
+    loadChannels()
+    setChannelSaving(null)
+    setSetupChannel(null)
+    setFbPages([])
+  }
+
+  async function selectWhatsAppNumber(num: { phone_number_id: string; display_phone_number: string; verified_name: string; waba_id: string }) {
+    setChannelSaving("whatsapp")
+    await fetch("/api/channels/save-connection", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agentId: id,
+        channelType: "whatsapp",
+        config: { phone_number_id: num.phone_number_id, phone_number: num.display_phone_number, waba_id: num.waba_id, verified_name: num.verified_name },
+      }),
+    })
+    loadChannels()
+    setChannelSaving(null)
+    setSetupChannel(null)
+    setWaNumbers([])
   }
 
   async function completeSetup() {
@@ -382,8 +483,51 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
               </Card>
 
               {/* Channel setup wizard */}
-              <Dialog open={!!setupChannel} onOpenChange={(open) => { if (!open) { setSetupChannel(null); setSetupStep(0) } }}>
+              <Dialog open={!!setupChannel} onOpenChange={(open) => { if (!open) { setSetupChannel(null); setSetupStep(0); setFbPages([]); setWaNumbers([]) } }}>
                 <DialogContent className="max-w-md">
+                  {/* Facebook — step 0: connecting, step 1: pick page */}
+                  {setupChannel === "facebook" && (
+                    <>
+                      <DialogHeader>
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-50 text-blue-600"><MessengerLogo size={18} weight="fill" /></div>
+                          <DialogTitle>Connect Facebook Messenger</DialogTitle>
+                        </div>
+                      </DialogHeader>
+                      {setupStep === 0 ? (
+                        <div className="flex flex-col items-center py-8 gap-3">
+                          {fbConnecting ? (
+                            <>
+                              <Loader variant="circular" size="sm" />
+                              <p className="text-sm text-muted-foreground">Connecting to Facebook...</p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-sm text-muted-foreground text-center">Log in with Facebook to connect your page</p>
+                              <Button onClick={() => connectWithFacebook("facebook")} className="bg-[#1877F2] hover:bg-[#166FE5] text-white">
+                                <MessengerLogo size={16} weight="fill" className="mr-2" />Connect with Facebook
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="space-y-3 py-2">
+                          <p className="text-sm text-muted-foreground">Select a page to connect:</p>
+                          {fbPages.map(page => (
+                            <button key={page.id} className="w-full flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors text-left" onClick={() => selectFacebookPage(page)} disabled={channelSaving !== null}>
+                              <div>
+                                <div className="text-sm font-medium">{page.name}</div>
+                                <div className="text-xs text-muted-foreground">ID: {page.id}</div>
+                              </div>
+                              <Badge variant="secondary" className="text-xs">Select</Badge>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* WhatsApp — step 0: connecting, step 1: pick number */}
                   {setupChannel === "whatsapp" && (
                     <>
                       <DialogHeader>
@@ -393,101 +537,39 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                         </div>
                       </DialogHeader>
                       {setupStep === 0 ? (
-                        <div className="space-y-4 py-2">
-                          <div className="rounded-lg bg-muted/50 p-3 space-y-2">
-                            <p className="text-xs font-medium">How to get your WhatsApp Business number:</p>
-                            <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
-                              <li>Go to <span className="font-medium text-foreground">Meta Business Suite</span></li>
-                              <li>Navigate to WhatsApp Manager</li>
-                              <li>Copy your <span className="font-medium text-foreground">Phone Number ID</span></li>
-                            </ol>
-                          </div>
-                          <div>
-                            <Label className="text-xs">WhatsApp Business Phone Number</Label>
-                            <Input className="mt-1.5" placeholder="+91 98765 43210" value={setupData.phone_number || ""} onChange={e => setSetupData({ ...setupData, phone_number: e.target.value })} />
-                          </div>
-                          <div>
-                            <Label className="text-xs">Phone Number ID</Label>
-                            <Input className="mt-1.5" placeholder="Paste from Meta Business Suite" value={setupData.phone_number_id || ""} onChange={e => setSetupData({ ...setupData, phone_number_id: e.target.value })} />
-                            <p className="text-[10px] text-muted-foreground mt-1">Found in WhatsApp Manager &rarr; Phone Numbers</p>
-                          </div>
-                          <DialogFooter>
-                            <Button variant="outline" onClick={() => setSetupChannel(null)}>Cancel</Button>
-                            <Button disabled={!setupData.phone_number_id || channelSaving !== null} onClick={() => setSetupStep(1)}>
-                              Next
-                            </Button>
-                          </DialogFooter>
+                        <div className="flex flex-col items-center py-8 gap-3">
+                          {fbConnecting ? (
+                            <>
+                              <Loader variant="circular" size="sm" />
+                              <p className="text-sm text-muted-foreground">Connecting to WhatsApp...</p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-sm text-muted-foreground text-center">Log in with Facebook to connect your WhatsApp Business number</p>
+                              <Button onClick={() => connectWithFacebook("whatsapp")} className="bg-[#25D366] hover:bg-[#20BD5A] text-white">
+                                <WhatsappLogo size={16} weight="fill" className="mr-2" />Connect with WhatsApp
+                              </Button>
+                            </>
+                          )}
                         </div>
                       ) : (
-                        <div className="space-y-4 py-2">
-                          <div className="rounded-lg bg-green-50 border border-green-200 p-3 space-y-2">
-                            <p className="text-xs font-medium text-green-800">Almost done! Set up your webhook:</p>
-                            <div className="space-y-1.5">
+                        <div className="space-y-3 py-2">
+                          <p className="text-sm text-muted-foreground">Select a phone number to connect:</p>
+                          {waNumbers.map(num => (
+                            <button key={num.phone_number_id} className="w-full flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors text-left" onClick={() => selectWhatsAppNumber(num)} disabled={channelSaving !== null}>
                               <div>
-                                <p className="text-[10px] text-green-700 font-medium">Webhook URL</p>
-                                <code className="text-[11px] bg-white rounded px-2 py-1 block mt-0.5 break-all">{typeof window !== "undefined" ? window.location.origin : ""}/api/webhooks/whatsapp</code>
+                                <div className="text-sm font-medium">{num.display_phone_number}</div>
+                                <div className="text-xs text-muted-foreground">{num.verified_name}</div>
                               </div>
-                              <div>
-                                <p className="text-[10px] text-green-700 font-medium">Verify Token</p>
-                                <code className="text-[11px] bg-white rounded px-2 py-1 block mt-0.5">XMwddUnTOby6UZqyou7JxJd0DVSSEKc8pqj8qlJnlXo</code>
-                              </div>
-                            </div>
-                            <p className="text-[10px] text-green-700">Paste these in Meta &rarr; WhatsApp &rarr; Configuration &rarr; Webhooks</p>
-                          </div>
-                          <DialogFooter>
-                            <Button variant="outline" onClick={() => setSetupStep(0)}>Back</Button>
-                            <Button onClick={completeSetup} disabled={channelSaving !== null}>
-                              {channelSaving ? "Connecting..." : "Done, Connect"}
-                            </Button>
-                          </DialogFooter>
+                              <Badge variant="secondary" className="text-xs">Select</Badge>
+                            </button>
+                          ))}
                         </div>
                       )}
                     </>
                   )}
 
-                  {setupChannel === "facebook" && (
-                    <>
-                      <DialogHeader>
-                        <div className="flex items-center gap-2">
-                          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-50 text-blue-600"><MessengerLogo size={18} weight="fill" /></div>
-                          <DialogTitle>Connect Facebook Messenger</DialogTitle>
-                        </div>
-                      </DialogHeader>
-                      <div className="space-y-4 py-2">
-                        <div className="rounded-lg bg-muted/50 p-3 space-y-2">
-                          <p className="text-xs font-medium">Connect your Facebook Page:</p>
-                          <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
-                            <li>Go to your <span className="font-medium text-foreground">Facebook Page Settings</span></li>
-                            <li>Navigate to Messaging &rarr; Connected Apps</li>
-                            <li>Copy your <span className="font-medium text-foreground">Page ID</span> and <span className="font-medium text-foreground">Access Token</span></li>
-                          </ol>
-                        </div>
-                        <div>
-                          <Label className="text-xs">Facebook Page Name</Label>
-                          <Input className="mt-1.5" placeholder="Your Business Page" value={setupData.page_name || ""} onChange={e => setSetupData({ ...setupData, page_name: e.target.value })} />
-                        </div>
-                        <div>
-                          <Label className="text-xs">Page ID</Label>
-                          <Input className="mt-1.5" placeholder="Paste from Page Settings" value={setupData.page_id || ""} onChange={e => setSetupData({ ...setupData, page_id: e.target.value })} />
-                        </div>
-                        <div>
-                          <Label className="text-xs">Page Access Token</Label>
-                          <Input className="mt-1.5" type="password" placeholder="Paste from Meta Developer Portal" value={setupData.page_access_token || ""} onChange={e => setSetupData({ ...setupData, page_access_token: e.target.value })} />
-                        </div>
-                        <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
-                          <p className="text-[10px] text-blue-700 font-medium">Webhook URL (paste in Facebook Developer Portal)</p>
-                          <code className="text-[11px] bg-white rounded px-2 py-1 block mt-1 break-all">{typeof window !== "undefined" ? window.location.origin : ""}/api/webhooks/facebook</code>
-                        </div>
-                        <DialogFooter>
-                          <Button variant="outline" onClick={() => setSetupChannel(null)}>Cancel</Button>
-                          <Button onClick={completeSetup} disabled={!setupData.page_id || !setupData.page_access_token || channelSaving !== null}>
-                            {channelSaving ? "Connecting..." : "Connect Page"}
-                          </Button>
-                        </DialogFooter>
-                      </div>
-                    </>
-                  )}
-
+                  {/* Phone — manual setup */}
                   {setupChannel === "phone" && (
                     <>
                       <DialogHeader>
@@ -497,14 +579,10 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                         </div>
                       </DialogHeader>
                       <div className="space-y-4 py-2">
-                        <div className="rounded-lg bg-muted/50 p-3 space-y-2">
-                          <p className="text-xs font-medium">Get a phone number for your agent:</p>
-                          <p className="text-xs text-muted-foreground">Customers can call this number and talk to your AI agent. We use Twilio to provide phone numbers.</p>
-                        </div>
+                        <p className="text-xs text-muted-foreground">Customers can call this number and talk to your AI agent.</p>
                         <div>
                           <Label className="text-xs">Phone Number</Label>
                           <Input className="mt-1.5" placeholder="+91 98765 43210" value={setupData.twilio_phone_number || ""} onChange={e => setSetupData({ ...setupData, twilio_phone_number: e.target.value })} />
-                          <p className="text-[10px] text-muted-foreground mt-1">Enter a Twilio phone number, or leave blank to auto-generate</p>
                         </div>
                         <DialogFooter>
                           <Button variant="outline" onClick={() => setSetupChannel(null)}>Cancel</Button>
