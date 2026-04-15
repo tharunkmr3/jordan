@@ -2,14 +2,12 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -19,7 +17,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { MagnifyingGlass, PaperPlaneTilt, UserCirclePlus } from '@phosphor-icons/react'
+import {
+  MagnifyingGlass,
+  PaperPlaneTilt,
+  Star,
+  DotsThreeVertical,
+  UserCircle,
+  Plus,
+  CaretDown,
+  CaretUp,
+  Lightning,
+  Paperclip,
+  Smiley,
+  At,
+  WhatsappLogo,
+  MessengerLogo,
+  Globe,
+  Phone as PhoneIcon,
+  Check,
+} from '@phosphor-icons/react'
 import type {
   ConversationStatus,
   ChannelType,
@@ -66,11 +82,11 @@ function timeAgo(dateStr: string): string {
   const seconds = Math.floor(diff / 1000)
   if (seconds < 60) return 'now'
   const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m ago`
+  if (minutes < 60) return `${minutes}m`
   const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
+  if (hours < 24) return `${hours}h`
   const days = Math.floor(hours / 24)
-  if (days < 7) return `${days}d ago`
+  if (days < 7) return `${days}d`
   return new Date(dateStr).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })
 }
 
@@ -91,17 +107,17 @@ function getInitials(name: string | null | undefined): string {
     .slice(0, 2)
 }
 
-function channelDotColor(channel: ChannelType): string {
+function channelIcon(channel: ChannelType, size = 14) {
   switch (channel) {
     case 'whatsapp':
-      return 'bg-green-500'
+      return <WhatsappLogo size={size} weight="fill" className="text-[#25D366]" />
     case 'facebook':
-      return 'bg-blue-500'
+      return <MessengerLogo size={size} weight="fill" className="text-[#0084FF]" />
     case 'phone':
-      return 'bg-black'
+      return <PhoneIcon size={size} weight="fill" className="text-[#6b7280]" />
     case 'website':
     default:
-      return 'bg-gray-400'
+      return <Globe size={size} weight="fill" className="text-[#6b7280]" />
   }
 }
 
@@ -110,7 +126,7 @@ function channelLabel(channel: ChannelType): string {
     case 'whatsapp':
       return 'WhatsApp'
     case 'facebook':
-      return 'Facebook'
+      return 'Messenger'
     case 'phone':
       return 'Phone'
     case 'website':
@@ -119,9 +135,46 @@ function channelLabel(channel: ChannelType): string {
   }
 }
 
+function channelBg(channel: ChannelType): string {
+  switch (channel) {
+    case 'whatsapp':
+      return 'bg-[#e7f8f0] text-[#25D366]'
+    case 'facebook':
+      return 'bg-[#e5f1ff] text-[#0084FF]'
+    case 'phone':
+      return 'bg-[#f5f5f5] text-[#6b7280]'
+    case 'website':
+    default:
+      return 'bg-[#f5f5f5] text-[#6b7280]'
+  }
+}
+
 function truncate(str: string | undefined | null, len: number): string {
   if (!str) return ''
   return str.length > len ? str.slice(0, len) + '...' : str
+}
+
+// ---------------------------------------------------------------------------
+// Collapsible section for right panel
+// ---------------------------------------------------------------------------
+
+function DetailSection({ title, children, defaultOpen = true, action }: { title: string; children: React.ReactNode; defaultOpen?: boolean; action?: React.ReactNode }) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div className="border-b border-[#ebebeb]">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center justify-between px-4 py-3 hover:bg-[#fafafa] transition-colors"
+      >
+        <span className="text-[12px] font-medium text-[#0a0a0a]">{title}</span>
+        <div className="flex items-center gap-1">
+          {action}
+          {open ? <CaretUp size={14} className="text-[#a3a3a3]" /> : <CaretDown size={14} className="text-[#a3a3a3]" />}
+        </div>
+      </button>
+      {open && <div className="px-4 pb-3">{children}</div>}
+    </div>
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -134,61 +187,52 @@ export default function InboxPage() {
   // State
   const [orgId, setOrgId] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
+  const [userName, setUserName] = useState<string>('')
   const [conversations, setConversations] = useState<ConversationItem[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [detail, setDetail] = useState<ConversationDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [detailLoading, setDetailLoading] = useState(false)
   const [tab, setTab] = useState<'all' | 'active' | 'escalated'>('all')
+  const [sortBy, setSortBy] = useState<'activity' | 'created'>('activity')
   const [search, setSearch] = useState('')
   const [replyText, setReplyText] = useState('')
   const [sending, setSending] = useState(false)
   const [aiAutoReply, setAiAutoReply] = useState(true)
   const [contactNotes, setContactNotes] = useState('')
   const [savingNotes, setSavingNotes] = useState(false)
+  const [rightTab, setRightTab] = useState<'details' | 'copilot'>('details')
+  const [starred, setStarred] = useState<Set<string>>(new Set())
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // Scroll to bottom on new messages
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [])
 
-  // -------------------------------------------------------------------------
-  // Init: load user + org
-  // -------------------------------------------------------------------------
+  // Init
   useEffect(() => {
     async function init() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+      const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-
       setUserId(user.id)
-
+      setUserName(user.user_metadata?.full_name || user.email?.split('@')[0] || 'User')
       const { data: membership } = await supabase
         .from('org_members')
         .select('org_id')
         .eq('user_id', user.id)
         .single()
-
-      if (membership) {
-        setOrgId(membership.org_id)
-      }
+      if (membership) setOrgId(membership.org_id)
     }
     init()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // -------------------------------------------------------------------------
-  // Fetch conversations
-  // -------------------------------------------------------------------------
   const fetchConversations = useCallback(async () => {
     if (!orgId) return
     const params = new URLSearchParams()
     if (tab !== 'all') params.set('status', tab)
     if (search) params.set('search', search)
-
     const res = await fetch(`/api/inbox?${params.toString()}`)
     if (res.ok) {
       const data: ConversationItem[] = await res.json()
@@ -202,9 +246,6 @@ export default function InboxPage() {
     fetchConversations()
   }, [fetchConversations])
 
-  // -------------------------------------------------------------------------
-  // Fetch conversation detail
-  // -------------------------------------------------------------------------
   useEffect(() => {
     if (!selectedId) {
       setDetail(null)
@@ -217,85 +258,42 @@ export default function InboxPage() {
         const data: ConversationDetail = await res.json()
         setDetail(data)
         setAiAutoReply(!data.assigned_to)
-        setContactNotes(
-          (data.contact?.metadata as Record<string, unknown>)?.notes as string || ''
-        )
+        setContactNotes((data.contact?.metadata as Record<string, unknown>)?.notes as string || '')
       }
       setDetailLoading(false)
     }
     load()
   }, [selectedId])
 
-  // Scroll to bottom when detail loads or messages change
   useEffect(() => {
-    if (detail?.messages) {
-      setTimeout(scrollToBottom, 100)
-    }
+    if (detail?.messages) setTimeout(scrollToBottom, 100)
   }, [detail?.messages, scrollToBottom])
 
-  // -------------------------------------------------------------------------
-  // Supabase Realtime
-  // -------------------------------------------------------------------------
+  // Realtime
   useEffect(() => {
     if (!orgId) return
-
     const channel = supabase
       .channel('inbox-messages')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `org_id=eq.${orgId}`,
-        },
-        (payload) => {
-          const newMsg = payload.new as Message
-
-          // If this message is for the active conversation, append it
-          setDetail((prev) => {
-            if (!prev || prev.id !== newMsg.conversation_id) return prev
-            // Avoid duplicates
-            if (prev.messages.some((m) => m.id === newMsg.id)) return prev
-            return { ...prev, messages: [...prev.messages, newMsg] }
-          })
-
-          // Update conversation list: move to top, update preview
-          setConversations((prev) => {
-            const idx = prev.findIndex((c) => c.id === newMsg.conversation_id)
-            if (idx === -1) {
-              // New conversation — refetch the list
-              fetchConversations()
-              return prev
-            }
-            const updated = [...prev]
-            const conv = {
-              ...updated[idx],
-              last_message: {
-                content: newMsg.content,
-                role: newMsg.role,
-                created_at: newMsg.created_at,
-              },
-              message_count: (updated[idx].message_count || 0) + 1,
-            }
-            updated.splice(idx, 1)
-            return [conv, ...updated]
-          })
-
-          // Auto-scroll
-          setTimeout(scrollToBottom, 100)
-        }
-      )
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `org_id=eq.${orgId}` }, (payload) => {
+        const newMsg = payload.new as Message
+        setDetail((prev) => {
+          if (!prev || prev.id !== newMsg.conversation_id) return prev
+          if (prev.messages.some((m) => m.id === newMsg.id)) return prev
+          return { ...prev, messages: [...prev.messages, newMsg] }
+        })
+        setConversations((prev) => {
+          const idx = prev.findIndex((c) => c.id === newMsg.conversation_id)
+          if (idx === -1) { fetchConversations(); return prev }
+          const updated = [...prev]
+          const conv = { ...updated[idx], last_message: { content: newMsg.content, role: newMsg.role, created_at: newMsg.created_at }, message_count: (updated[idx].message_count || 0) + 1 }
+          updated.splice(idx, 1)
+          return [conv, ...updated]
+        })
+        setTimeout(scrollToBottom, 100)
+      })
       .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
+    return () => { supabase.removeChannel(channel) }
   }, [orgId, fetchConversations, scrollToBottom]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // -------------------------------------------------------------------------
-  // Actions
-  // -------------------------------------------------------------------------
 
   async function handleSendReply() {
     if (!replyText.trim() || !selectedId || sending) return
@@ -324,9 +322,7 @@ export default function InboxPage() {
     })
     if (res.ok) {
       setDetail((prev) => (prev ? { ...prev, status: newStatus } : prev))
-      setConversations((prev) =>
-        prev.map((c) => (c.id === selectedId ? { ...c, status: newStatus } : c))
-      )
+      setConversations((prev) => prev.map((c) => (c.id === selectedId ? { ...c, status: newStatus } : c)))
     }
   }
 
@@ -350,18 +346,24 @@ export default function InboxPage() {
       const currentMetadata = (detail.contact.metadata || {}) as Record<string, unknown>
       await supabase
         .from('contacts')
-        .update({
-          metadata: { ...currentMetadata, notes: contactNotes },
-        })
+        .update({ metadata: { ...currentMetadata, notes: contactNotes } })
         .eq('id', detail.contact.id)
     } finally {
       setSavingNotes(false)
     }
   }
 
+  function toggleStar(id: string) {
+    setStarred(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
   function handleTextareaInput(e: React.ChangeEvent<HTMLTextAreaElement>) {
     setReplyText(e.target.value)
-    // Auto-grow
     const el = e.target
     el.style.height = 'auto'
     el.style.height = Math.min(el.scrollHeight, 160) + 'px'
@@ -374,62 +376,76 @@ export default function InboxPage() {
     }
   }
 
-  // -------------------------------------------------------------------------
-  // Filtered conversations
-  // -------------------------------------------------------------------------
-  const filteredConversations = conversations
+  const openCount = conversations.filter(c => c.status === 'active' || c.status === 'waiting' || c.status === 'escalated').length
 
-  // -------------------------------------------------------------------------
-  // Render
-  // -------------------------------------------------------------------------
   return (
-    <div className="flex h-full">
-      {/* ================================================================= */}
-      {/* LEFT PANEL: Conversation List */}
-      {/* ================================================================= */}
-      <div className="flex w-[280px] flex-shrink-0 flex-col border-r border-[#ebebeb]">
+    <div className="flex h-full bg-white">
+      {/* ============================================================= */}
+      {/* LEFT: Conversation List */}
+      {/* ============================================================= */}
+      <div className="flex w-[320px] flex-shrink-0 flex-col border-r border-[#ebebeb] bg-white">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[#ebebeb]">
+          <div className="flex items-center gap-2">
+            <Avatar className="h-7 w-7">
+              <AvatarFallback className="bg-[#0a0a0a] text-[10px] text-white">{getInitials(userName)}</AvatarFallback>
+            </Avatar>
+            <span className="text-[13px] font-medium text-[#0a0a0a]">{userName}</span>
+          </div>
+        </div>
+
+        {/* Sort row */}
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#ebebeb]">
+          <button className="text-[12px] font-medium text-[#0a0a0a]">
+            {openCount} Open
+            <CaretDown size={10} className="inline ml-1 text-[#a3a3a3]" />
+          </button>
+          <Select value={sortBy} onValueChange={(v) => v && setSortBy(v as typeof sortBy)}>
+            <SelectTrigger className="h-7 border-0 shadow-none text-[12px] text-[#737373] px-0 w-auto gap-1 hover:text-[#0a0a0a]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end">
+              <SelectItem value="activity" className="text-[12px]">Last activity</SelectItem>
+              <SelectItem value="created" className="text-[12px]">Created at</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         {/* Search */}
-        <div className="p-3">
+        <div className="px-3 py-2 border-b border-[#ebebeb]">
           <div className="relative">
-            <MagnifyingGlass
-              size={15}
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#a3a3a3]"
-            />
+            <MagnifyingGlass size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#a3a3a3]" />
             <Input
-              placeholder="Search conversations..."
+              placeholder="Search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="h-8 pl-8 text-[13px]"
+              className="h-8 pl-8 text-[12px] border-[#ebebeb] bg-[#fafafa] focus-visible:ring-1"
             />
           </div>
         </div>
 
         {/* Filter tabs */}
-        <div className="px-3 pb-2">
-          <Tabs value={tab} onValueChange={(v) => v && setTab(v as typeof tab)}>
-            <TabsList className="h-8 w-full">
-              <TabsTrigger value="all" className="flex-1 text-[12px]">
-                All
-              </TabsTrigger>
-              <TabsTrigger value="active" className="flex-1 text-[12px]">
-                Active
-              </TabsTrigger>
-              <TabsTrigger value="escalated" className="flex-1 text-[12px]">
-                Escalated
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+        <div className="flex items-center gap-1 px-3 py-2 border-b border-[#ebebeb]">
+          {(['all', 'active', 'escalated'] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                tab === t ? 'bg-[#0a0a0a] text-white' : 'text-[#737373] hover:bg-[#f5f5f5]'
+              }`}
+            >
+              {t === 'all' ? 'All' : t === 'active' ? 'Active' : 'Escalated'}
+            </button>
+          ))}
         </div>
 
-        <Separator />
-
-        {/* Conversation list */}
+        {/* List */}
         <ScrollArea className="flex-1">
           {loading ? (
-            <div className="py-1">
+            <div>
               {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="flex items-start gap-3 px-3 py-2.5">
-                  <Skeleton className="h-8 w-8 flex-shrink-0 rounded-full" />
+                <div key={i} className="flex items-start gap-3 px-4 py-3 border-b border-[#f5f5f5]">
+                  <Skeleton className="h-9 w-9 flex-shrink-0 rounded-full" />
                   <div className="flex-1 min-w-0 space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
                       <Skeleton className="h-3 w-24" />
@@ -440,66 +456,55 @@ export default function InboxPage() {
                 </div>
               ))}
             </div>
-          ) : filteredConversations.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <div className="text-[13px] font-medium text-[#a3a3a3]">No conversations</div>
-              <div className="mt-1 text-[12px] text-[#c4c4c4]">
-                {tab === 'all' ? 'Conversations will appear here' : `No ${tab} conversations`}
+          ) : conversations.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 px-6">
+              <div className="h-12 w-12 rounded-full bg-[#f5f5f5] flex items-center justify-center mb-3">
+                <MagnifyingGlass size={20} className="text-[#a3a3a3]" />
+              </div>
+              <div className="text-[13px] font-medium text-[#0a0a0a]">No conversations</div>
+              <div className="mt-1 text-[11px] text-[#a3a3a3] text-center">
+                {tab === 'all' ? 'Messages will appear here when customers reach out' : `No ${tab} conversations`}
               </div>
             </div>
           ) : (
-            <div className="py-1">
-              {filteredConversations.map((conv) => {
+            <div>
+              {conversations.map((conv) => {
                 const isSelected = conv.id === selectedId
                 const contactName = conv.contact?.name || 'Unknown'
                 return (
                   <button
                     key={conv.id}
                     onClick={() => setSelectedId(conv.id)}
-                    className={`flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors ${
-                      isSelected
-                        ? 'bg-[#f0f0f0]'
-                        : 'hover:bg-[#fafafa]'
+                    className={`flex w-full items-start gap-3 px-4 py-3 text-left transition-colors border-b border-[#f5f5f5] ${
+                      isSelected ? 'bg-[#eff6ff] border-l-2 border-l-[#3b82f6]' : 'hover:bg-[#fafafa] border-l-2 border-l-transparent'
                     }`}
                   >
-                    {/* Avatar */}
-                    <Avatar className="h-8 w-8 flex-shrink-0">
-                      <AvatarFallback className="bg-[#0a0a0a] text-[10px] text-white">
-                        {getInitials(contactName)}
-                      </AvatarFallback>
-                    </Avatar>
-
+                    {/* Channel icon avatar */}
+                    <div className={`relative flex-shrink-0 flex items-center justify-center h-9 w-9 rounded-full ${channelBg(conv.channel)}`}>
+                      {channelIcon(conv.channel, 16)}
+                      <div className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full bg-white flex items-center justify-center">
+                        <Avatar className="h-3.5 w-3.5">
+                          <AvatarFallback className="bg-[#0a0a0a] text-white text-[7px] font-semibold">{getInitials(contactName)}</AvatarFallback>
+                        </Avatar>
+                      </div>
+                    </div>
                     {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="truncate text-[13px] font-medium text-[#0a0a0a]">
-                            {contactName}
-                          </span>
-                          <span
-                            className={`inline-block h-2 w-2 flex-shrink-0 rounded-full ${channelDotColor(conv.channel)}`}
-                            title={channelLabel(conv.channel)}
-                          />
+                          <span className="truncate text-[13px] font-semibold text-[#0a0a0a]">{contactName}</span>
+                          <span className="text-[11px] text-[#a3a3a3] flex-shrink-0">[{channelLabel(conv.channel)}]</span>
                         </div>
                         <span className="flex-shrink-0 text-[11px] text-[#a3a3a3]">
-                          {conv.last_message
-                            ? timeAgo(conv.last_message.created_at)
-                            : timeAgo(conv.updated_at)}
+                          {conv.last_message ? timeAgo(conv.last_message.created_at) : timeAgo(conv.updated_at)}
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <span className="truncate text-[12px] text-[#737373]">
-                          {conv.last_message
-                            ? truncate(conv.last_message.content, 50)
-                            : 'No messages yet'}
+                          {conv.last_message ? truncate(conv.last_message.content, 45) : 'No messages yet'}
                         </span>
                         {conv.status === 'escalated' && (
-                          <Badge
-                            variant="destructive"
-                            className="h-4 flex-shrink-0 px-1 text-[9px]"
-                          >
-                            Escalated
-                          </Badge>
+                          <Badge className="h-4 flex-shrink-0 px-1 text-[9px] bg-red-50 text-red-600 hover:bg-red-50">Escalated</Badge>
                         )}
                       </div>
                     </div>
@@ -509,77 +514,64 @@ export default function InboxPage() {
             </div>
           )}
         </ScrollArea>
+
+        {/* Bottom layout icons */}
+        <div className="flex items-center gap-1 px-3 py-2 border-t border-[#ebebeb]">
+          <button className="p-1.5 rounded hover:bg-[#f5f5f5]">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="5" height="12" rx="1" stroke="currentColor" strokeWidth="1.2" className="text-[#737373]"/><rect x="8" y="1" width="5" height="12" rx="1" stroke="currentColor" strokeWidth="1.2" className="text-[#737373]"/></svg>
+          </button>
+          <button className="p-1.5 rounded hover:bg-[#f5f5f5]">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="12" height="12" rx="1" stroke="currentColor" strokeWidth="1.2" className="text-[#737373]"/></svg>
+          </button>
+        </div>
       </div>
 
-      {/* ================================================================= */}
-      {/* CENTER PANEL: Active Conversation */}
-      {/* ================================================================= */}
-      <div className="flex flex-1 flex-col">
+      {/* ============================================================= */}
+      {/* CENTER: Conversation */}
+      {/* ============================================================= */}
+      <div className="flex flex-1 flex-col bg-white min-w-0">
         {!selectedId ? (
           <div className="flex flex-1 items-center justify-center">
             <div className="text-center">
-              <div className="text-[13px] font-medium text-[#a3a3a3]">
-                Select a conversation
+              <div className="h-14 w-14 rounded-full bg-[#f5f5f5] flex items-center justify-center mx-auto mb-3">
+                <PaperPlaneTilt size={22} className="text-[#a3a3a3]" />
               </div>
-              <div className="mt-1 text-[12px] text-[#c4c4c4]">
-                Choose a conversation from the left to view messages
-              </div>
+              <div className="text-[13px] font-medium text-[#0a0a0a]">Select a conversation</div>
+              <div className="mt-1 text-[12px] text-[#a3a3a3]">Choose one from the left to view messages</div>
             </div>
           </div>
         ) : detailLoading ? (
           <div className="flex flex-1 flex-col">
-            <div className="flex items-center justify-between border-b border-[#ebebeb] px-4 py-2.5">
+            <div className="flex items-center justify-between border-b border-[#ebebeb] px-5 py-3">
               <div className="flex items-center gap-3">
-                <Skeleton className="h-7 w-7 rounded-full" />
-                <div className="space-y-1.5">
-                  <Skeleton className="h-3 w-32" />
-                  <Skeleton className="h-2.5 w-20" />
-                </div>
+                <Skeleton className="h-8 w-8 rounded-full" />
+                <Skeleton className="h-4 w-32" />
               </div>
             </div>
-            <div className="flex-1 px-4 py-4">
-              <div className="mx-auto max-w-2xl space-y-3">
-                {[60, 80, 50, 90, 70].map((w, i) => (
-                  <div key={i} className="flex justify-start">
-                    <Skeleton className="h-14 rounded-lg" style={{ width: `${w}%` }} />
-                  </div>
-                ))}
-              </div>
+            <div className="flex-1 px-5 py-4 space-y-3">
+              {[60, 80, 50, 90].map((w, i) => (
+                <div key={i} className={i % 2 === 0 ? 'flex' : 'flex justify-end'}>
+                  <Skeleton className="h-12 rounded-2xl" style={{ width: `${w}%` }} />
+                </div>
+              ))}
             </div>
           </div>
         ) : detail ? (
           <>
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-[#ebebeb] px-4 py-2.5">
+            <div className="flex items-center justify-between border-b border-[#ebebeb] px-5 py-3">
               <div className="flex items-center gap-3">
-                <Avatar className="h-7 w-7">
-                  <AvatarFallback className="bg-[#0a0a0a] text-[9px] text-white">
-                    {getInitials(detail.contact?.name)}
-                  </AvatarFallback>
+                <Avatar className="h-8 w-8">
+                  <AvatarFallback className="bg-[#0a0a0a] text-[10px] text-white">{getInitials(detail.contact?.name)}</AvatarFallback>
                 </Avatar>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[13px] font-medium text-[#0a0a0a]">
-                      {detail.contact?.name || 'Unknown'}
-                    </span>
-                    <span
-                      className={`inline-block h-2 w-2 rounded-full ${channelDotColor(detail.channel)}`}
-                      title={channelLabel(detail.channel)}
-                    />
-                    <span className="text-[11px] text-[#a3a3a3]">
-                      {channelLabel(detail.channel)}
-                    </span>
-                  </div>
-                </div>
+                <span className="text-[14px] font-semibold text-[#0a0a0a]">{detail.contact?.name || 'Unknown'}</span>
               </div>
-              <div className="flex items-center gap-2">
-                <Select
-                  value={detail.status}
-                  onValueChange={(v) => v && handleStatusChange(v as ConversationStatus)}
-                >
-                  <SelectTrigger className="h-7 w-[130px] text-[12px]">
-                    <SelectValue />
-                  </SelectTrigger>
+              <div className="flex items-center gap-1">
+                <button onClick={() => toggleStar(detail.id)} className="p-1.5 rounded hover:bg-[#f5f5f5]">
+                  <Star size={16} weight={starred.has(detail.id) ? 'fill' : 'regular'} className={starred.has(detail.id) ? 'text-yellow-500' : 'text-[#737373]'} />
+                </button>
+                <Select value={detail.status} onValueChange={(v) => v && handleStatusChange(v as ConversationStatus)}>
+                  <SelectTrigger className="h-8 w-[110px] text-[12px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="active" className="text-[12px]">Active</SelectItem>
                     <SelectItem value="waiting" className="text-[12px]">Waiting</SelectItem>
@@ -587,76 +579,65 @@ export default function InboxPage() {
                     <SelectItem value="escalated" className="text-[12px]">Escalated</SelectItem>
                   </SelectContent>
                 </Select>
-                {!detail.assigned_to && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 gap-1.5 text-[12px]"
-                    onClick={handleTakeOver}
-                  >
-                    <UserCirclePlus size={14} />
-                    Take over
-                  </Button>
-                )}
+                <button className="p-1.5 rounded hover:bg-[#f5f5f5]">
+                  <DotsThreeVertical size={16} className="text-[#737373]" />
+                </button>
               </div>
             </div>
 
             {/* Messages */}
-            <ScrollArea className="flex-1 px-4 py-4">
+            <ScrollArea className="flex-1 px-5 py-4 bg-[#fafafa]">
               <div className="mx-auto max-w-2xl space-y-3">
                 {detail.messages.length === 0 ? (
-                  <div className="flex items-center justify-center py-12">
+                  <div className="flex items-center justify-center py-16">
                     <div className="text-[12px] text-[#a3a3a3]">No messages yet</div>
                   </div>
                 ) : (
-                  detail.messages.map((msg) => {
+                  detail.messages.map((msg, idx) => {
                     if (msg.role === 'system') {
                       return (
                         <div key={msg.id} className="flex justify-center">
-                          <span className="rounded-full bg-[#f5f5f5] px-3 py-1 text-[11px] text-[#a3a3a3]">
-                            {msg.content}
-                          </span>
+                          <span className="rounded-full bg-[#f0f0f0] px-3 py-1 text-[11px] text-[#737373]">{msg.content}</span>
                         </div>
                       )
                     }
-
                     const isUser = msg.role === 'user'
                     const isAI = msg.role === 'assistant'
                     const isHumanAgent = msg.role === 'human_agent'
+                    const isOutgoing = isAI || isHumanAgent
+                    const prevMsg = idx > 0 ? detail.messages[idx - 1] : null
+                    const showAvatar = !prevMsg || prevMsg.role !== msg.role
 
                     return (
-                      <div key={msg.id} className={`flex ${isUser ? 'justify-start' : 'justify-start'}`}>
-                        <div
-                          className={`max-w-[80%] rounded-lg px-3 py-2 ${
-                            isUser
-                              ? 'bg-[#f0f0f0] text-[#0a0a0a]'
-                              : isAI
-                              ? 'bg-[#f8f5ff] text-[#0a0a0a]'
-                              : isHumanAgent
-                              ? 'bg-[#eef6ff] text-[#0a0a0a]'
-                              : 'bg-[#f5f5f5] text-[#0a0a0a]'
-                          }`}
-                        >
-                          {/* Role badge */}
-                          {(isAI || isHumanAgent) && (
-                            <div className="mb-1">
-                              <span
-                                className={`inline-block rounded px-1.5 py-0.5 text-[9px] font-medium ${
-                                  isAI
-                                    ? 'bg-[#ede5ff] text-[#7c3aed]'
-                                    : 'bg-[#dbeafe] text-[#2563eb]'
-                                }`}
-                              >
-                                {isAI ? 'AI' : 'You'}
-                              </span>
-                            </div>
-                          )}
-                          <div className="whitespace-pre-wrap text-[13px] leading-relaxed">
+                      <div key={msg.id} className={`flex items-end gap-2 ${isOutgoing ? 'justify-end' : 'justify-start'}`}>
+                        {!isOutgoing && (
+                          <Avatar className={`h-6 w-6 flex-shrink-0 ${showAvatar ? '' : 'invisible'}`}>
+                            <AvatarFallback className="bg-[#e5e5e5] text-[8px] text-[#737373]">
+                              {getInitials(detail.contact?.name)}
+                            </AvatarFallback>
+                          </Avatar>
+                        )}
+                        <div className={`max-w-[75%] flex flex-col ${isOutgoing ? 'items-end' : 'items-start'}`}>
+                          <div
+                            className={`rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed whitespace-pre-wrap ${
+                              isOutgoing
+                                ? 'bg-[#dbeafe] text-[#0a0a0a] rounded-br-md'
+                                : 'bg-white text-[#0a0a0a] rounded-bl-md ring-1 ring-[#ebebeb]'
+                            }`}
+                          >
                             {msg.content}
                           </div>
-                          <div className="mt-1 text-right text-[10px] text-[#a3a3a3]">
-                            {formatTimestamp(msg.created_at)}
-                          </div>
+                          {isOutgoing && (
+                            <div className="mt-0.5 flex items-center gap-1 text-[10px] text-[#a3a3a3]">
+                              <span>Sent &middot; {timeAgo(msg.created_at)}</span>
+                              <Check size={11} weight="bold" className="text-[#3b82f6]" />
+                            </div>
+                          )}
+                          {!isOutgoing && (
+                            <div className="mt-0.5 text-[10px] text-[#a3a3a3]">
+                              {formatTimestamp(msg.created_at)}
+                            </div>
+                          )}
                         </div>
                       </div>
                     )
@@ -666,40 +647,49 @@ export default function InboxPage() {
               </div>
             </ScrollArea>
 
-            {/* Input area */}
-            <div className="border-t border-[#ebebeb] px-4 py-3">
+            {/* Input */}
+            <div className="border-t border-[#ebebeb] bg-white px-5 py-3">
               <div className="mx-auto max-w-2xl">
-                <div className="flex items-end gap-2">
-                  <Textarea
-                    ref={textareaRef}
-                    placeholder="Type your reply..."
-                    value={replyText}
-                    onChange={handleTextareaInput}
-                    onKeyDown={handleKeyDown}
-                    rows={1}
-                    className="min-h-[36px] max-h-[160px] resize-none text-[13px]"
-                  />
+                {/* Channel selector */}
+                <div className="flex items-center gap-2 mb-2">
+                  <button className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-[#f5f5f5] text-[12px] text-[#737373]">
+                    {channelIcon(detail.channel, 14)}
+                    <span className="font-medium">{channelLabel(detail.channel)}</span>
+                    <CaretDown size={10} />
+                  </button>
+                </div>
+                {/* Textarea */}
+                <Textarea
+                  ref={textareaRef}
+                  placeholder="Type your reply... Use @@ for shortcuts"
+                  value={replyText}
+                  onChange={handleTextareaInput}
+                  onKeyDown={handleKeyDown}
+                  rows={1}
+                  className="min-h-[60px] max-h-[160px] resize-none text-[13px] border-[#ebebeb] focus-visible:ring-1"
+                />
+                {/* Bottom toolbar */}
+                <div className="flex items-center justify-between mt-2">
+                  <div className="flex items-center gap-0.5">
+                    <button className="p-1.5 rounded hover:bg-[#f5f5f5] text-[#737373]" title="Shortcuts"><Lightning size={15} /></button>
+                    <button className="p-1.5 rounded hover:bg-[#f5f5f5] text-[#737373]" title="Attach"><Paperclip size={15} /></button>
+                    <button className="p-1.5 rounded hover:bg-[#f5f5f5] text-[#737373]" title="Emoji"><Smiley size={15} /></button>
+                    <button className="p-1.5 rounded hover:bg-[#f5f5f5] text-[#737373]" title="Mention"><At size={15} /></button>
+                    <div className="h-4 w-px bg-[#ebebeb] mx-1" />
+                    <div className="flex items-center gap-1.5">
+                      <Switch checked={aiAutoReply} onCheckedChange={(v) => { setAiAutoReply(v); if (!v) handleTakeOver() }} />
+                      <span className="text-[11px] text-[#737373]">AI {aiAutoReply ? 'on' : 'off'}</span>
+                    </div>
+                  </div>
                   <Button
                     size="sm"
-                    className="h-9 w-9 flex-shrink-0 p-0"
+                    className="h-8 px-4 gap-1.5 text-[12px] bg-[#0a0a0a] hover:bg-[#262626]"
                     onClick={handleSendReply}
                     disabled={!replyText.trim() || sending}
                   >
-                    <PaperPlaneTilt size={16} weight="fill" />
+                    {sending ? 'Sending...' : 'Send'}
+                    <PaperPlaneTilt size={12} weight="fill" />
                   </Button>
-                </div>
-                <div className="mt-2 flex items-center gap-2">
-                  <Switch
-                    checked={aiAutoReply}
-                    onCheckedChange={(checked) => {
-                      setAiAutoReply(checked)
-                      if (!checked) handleTakeOver()
-                    }}
-                    className="h-4 w-7"
-                  />
-                  <span className="text-[11px] text-[#737373]">
-                    AI auto-reply {aiAutoReply ? 'on' : 'off'}
-                  </span>
                 </div>
               </div>
             </div>
@@ -707,120 +697,137 @@ export default function InboxPage() {
         ) : null}
       </div>
 
-      {/* ================================================================= */}
-      {/* RIGHT PANEL: Contact Details */}
-      {/* ================================================================= */}
-      {detail?.contact ? (
-        <div className="flex w-[280px] flex-shrink-0 flex-col border-l border-[#ebebeb]">
-          <div className="p-4">
-            {/* Contact header */}
-            <div className="flex flex-col items-center text-center">
-              <Avatar className="h-12 w-12">
-                <AvatarFallback className="bg-[#0a0a0a] text-sm text-white">
-                  {getInitials(detail.contact.name)}
-                </AvatarFallback>
-              </Avatar>
-              <h3 className="mt-2 text-[14px] font-medium text-[#0a0a0a]">
-                {detail.contact.name || 'Unknown'}
-              </h3>
-              <div className="mt-1 flex items-center gap-1.5">
-                <span
-                  className={`inline-block h-2 w-2 rounded-full ${channelDotColor(detail.channel)}`}
-                />
-                <span className="text-[12px] text-[#737373]">
-                  {channelLabel(detail.channel)}
-                </span>
-                {detail.contact.language && (
-                  <>
-                    <span className="text-[12px] text-[#d4d4d4]">|</span>
-                    <span className="text-[12px] text-[#737373]">
-                      {detail.contact.language.toUpperCase()}
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
+      {/* ============================================================= */}
+      {/* RIGHT: Details */}
+      {/* ============================================================= */}
+      {detail?.contact && (
+        <div className="flex w-[300px] flex-shrink-0 flex-col border-l border-[#ebebeb] bg-white">
+          {/* Tabs */}
+          <div className="flex border-b border-[#ebebeb]">
+            {(['details', 'copilot'] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setRightTab(t)}
+                className={`flex-1 px-4 py-3 text-[12px] font-medium transition-colors border-b-2 ${
+                  rightTab === t ? 'border-[#0a0a0a] text-[#0a0a0a]' : 'border-transparent text-[#737373] hover:text-[#0a0a0a]'
+                }`}
+              >
+                {t === 'details' ? 'Details' : 'Copilot'}
+              </button>
+            ))}
+          </div>
 
-            <Separator className="my-4" />
+          {rightTab === 'details' ? (
+            <ScrollArea className="flex-1">
+              {/* Assignee */}
+              <DetailSection title="Assignee">
+                <div className="flex items-center gap-2 py-1">
+                  <Avatar className="h-6 w-6"><AvatarFallback className="bg-[#0a0a0a] text-[9px] text-white">{getInitials(userName)}</AvatarFallback></Avatar>
+                  <span className="text-[12px] text-[#0a0a0a]">{userName}</span>
+                </div>
+                <button className="flex items-center gap-2 mt-2 text-[11px] text-[#737373] hover:text-[#0a0a0a]">
+                  <UserCircle size={14} />
+                  <span>Team Inbox</span>
+                </button>
+              </DetailSection>
 
-            {/* Contact info */}
-            <div className="space-y-3">
-              {detail.contact.email && (
-                <div>
-                  <div className="text-[11px] font-medium text-[#a3a3a3] uppercase tracking-wider">
-                    Email
+              {/* Conversation attributes */}
+              <DetailSection title="Conversation">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-[#a3a3a3]">ID</span>
+                    <span className="text-[11px] text-[#0a0a0a] font-mono">{detail.id.slice(0, 8)}</span>
                   </div>
-                  <div className="mt-0.5 text-[13px] text-[#0a0a0a] break-all">
-                    {detail.contact.email}
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-[#a3a3a3]">Channel</span>
+                    <div className="flex items-center gap-1">
+                      {channelIcon(detail.channel, 12)}
+                      <span className="text-[11px] text-[#0a0a0a]">{channelLabel(detail.channel)}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-[#a3a3a3]">Status</span>
+                    <span className="text-[11px] text-[#0a0a0a] capitalize">{detail.status}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-[#a3a3a3]">Started</span>
+                    <span className="text-[11px] text-[#0a0a0a]">{timeAgo(detail.started_at)} ago</span>
                   </div>
                 </div>
-              )}
-              {detail.contact.phone && (
-                <div>
-                  <div className="text-[11px] font-medium text-[#a3a3a3] uppercase tracking-wider">
-                    Phone
-                  </div>
-                  <div className="mt-0.5 text-[13px] text-[#0a0a0a]">
-                    {detail.contact.phone}
-                  </div>
-                </div>
-              )}
-              <div>
-                <div className="text-[11px] font-medium text-[#a3a3a3] uppercase tracking-wider">
-                  Conversations
-                </div>
-                <div className="mt-0.5 text-[13px] text-[#0a0a0a]">
-                  {detail.conversation_count}
-                </div>
-              </div>
+              </DetailSection>
 
-              {detail.contact.tags && detail.contact.tags.length > 0 && (
-                <div>
-                  <div className="text-[11px] font-medium text-[#a3a3a3] uppercase tracking-wider">
-                    Tags
-                  </div>
-                  <div className="mt-1 flex flex-wrap gap-1">
+              {/* Contact */}
+              <DetailSection title="Contact" action={<Plus size={12} className="text-[#a3a3a3]" />}>
+                <div className="space-y-2">
+                  {detail.contact.email && (
+                    <div>
+                      <div className="text-[10px] text-[#a3a3a3] uppercase tracking-wider mb-0.5">Email</div>
+                      <div className="text-[12px] text-[#0a0a0a] break-all">{detail.contact.email}</div>
+                    </div>
+                  )}
+                  {detail.contact.phone && (
+                    <div>
+                      <div className="text-[10px] text-[#a3a3a3] uppercase tracking-wider mb-0.5">Phone</div>
+                      <div className="text-[12px] text-[#0a0a0a]">{detail.contact.phone}</div>
+                    </div>
+                  )}
+                  {detail.contact.language && (
+                    <div>
+                      <div className="text-[10px] text-[#a3a3a3] uppercase tracking-wider mb-0.5">Language</div>
+                      <div className="text-[12px] text-[#0a0a0a] uppercase">{detail.contact.language}</div>
+                    </div>
+                  )}
+                </div>
+              </DetailSection>
+
+              {/* Tags */}
+              <DetailSection title="Tags" action={<Plus size={12} className="text-[#a3a3a3]" />}>
+                {detail.contact.tags && detail.contact.tags.length > 0 ? (
+                  <div className="flex flex-wrap gap-1">
                     {detail.contact.tags.map((tag) => (
-                      <Badge key={tag} variant="secondary" className="text-[10px]">
-                        {tag}
-                      </Badge>
+                      <Badge key={tag} variant="secondary" className="text-[10px]">{tag}</Badge>
                     ))}
                   </div>
-                </div>
-              )}
-            </div>
+                ) : (
+                  <span className="text-[11px] text-[#a3a3a3]">No tags</span>
+                )}
+              </DetailSection>
 
-            <Separator className="my-4" />
+              {/* Recent conversations */}
+              <DetailSection title="Recent conversations" defaultOpen={false}>
+                <div className="text-[11px] text-[#737373]">{detail.conversation_count} total with this contact</div>
+              </DetailSection>
 
-            {/* Notes */}
-            <div>
-              <div className="text-[11px] font-medium text-[#a3a3a3] uppercase tracking-wider mb-1.5">
-                Notes
+              {/* Notes */}
+              <DetailSection title="Notes">
+                <Textarea
+                  placeholder="Add notes about this contact..."
+                  value={contactNotes}
+                  onChange={(e) => setContactNotes(e.target.value)}
+                  rows={3}
+                  className="text-[12px] resize-none border-[#ebebeb]"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 h-7 w-full text-[11px]"
+                  onClick={handleSaveNotes}
+                  disabled={savingNotes}
+                >
+                  {savingNotes ? 'Saving...' : 'Save notes'}
+                </Button>
+              </DetailSection>
+            </ScrollArea>
+          ) : (
+            <div className="flex-1 flex items-center justify-center p-6 text-center">
+              <div>
+                <div className="text-[13px] font-medium text-[#0a0a0a] mb-1">AI Copilot</div>
+                <div className="text-[11px] text-[#a3a3a3]">Coming soon — AI suggestions, summaries, and actions</div>
               </div>
-              <Textarea
-                placeholder="Add notes about this contact..."
-                value={contactNotes}
-                onChange={(e) => setContactNotes(e.target.value)}
-                rows={4}
-                className="text-[12px] resize-none"
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-2 h-7 w-full text-[11px]"
-                onClick={handleSaveNotes}
-                disabled={savingNotes}
-              >
-                {savingNotes ? 'Saving...' : 'Save notes'}
-              </Button>
             </div>
-          </div>
+          )}
         </div>
-      ) : selectedId && detail ? (
-        <div className="flex w-[280px] flex-shrink-0 items-center justify-center border-l border-[#ebebeb]">
-          <div className="text-[12px] text-[#a3a3a3]">No contact info</div>
-        </div>
-      ) : null}
+      )}
     </div>
   )
 }
