@@ -1,14 +1,16 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { stripe, PLANS, type PlanKey } from '@/lib/stripe'
+import { razorpay, PLANS, type PlanKey } from '@/lib/razorpay'
 
 export async function POST(request: Request) {
   try {
+    if (!razorpay) {
+      return NextResponse.json({ error: 'Payment not configured' }, { status: 500 })
+    }
+
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { data: membership } = await supabase
       .from('org_members')
@@ -16,9 +18,7 @@ export async function POST(request: Request) {
       .eq('user_id', user.id)
       .single()
 
-    if (!membership) {
-      return NextResponse.json({ error: 'No organization found' }, { status: 403 })
-    }
+    if (!membership) return NextResponse.json({ error: 'No organization found' }, { status: 403 })
 
     const body = await request.json()
     const plan = body.plan as PlanKey
@@ -28,56 +28,53 @@ export async function POST(request: Request) {
     }
 
     const selectedPlan = PLANS[plan]
-    if (!selectedPlan.priceId) {
-      return NextResponse.json({ error: 'Price not configured for this plan' }, { status: 400 })
-    }
 
-    // Get or create Stripe customer
+    // Get org info
     const { data: org } = await supabase
       .from('organizations')
-      .select('id, name, stripe_customer_id')
+      .select('id, name')
       .eq('id', membership.org_id)
       .single()
 
-    if (!org) {
-      return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
-    }
+    if (!org) return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
 
-    let customerId = org.stripe_customer_id
-
-    if (!customerId) {
-      const customer = await stripe.customers.create({
-        email: user.email,
-        name: org.name,
-        metadata: { org_id: org.id },
+    if (selectedPlan.planId) {
+      // Subscription mode — create a Razorpay subscription
+      const subscription = await razorpay.subscriptions.create({
+        plan_id: selectedPlan.planId,
+        total_count: 12, // 12 months
+        notes: { org_id: org.id, plan, org_name: org.name },
       })
-      customerId = customer.id
 
-      await supabase
-        .from('organizations')
-        .update({ stripe_customer_id: customerId })
-        .eq('id', org.id)
+      return NextResponse.json({
+        subscriptionId: subscription.id,
+        keyId: process.env.RAZORPAY_KEY_ID,
+        plan,
+        orgId: org.id,
+        name: org.name,
+        email: user.email,
+      })
+    } else {
+      // One-time order fallback
+      const order = await razorpay.orders.create({
+        amount: selectedPlan.price,
+        currency: 'INR',
+        receipt: `order_${org.id}_${plan}_${Date.now()}`,
+        notes: { org_id: org.id, plan, org_name: org.name },
+      })
+
+      return NextResponse.json({
+        orderId: order.id,
+        keyId: process.env.RAZORPAY_KEY_ID,
+        amount: selectedPlan.price,
+        plan,
+        orgId: org.id,
+        name: org.name,
+        email: user.email,
+      })
     }
-
-    // Create checkout session
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
-      mode: 'subscription',
-      line_items: [{ price: selectedPlan.priceId, quantity: 1 }],
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/billing?success=true`,
-      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/billing?canceled=true`,
-      metadata: { org_id: org.id, plan },
-      subscription_data: {
-        metadata: { org_id: org.id, plan },
-      },
-    })
-
-    return NextResponse.json({ url: session.url })
   } catch (error) {
     console.error('Checkout error:', error)
-    return NextResponse.json(
-      { error: 'Failed to create checkout session' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to create checkout' }, { status: 500 })
   }
 }

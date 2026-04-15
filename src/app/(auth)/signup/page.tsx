@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { createBrowserClient } from "@supabase/ssr";
+import { Eye, EyeOff } from "lucide-react";
 
 function GoogleIcon() {
   return (
@@ -47,6 +48,7 @@ export default function SignupPage() {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -82,37 +84,35 @@ export default function SignupPage() {
       return;
     }
 
-    // Create default organization
-    const slug = email.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "-");
-    const { data: org, error: orgError } = await supabase
-      .from("organizations")
-      .insert({
-        name: `${fullName}'s Organization`,
-        slug,
-      })
-      .select()
-      .single();
-
-    if (orgError) {
-      setError(orgError.message);
-      setLoading(false);
-      return;
-    }
-
-    // Add user as owner
-    const { error: memberError } = await supabase.from("org_members").insert({
-      org_id: org.id,
-      user_id: user.id,
-      role: "owner",
+    // Create org via server-side API (uses service role, bypasses RLS)
+    const orgRes = await fetch("/api/auth/setup-org", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: user.id, fullName, email }),
     });
 
-    if (memberError) {
-      setError(memberError.message);
+    if (!orgRes.ok) {
+      const data = await orgRes.json();
+      setError(data.error || "Failed to create organization. Please try logging in.");
       setLoading(false);
       return;
     }
 
-    router.push("/onboarding");
+    // Send verification email
+    const verifyRes = await fetch("/api/auth/send-verification", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, userId: user.id }),
+    });
+    const verifyData = await verifyRes.json();
+
+    if (verifyData.skipped) {
+      // Local dev — skip verification, go straight to onboarding
+      router.push("/onboarding");
+    } else {
+      // Redirect to OTP verification page
+      router.push(`/verify-email?userId=${user.id}&email=${encodeURIComponent(email)}`);
+    }
     router.refresh();
   }
 
@@ -198,14 +198,23 @@ export default function SignupPage() {
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="password">Password</Label>
-          <Input
-            id="password"
-            name="password"
-            type="password"
-            placeholder="Create a password"
-            required
-            className="h-11 rounded-xl"
-          />
+          <div className="relative">
+            <Input
+              id="password"
+              name="password"
+              type={showPassword ? "text" : "password"}
+              placeholder="Create a password"
+              required
+              className="h-11 rounded-xl pr-10"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
         </div>
 
         {error && (

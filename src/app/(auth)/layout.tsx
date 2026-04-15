@@ -67,7 +67,9 @@ export default function AuthLayout({
 
         {/* Footer */}
         <p className="mt-12 text-center text-xs text-muted-foreground">
-          Crafted with Care. For India, from India.
+          <a href="https://jordon.ai/privacy" className="hover:underline">Privacy</a>
+          {" · "}
+          <a href="https://jordon.ai/terms" className="hover:underline">Terms</a>
         </p>
       </div>
     </div>

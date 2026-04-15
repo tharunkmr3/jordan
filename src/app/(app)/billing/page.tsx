@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { PLANS, type PlanKey } from '@/lib/stripe'
+import { PLANS, type PlanKey } from '@/lib/razorpay'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -13,7 +13,12 @@ interface OrgData {
   id: string
   name: string
   plan: string
-  stripe_customer_id: string | null
+}
+
+declare global {
+  interface Window {
+    Razorpay: new (options: Record<string, unknown>) => { open: () => void }
+  }
 }
 
 export default function BillingPage() {
@@ -23,6 +28,14 @@ export default function BillingPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   useEffect(() => {
+    // Load Razorpay script
+    if (!document.getElementById('razorpay-script')) {
+      const script = document.createElement('script')
+      script.id = 'razorpay-script'
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+      document.body.appendChild(script)
+    }
+
     async function fetchBillingData() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
@@ -38,7 +51,7 @@ export default function BillingPage() {
 
       const { data: orgData } = await supabase
         .from('organizations')
-        .select('id, name, plan, stripe_customer_id')
+        .select('id, name, plan')
         .eq('id', membership.org_id)
         .single()
 
@@ -68,26 +81,51 @@ export default function BillingPage() {
         body: JSON.stringify({ plan }),
       })
       const data = await res.json()
-      if (data.url) {
-        window.location.href = data.url
+
+      if (data.error) {
+        alert(data.error)
+        setActionLoading(null)
+        return
       }
+
+      const options: Record<string, unknown> = {
+        key: data.keyId,
+        name: 'Jordon AI',
+        description: `${PLANS[plan].name} Plan`,
+        prefill: { email: data.email, contact: '' },
+        notes: { org_id: data.orgId, plan },
+        theme: { color: '#0a0a0a' },
+        handler: async (response: { razorpay_payment_id: string; razorpay_subscription_id?: string; razorpay_signature: string; razorpay_order_id?: string }) => {
+          // Verify payment on server
+          const verifyRes = await fetch('/api/billing/verify-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ...response,
+              plan,
+              orgId: data.orgId,
+            }),
+          })
+          if (verifyRes.ok) {
+            window.location.reload()
+          } else {
+            alert('Payment verification failed. Please contact support.')
+          }
+        },
+      }
+
+      if (data.subscriptionId) {
+        options.subscription_id = data.subscriptionId
+      } else if (data.orderId) {
+        options.order_id = data.orderId
+        options.amount = data.amount
+        options.currency = 'INR'
+      }
+
+      const rzp = new window.Razorpay(options)
+      rzp.open()
     } catch (error) {
       console.error('Checkout error:', error)
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
-  async function handleManageBilling() {
-    setActionLoading('portal')
-    try {
-      const res = await fetch('/api/billing/portal', { method: 'POST' })
-      const data = await res.json()
-      if (data.url) {
-        window.location.href = data.url
-      }
-    } catch (error) {
-      console.error('Portal error:', error)
     } finally {
       setActionLoading(null)
     }
@@ -113,16 +151,6 @@ export default function BillingPage() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-[15px] font-semibold text-[#0a0a0a]">Billing</h1>
-        {isActive && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleManageBilling}
-            disabled={actionLoading === 'portal'}
-          >
-            {actionLoading === 'portal' ? 'Loading...' : 'Manage Subscription'}
-          </Button>
-        )}
       </div>
 
       {/* Current Plan Status */}
@@ -132,7 +160,7 @@ export default function BillingPage() {
           <CardDescription className="text-[12px]">
             {isActive
               ? `You are on the ${PLANS[currentPlan as PlanKey]?.name || currentPlan} plan`
-              : 'You are on the Free Trial'}
+              : 'You are on the Free plan'}
           </CardDescription>
         </CardHeader>
         {isActive && subscription && (
@@ -189,13 +217,8 @@ export default function BillingPage() {
               </CardContent>
               <CardFooter>
                 {isCurrent ? (
-                  <Button
-                    className="w-full"
-                    variant="outline"
-                    onClick={handleManageBilling}
-                    disabled={actionLoading === 'portal'}
-                  >
-                    Manage Plan
+                  <Button className="w-full" variant="outline" disabled>
+                    Current Plan
                   </Button>
                 ) : (
                   <Button
@@ -203,7 +226,7 @@ export default function BillingPage() {
                     onClick={() => handleSubscribe(key)}
                     disabled={actionLoading === key}
                   >
-                    {actionLoading === key ? 'Redirecting...' : 'Subscribe'}
+                    {actionLoading === key ? 'Loading...' : 'Subscribe'}
                   </Button>
                 )}
               </CardFooter>
