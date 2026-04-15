@@ -20,7 +20,7 @@ export async function OPTIONS() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { agentId, message, conversationId, visitorId, stream } = body
+    const { agentId, message, conversationId, visitorId, visitorName, stream } = body
 
     if (!agentId || typeof agentId !== 'string') {
       return NextResponse.json({ error: 'agentId is required' }, { status: 400, headers: corsHeaders })
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
       message,
       conversationId: conversationId || undefined,
       channel: 'website' as const,
-      contactInfo: visitorId ? { channelUserId: visitorId } : undefined,
+      contactInfo: visitorId ? { channelUserId: visitorId, name: visitorName || undefined } : undefined,
     }
 
     // Streaming mode — Server-Sent Events

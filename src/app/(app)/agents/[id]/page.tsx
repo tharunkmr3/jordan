@@ -137,7 +137,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agentId: id, message: msg, conversationId, stream: true }),
+        body: JSON.stringify({ agentId: id, message: msg, conversationId, stream: true, visitorId: `test-${id}`, visitorName: "Test" }),
       })
       if (!res.body) throw new Error("No stream")
       const reader = res.body.getReader()
