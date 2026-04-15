@@ -32,7 +32,7 @@ const nav = [
   { label: "Channels", href: "/channels", icon: Broadcast },
 ]
 
-interface SidebarAgent { id: string; name: string; status: string }
+interface SidebarAgent { id: string; name: string; status: string; avatar_url?: string | null }
 
 const bottomNav = [
   { label: "Billing", href: "/billing", icon: CreditCard },
@@ -109,7 +109,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         const res = await fetch("/api/agents")
         if (res.ok) {
           const data = await res.json()
-          if (Array.isArray(data)) setAgents(data.map((a: SidebarAgent) => ({ id: a.id, name: a.name, status: a.status })))
+          if (Array.isArray(data)) setAgents(data.map((a: SidebarAgent) => ({ id: a.id, name: a.name, status: a.status, avatar_url: a.avatar_url })))
         }
       } catch { /* ignore */ }
     }
@@ -218,7 +218,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         isActive ? "bg-[#ebebeb] text-[#0a0a0a]" : "text-[#525252] hover:bg-[#ebebeb]"
                       )}
                     >
-                      <Robot size={14} weight={isActive ? "fill" : "regular"} className={isActive ? "text-[#0a0a0a]" : "text-[#737373]"} />
+                      {a.avatar_url ? (
+                        <img src={a.avatar_url} alt={a.name} className="h-5 w-5 rounded-full object-cover flex-shrink-0" />
+                      ) : (
+                        <div className="h-5 w-5 rounded-full bg-[#0a0a0a] text-white text-[9px] font-semibold flex items-center justify-center flex-shrink-0">
+                          {a.name[0]?.toUpperCase() || 'A'}
+                        </div>
+                      )}
                       <span className="truncate flex-1">{a.name}</span>
                       {a.status === "active" && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 flex-shrink-0" />}
                     </Link>

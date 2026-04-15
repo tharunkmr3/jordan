@@ -17,11 +17,13 @@ import { Message, MessageAvatar, MessageContent } from "@/components/ui/message"
 import { PromptInput, PromptInputTextarea, PromptInputActions, PromptInputAction } from "@/components/ui/prompt-input"
 import { Loader } from "@/components/ui/loader"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ArrowUp, Copy, Check, Trash2, Pencil, Phone, Mail, Globe, Upload, FileText, X, Plus } from "lucide-react"
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
+import { ArrowUp, Copy, Check, Trash2, Pencil, Phone, Mail, Globe, Upload, FileText, X, Plus, Camera } from "lucide-react"
 import { WhatsappLogo, MessengerLogo } from "@phosphor-icons/react"
 
 interface Agent {
   id: string; name: string; description: string; system_prompt: string
+  avatar_url: string | null
   model_provider: string; model_name: string; voice_provider: string
   voice_id: string; language: string; supported_languages: string[]
   temperature: number; max_tokens: number; greeting_message: string
@@ -89,6 +91,8 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
   const [uploading, setUploading] = useState(false)
   const [showKbPicker, setShowKbPicker] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const avatarInputRef = useRef<HTMLInputElement>(null)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
 
   const loadChannels = useCallback(() => {
     fetch(`/api/channels?agentId=${id}`).then(r => r.json()).then(data => {
@@ -361,6 +365,28 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
     setKbLoading(false)
   }
 
+  async function uploadAvatar(file: File) {
+    setUploadingAvatar(true)
+    const formData = new FormData()
+    formData.append("file", file)
+    try {
+      const res = await fetch(`/api/agents/${id}/avatar`, { method: "POST", body: formData })
+      const data = await res.json()
+      if (data.avatar_url) {
+        setAgent(prev => prev ? { ...prev, avatar_url: data.avatar_url } : prev)
+        setEditData(prev => ({ ...prev, avatar_url: data.avatar_url }))
+      }
+    } finally {
+      setUploadingAvatar(false)
+    }
+  }
+
+  async function removeAvatar() {
+    await fetch(`/api/agents/${id}/avatar`, { method: "DELETE" })
+    setAgent(prev => prev ? { ...prev, avatar_url: null } : prev)
+    setEditData(prev => ({ ...prev, avatar_url: null }))
+  }
+
   async function uploadDocument(file: File) {
     if (!linkedKb) return
     setUploading(true)
@@ -419,12 +445,51 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
       <div className="flex-1 overflow-y-auto border-r border-[#ebebeb] p-6">
         <div className="max-w-xl mx-auto space-y-5">
           <div className="flex items-start justify-between">
-            <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-lg font-semibold">{agent.name}</h1>
-                <Badge className={statusColors[agent.status] || ""}>{agent.status}</Badge>
+            <div className="flex items-start gap-4">
+              {/* Avatar with upload */}
+              <div className="relative group shrink-0">
+                <Avatar className="h-14 w-14">
+                  {agent.avatar_url && <AvatarImage src={agent.avatar_url} alt={agent.name} />}
+                  <AvatarFallback className="bg-[#0a0a0a] text-white text-sm font-semibold">
+                    {agent.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  className="hidden"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  onChange={e => { if (e.target.files?.[0]) uploadAvatar(e.target.files[0]); e.target.value = "" }}
+                />
+                <button
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={uploadingAvatar}
+                  className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Upload avatar"
+                >
+                  {uploadingAvatar ? (
+                    <Loader variant="circular" size="sm" />
+                  ) : (
+                    <Camera size={18} className="text-white" />
+                  )}
+                </button>
+                {agent.avatar_url && !uploadingAvatar && (
+                  <button
+                    onClick={removeAvatar}
+                    className="absolute -top-1 -right-1 bg-white border border-[#e5e5e5] rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50"
+                    title="Remove avatar"
+                  >
+                    <X size={10} className="text-red-600" />
+                  </button>
+                )}
               </div>
-              {agent.description && <p className="text-sm text-muted-foreground mt-1">{agent.description}</p>}
+              <div>
+                <div className="flex items-center gap-3">
+                  <h1 className="text-lg font-semibold">{agent.name}</h1>
+                  <Badge className={statusColors[agent.status] || ""}>{agent.status}</Badge>
+                </div>
+                {agent.description && <p className="text-sm text-muted-foreground mt-1">{agent.description}</p>}
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={() => setEditing(!editing)}>
@@ -838,13 +903,13 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
           <div className="space-y-4">
             {messages.map((msg, i) => (
               <Message key={i} className={msg.role === "user" ? "flex-row-reverse" : ""}>
-                <MessageAvatar src="" alt={msg.role === "assistant" ? "AI" : "You"} fallback={msg.role === "assistant" ? "J" : "Y"} className={msg.role === "assistant" ? "bg-[#0a0a0a] text-white" : "bg-[#ebebeb]"} />
+                <MessageAvatar src={msg.role === "assistant" ? (agent.avatar_url || "") : ""} alt={msg.role === "assistant" ? agent.name : "You"} fallback={msg.role === "assistant" ? (agent.name[0]?.toUpperCase() || "J") : "Y"} className={msg.role === "assistant" ? "bg-[#0a0a0a] text-white" : "bg-[#ebebeb]"} />
                 <MessageContent className={msg.role === "user" ? "bg-[#0a0a0a] text-white rounded-2xl rounded-tr-sm px-4 py-2.5" : "bg-[#f5f5f5] rounded-2xl rounded-tl-sm px-4 py-2.5"}>{msg.content}</MessageContent>
               </Message>
             ))}
             {chatLoading && (
               <Message>
-                <MessageAvatar src="" alt="AI" fallback="J" className="bg-[#0a0a0a] text-white" />
+                <MessageAvatar src={agent.avatar_url || ""} alt={agent.name} fallback={agent.name[0]?.toUpperCase() || "J"} className="bg-[#0a0a0a] text-white" />
                 <div className="bg-[#f5f5f5] rounded-2xl rounded-tl-sm px-4 py-3"><Loader variant="typing" size="sm" /></div>
               </Message>
             )}
