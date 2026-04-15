@@ -112,7 +112,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
     fetch(`/api/agents/${id}`).then(r => r.json()).then(data => {
       setAgent(data)
       setEditData(data)
-      if (data.greeting_message) setMessages([{ role: "assistant", content: data.greeting_message }])
+      // Chat starts empty — greeting only used for phone calls
       setLoading(false)
     })
     loadChannels()
@@ -444,7 +444,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                   <TabsContent value="general" className="space-y-4 pt-4">
                     <div><Label>Name</Label><Input value={editData.name || ""} onChange={e => setEditData({...editData, name: e.target.value})} className="mt-1.5" /></div>
                     <div><Label>Description</Label><Textarea value={editData.description || ""} onChange={e => setEditData({...editData, description: e.target.value})} className="mt-1.5" /></div>
-                    <div><Label>Greeting Message</Label><Textarea value={editData.greeting_message || ""} onChange={e => setEditData({...editData, greeting_message: e.target.value})} className="mt-1.5" /></div>
+                    <div><Label>Phone Greeting</Label><Textarea placeholder="Welcome to Jordon.ai, how may I help you today?" value={editData.greeting_message || ""} onChange={e => setEditData({...editData, greeting_message: e.target.value})} className="mt-1.5" /><p className="text-[11px] text-muted-foreground mt-1">Spoken when someone calls. Chat channels start empty.</p></div>
                     <div><Label>Fallback Message</Label><Textarea value={editData.fallback_message || ""} onChange={e => setEditData({...editData, fallback_message: e.target.value})} className="mt-1.5" /></div>
                     <div><Label>Status</Label><Select value={editData.status} onValueChange={v => v && setEditData({...editData, status: v})}><SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="draft">Draft</SelectItem><SelectItem value="active">Active</SelectItem><SelectItem value="paused">Paused</SelectItem></SelectContent></Select></div>
                   </TabsContent>
@@ -832,7 +832,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
       <div className="w-[400px] flex flex-col bg-white">
         <div className="h-12 flex items-center justify-between px-4 border-b border-[#ebebeb]">
           <span className="text-sm font-medium">Test Chat</span>
-          <Button variant="ghost" size="sm" className="text-xs" onClick={() => { setMessages(agent?.greeting_message ? [{ role: "assistant", content: agent.greeting_message }] : []); setConversationId(null) }}>Clear</Button>
+          <Button variant="ghost" size="sm" className="text-xs" onClick={() => { setMessages([]); setConversationId(null) }}>Clear</Button>
         </div>
         <ScrollArea className="flex-1 p-4" ref={scrollRef}>
           <div className="space-y-4">
