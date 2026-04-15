@@ -133,12 +133,46 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
     setMessages(prev => [...prev, { role: "user", content: msg }])
     setChatLoading(true)
     try {
-      const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agentId: id, message: msg, conversationId }) })
-      const data = await res.json()
-      setMessages(prev => [...prev, { role: "assistant", content: data.response || data.error || "No response" }])
-      if (data.conversationId) setConversationId(data.conversationId)
-    } catch { setMessages(prev => [...prev, { role: "assistant", content: "Failed to get response" }]) }
-    setChatLoading(false)
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agentId: id, message: msg, conversationId, stream: true }),
+      })
+      if (!res.body) throw new Error("No stream")
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let assistantMsg = ""
+      setMessages(prev => [...prev, { role: "assistant", content: "" }])
+      setChatLoading(false)
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const text = decoder.decode(value, { stream: true })
+        for (const line of text.split("\n")) {
+          if (!line.startsWith("data: ")) continue
+          const payload = line.slice(6).trim()
+          if (payload === "[DONE]") break
+          try {
+            const parsed = JSON.parse(payload)
+            if (parsed.type === "token") {
+              assistantMsg += parsed.data
+              setMessages(prev => {
+                const updated = [...prev]
+                updated[updated.length - 1] = { role: "assistant", content: assistantMsg }
+                return updated
+              })
+            } else if (parsed.type === "meta") {
+              const meta = JSON.parse(parsed.data)
+              if (meta.conversationId) setConversationId(meta.conversationId)
+            }
+          } catch { /* skip malformed lines */ }
+        }
+      }
+    } catch {
+      setMessages(prev => [...prev, { role: "assistant", content: "Failed to get response" }])
+      setChatLoading(false)
+    }
   }
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }) }, [messages, chatLoading])
@@ -373,20 +407,6 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
             </div>
           </div>
 
-          <Card>
-            <CardContent className="p-4">
-              <Label className="text-xs text-muted-foreground">Widget Embed Code</Label>
-              <div className="flex items-center gap-2 mt-2">
-                <code className="flex-1 rounded-md bg-muted px-3 py-2 text-xs font-mono break-all">
-                  {`<script src="${typeof window !== "undefined" ? window.location.origin : ""}/widget.js" data-agent-id="${id}"></script>`}
-                </code>
-                <Button variant="outline" size="icon-sm" onClick={copyWidget}>
-                  {copied ? <Check size={14} /> : <Copy size={14} />}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
           {editing ? (
             <Card>
               <CardContent className="p-5 space-y-5">
@@ -454,32 +474,47 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                     const config = (ch?.channel_config || {}) as Record<string, unknown>
                     const configured = isChannelConfigured(type, config)
                     return (
-                      <div key={type} className="flex items-center justify-between py-2.5 px-1 rounded-lg hover:bg-muted/50 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <div className={`flex items-center justify-center w-8 h-8 rounded-lg ${isActive && configured ? "bg-green-50 text-green-700" : "bg-muted text-muted-foreground"}`}>{meta.icon}</div>
-                          <div>
-                            <span className="text-sm font-medium">{meta.label}</span>
-                            <div className="text-xs text-muted-foreground">
-                              {isActive && configured ? meta.connectedLabel(config) : meta.description}
+                      <div key={type}>
+                        <div className="flex items-center justify-between py-2.5 px-1 rounded-lg hover:bg-muted/50 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <div className={`flex items-center justify-center w-8 h-8 rounded-lg ${isActive && configured ? "bg-green-50 text-green-700" : "bg-muted text-muted-foreground"}`}>{meta.icon}</div>
+                            <div>
+                              <span className="text-sm font-medium">{meta.label}</span>
+                              <div className="text-xs text-muted-foreground">
+                                {isActive && configured ? meta.connectedLabel(config) : meta.description}
+                              </div>
                             </div>
                           </div>
+                          <div className="flex items-center gap-2">
+                            {isActive && type !== "website" && (
+                              <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => {
+                                setSetupChannel(type)
+                                setSetupStep(0)
+                                setSetupData(Object.fromEntries(Object.entries(config).map(([k, v]) => [k, String(v || "")])))
+                              }}>
+                                Edit
+                              </Button>
+                            )}
+                            <Switch
+                              checked={isActive}
+                              disabled={channelSaving === type}
+                              onCheckedChange={(v: boolean) => void toggleChannel(type, v)}
+                            />
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          {isActive && type !== "website" && (
-                            <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => {
-                              setSetupChannel(type)
-                              setSetupStep(0)
-                              setSetupData(Object.fromEntries(Object.entries(config).map(([k, v]) => [k, String(v || "")])))
-                            }}>
-                              Edit
-                            </Button>
-                          )}
-                          <Switch
-                            checked={isActive}
-                            disabled={channelSaving === type}
-                            onCheckedChange={(v: boolean) => void toggleChannel(type, v)}
-                          />
-                        </div>
+                        {type === "website" && isActive && (
+                          <div className="ml-11 mt-1 mb-2">
+                            <div className="flex items-center gap-2">
+                              <code className="flex-1 rounded-md bg-muted px-3 py-2 text-[11px] font-mono break-all">
+                                {`<script src="${typeof window !== "undefined" ? window.location.origin : ""}/widget.js" data-agent-id="${id}"></script>`}
+                              </code>
+                              <Button variant="outline" size="icon-sm" onClick={copyWidget}>
+                                {copied ? <Check size={14} /> : <Copy size={14} />}
+                              </Button>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground mt-1">Paste this in your website&apos;s HTML</p>
+                          </div>
+                        )}
                       </div>
                     )
                   })}

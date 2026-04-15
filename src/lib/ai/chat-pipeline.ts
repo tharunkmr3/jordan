@@ -4,7 +4,7 @@
 // ============================================================================
 
 import { createAdminClient } from '@/lib/supabase/admin'
-import { generateResponse, type ChatMessage, type ModelConfig } from './models'
+import { generateResponse, streamResponse, type ChatMessage, type ModelConfig } from './models'
 import type {
   Agent,
   ChannelType,
@@ -39,7 +39,7 @@ export interface PipelineOutput {
 }
 
 // ---------------------------------------------------------------------------
-// Knowledge base — optional dependency (another agent is building this)
+// Knowledge base — optional dependency
 // ---------------------------------------------------------------------------
 
 let queryKnowledgeBase:
@@ -51,7 +51,7 @@ try {
   const kb = require('./knowledge-base')
   queryKnowledgeBase = kb.queryKnowledgeBase
 } catch {
-  // Knowledge base module not available yet — that's fine
+  // Knowledge base module not available yet
 }
 
 // ---------------------------------------------------------------------------
@@ -66,46 +66,30 @@ export async function processChatMessage(
   // 1. Load agent config
   const agent = await loadAgent(supabase, input.agentId)
 
-  // 2. Find or create contact
+  // 2. Find or create contact + conversation in parallel where possible
   const contact = await findOrCreateContact(supabase, agent.org_id, input)
+  const conversation = await findOrCreateConversation(supabase, agent, contact, input)
 
-  // 3. Find or create conversation
-  const conversation = await findOrCreateConversation(
-    supabase,
-    agent,
-    contact,
-    input
-  )
+  // 3. Save user message, load history, and query KB in parallel
+  const [, history, kbContext] = await Promise.all([
+    saveMessage(supabase, {
+      conversation_id: conversation.id,
+      org_id: agent.org_id,
+      role: 'user',
+      content: input.message,
+      channel: input.channel,
+    }),
+    loadHistory(supabase, conversation.id, 20),
+    queryKnowledgeBase
+      ? queryKnowledgeBase(input.agentId, input.message, 5).catch(() => [] as string[])
+      : Promise.resolve([] as string[]),
+  ])
 
-  // 4. Save user message
-  await saveMessage(supabase, {
-    conversation_id: conversation.id,
-    org_id: agent.org_id,
-    role: 'user',
-    content: input.message,
-    channel: input.channel,
-  })
+  // 4. Build prompt
+  const kbContextStr = kbContext.length > 0 ? kbContext.join('\n\n') : ''
+  const messages = buildPrompt(agent, history, input.message, kbContextStr)
 
-  // 5. Load conversation history (last 20 messages)
-  const history = await loadHistory(supabase, conversation.id, 20)
-
-  // 6. Query knowledge base for relevant context
-  let kbContext = ''
-  if (queryKnowledgeBase) {
-    try {
-      const results = await queryKnowledgeBase(input.agentId, input.message, 5)
-      if (results.length > 0) {
-        kbContext = results.join('\n\n')
-      }
-    } catch {
-      // KB query failed — continue without context
-    }
-  }
-
-  // 7. Build prompt
-  const messages = buildPrompt(agent, history, input.message, kbContext)
-
-  // 8. Call AI model
+  // 5. Call AI model
   const modelConfig: ModelConfig = {
     provider: agent.model_provider,
     model: agent.model_name,
@@ -123,7 +107,7 @@ export async function processChatMessage(
       "I'm sorry, I'm having trouble right now. Please try again in a moment."
   }
 
-  // 9. Save assistant message
+  // 6. Save assistant message
   const { data: savedMsg } = await saveMessage(supabase, {
     conversation_id: conversation.id,
     org_id: agent.org_id,
@@ -135,8 +119,8 @@ export async function processChatMessage(
     },
   })
 
-  // 10. Log usage
-  await logUsage(supabase, {
+  // 7. Log usage — fire and forget (don't block the response)
+  logUsage(supabase, {
     org_id: agent.org_id,
     agent_id: agent.id,
     event_type: 'message',
@@ -146,9 +130,8 @@ export async function processChatMessage(
       channel: input.channel,
       model: `${agent.model_provider}/${agent.model_name}`,
     },
-  })
+  }).catch(err => console.error('[chat-pipeline] Usage log failed:', err))
 
-  // 11. Return
   return {
     response,
     conversationId: conversation.id,
@@ -157,16 +140,85 @@ export async function processChatMessage(
   }
 }
 
+/**
+ * Streaming pipeline — yields text chunks as they arrive from the LLM.
+ * Saves the full response to DB after streaming completes.
+ */
+export async function* streamChatMessage(
+  input: PipelineInput
+): AsyncGenerator<{ type: 'token' | 'meta'; data: string }> {
+  const supabase = createAdminClient()
+
+  const agent = await loadAgent(supabase, input.agentId)
+  const contact = await findOrCreateContact(supabase, agent.org_id, input)
+  const conversation = await findOrCreateConversation(supabase, agent, contact, input)
+
+  const [, history, kbContext] = await Promise.all([
+    saveMessage(supabase, {
+      conversation_id: conversation.id,
+      org_id: agent.org_id,
+      role: 'user',
+      content: input.message,
+      channel: input.channel,
+    }),
+    loadHistory(supabase, conversation.id, 20),
+    queryKnowledgeBase
+      ? queryKnowledgeBase(input.agentId, input.message, 5).catch(() => [] as string[])
+      : Promise.resolve([] as string[]),
+  ])
+
+  const kbContextStr = kbContext.length > 0 ? kbContext.join('\n\n') : ''
+  const messages = buildPrompt(agent, history, input.message, kbContextStr)
+
+  const modelConfig: ModelConfig = {
+    provider: agent.model_provider,
+    model: agent.model_name,
+    temperature: agent.temperature,
+    maxTokens: agent.max_tokens,
+  }
+
+  // Yield conversation ID first so frontend can track it
+  yield { type: 'meta', data: JSON.stringify({ conversationId: conversation.id, contactId: contact.id }) }
+
+  // Stream LLM tokens
+  let fullResponse = ''
+  try {
+    for await (const chunk of streamResponse(messages, modelConfig)) {
+      fullResponse += chunk
+      yield { type: 'token', data: chunk }
+    }
+  } catch (error) {
+    console.error('[chat-pipeline] Stream error:', error)
+    fullResponse = agent.fallback_message || "I'm sorry, I'm having trouble right now."
+    yield { type: 'token', data: fullResponse }
+  }
+
+  // Save response and log usage (fire and forget)
+  saveMessage(supabase, {
+    conversation_id: conversation.id,
+    org_id: agent.org_id,
+    role: 'assistant',
+    content: fullResponse,
+    channel: input.channel,
+    metadata: { model_used: `${agent.model_provider}/${agent.model_name}` },
+  }).catch(err => console.error('[chat-pipeline] Save response failed:', err))
+
+  logUsage(supabase, {
+    org_id: agent.org_id,
+    agent_id: agent.id,
+    event_type: 'message',
+    quantity: 1,
+    metadata: { conversation_id: conversation.id, channel: input.channel, model: `${agent.model_provider}/${agent.model_name}` },
+  }).catch(err => console.error('[chat-pipeline] Usage log failed:', err))
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 type SupabaseAdmin = ReturnType<typeof createAdminClient>
 
-async function loadAgent(
-  supabase: SupabaseAdmin,
-  agentId: string
-): Promise<Agent> {
+async function loadAgent(supabase: SupabaseAdmin, agentId: string): Promise<Agent> {
   const { data, error } = await supabase
     .from('agents')
     .select('*')
@@ -177,95 +229,40 @@ async function loadAgent(
   if (error || !data) {
     throw new Error(`Agent not found or inactive: ${agentId}`)
   }
-
   return data as Agent
 }
 
-async function findOrCreateContact(
-  supabase: SupabaseAdmin,
-  orgId: string,
-  input: PipelineInput
-): Promise<Contact> {
+async function findOrCreateContact(supabase: SupabaseAdmin, orgId: string, input: PipelineInput): Promise<Contact> {
   const info = input.contactInfo
-
-  // Try to find by channel user ID first
   if (info?.channelUserId) {
-    const { data } = await supabase
-      .from('contacts')
-      .select('*')
-      .eq('org_id', orgId)
-      .eq('channel_user_id', info.channelUserId)
-      .eq('channel', input.channel)
-      .single()
-
+    const { data } = await supabase.from('contacts').select('*').eq('org_id', orgId).eq('channel_user_id', info.channelUserId).eq('channel', input.channel).single()
     if (data) return data as Contact
   }
-
-  // Try by email
   if (info?.email) {
-    const { data } = await supabase
-      .from('contacts')
-      .select('*')
-      .eq('org_id', orgId)
-      .eq('email', info.email)
-      .single()
-
+    const { data } = await supabase.from('contacts').select('*').eq('org_id', orgId).eq('email', info.email).single()
     if (data) return data as Contact
   }
-
-  // Try by phone
   if (info?.phone) {
-    const { data } = await supabase
-      .from('contacts')
-      .select('*')
-      .eq('org_id', orgId)
-      .eq('phone', info.phone)
-      .single()
-
+    const { data } = await supabase.from('contacts').select('*').eq('org_id', orgId).eq('phone', info.phone).single()
     if (data) return data as Contact
   }
 
-  // Create new contact
   const { data, error } = await supabase
     .from('contacts')
-    .insert({
-      org_id: orgId,
-      name: info?.name || null,
-      email: info?.email || null,
-      phone: info?.phone || null,
-      channel: input.channel,
-      channel_user_id: info?.channelUserId || null,
-      metadata: {},
-      tags: [],
-    })
+    .insert({ org_id: orgId, name: info?.name || null, email: info?.email || null, phone: info?.phone || null, channel: input.channel, channel_user_id: info?.channelUserId || null, metadata: {}, tags: [] })
     .select()
     .single()
 
-  if (error || !data) {
-    throw new Error(`Failed to create contact: ${error?.message}`)
-  }
-
+  if (error || !data) throw new Error(`Failed to create contact: ${error?.message}`)
   return data as Contact
 }
 
-async function findOrCreateConversation(
-  supabase: SupabaseAdmin,
-  agent: Agent,
-  contact: Contact,
-  input: PipelineInput
-): Promise<Conversation> {
-  // If conversationId provided, load it
+async function findOrCreateConversation(supabase: SupabaseAdmin, agent: Agent, contact: Contact, input: PipelineInput): Promise<Conversation> {
   if (input.conversationId) {
-    const { data } = await supabase
-      .from('conversations')
-      .select('*')
-      .eq('id', input.conversationId)
-      .single()
-
+    const { data } = await supabase.from('conversations').select('*').eq('id', input.conversationId).single()
     if (data) return data as Conversation
   }
 
-  // Look for an active conversation with this contact + agent
   const { data: existing } = await supabase
     .from('conversations')
     .select('*')
@@ -280,52 +277,23 @@ async function findOrCreateConversation(
 
   if (existing) return existing as Conversation
 
-  // Create new conversation
   const { data, error } = await supabase
     .from('conversations')
-    .insert({
-      org_id: agent.org_id,
-      agent_id: agent.id,
-      contact_id: contact.id,
-      channel: input.channel,
-      status: 'active',
-      started_at: new Date().toISOString(),
-      resolved_at: null,
-      channel_conversation_id: null,
-      assigned_to: null,
-    })
+    .insert({ org_id: agent.org_id, agent_id: agent.id, contact_id: contact.id, channel: input.channel, status: 'active', started_at: new Date().toISOString(), resolved_at: null, channel_conversation_id: null, assigned_to: null })
     .select()
     .single()
 
-  if (error || !data) {
-    throw new Error(`Failed to create conversation: ${error?.message}`)
-  }
-
+  if (error || !data) throw new Error(`Failed to create conversation: ${error?.message}`)
   return data as Conversation
 }
 
-async function saveMessage(
-  supabase: SupabaseAdmin,
-  msg: MessageInsert
-): Promise<{ data: { id: string } | null }> {
-  const { data, error } = await supabase
-    .from('messages')
-    .insert(msg)
-    .select('id')
-    .single()
-
-  if (error) {
-    console.error('[chat-pipeline] Failed to save message:', error)
-  }
-
+async function saveMessage(supabase: SupabaseAdmin, msg: MessageInsert): Promise<{ data: { id: string } | null }> {
+  const { data, error } = await supabase.from('messages').insert(msg).select('id').single()
+  if (error) console.error('[chat-pipeline] Failed to save message:', error)
   return { data }
 }
 
-async function loadHistory(
-  supabase: SupabaseAdmin,
-  conversationId: string,
-  limit: number
-): Promise<ChatMessage[]> {
+async function loadHistory(supabase: SupabaseAdmin, conversationId: string, limit: number): Promise<ChatMessage[]> {
   const { data } = await supabase
     .from('messages')
     .select('role, content')
@@ -334,24 +302,13 @@ async function loadHistory(
     .limit(limit)
 
   if (!data) return []
-
   return data
     .filter((m) => m.role === 'user' || m.role === 'assistant')
-    .map((m) => ({
-      role: m.role as 'user' | 'assistant',
-      content: m.content,
-    }))
+    .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
 }
 
-function buildPrompt(
-  agent: Agent,
-  history: ChatMessage[],
-  _currentMessage: string,
-  kbContext: string
-): ChatMessage[] {
+function buildPrompt(agent: Agent, history: ChatMessage[], _currentMessage: string, kbContext: string): ChatMessage[] {
   const messages: ChatMessage[] = []
-
-  // System prompt
   let systemPrompt = agent.system_prompt || 'You are a helpful assistant.'
 
   if (kbContext) {
@@ -359,20 +316,11 @@ function buildPrompt(
   }
 
   messages.push({ role: 'system', content: systemPrompt })
-
-  // Conversation history (already includes the current user message since we saved it before loading)
   messages.push(...history)
-
   return messages
 }
 
-async function logUsage(
-  supabase: SupabaseAdmin,
-  log: UsageLogInsert
-): Promise<void> {
+async function logUsage(supabase: SupabaseAdmin, log: UsageLogInsert): Promise<void> {
   const { error } = await supabase.from('usage_logs').insert(log)
-
-  if (error) {
-    console.error('[chat-pipeline] Failed to log usage:', error)
-  }
+  if (error) console.error('[chat-pipeline] Failed to log usage:', error)
 }
