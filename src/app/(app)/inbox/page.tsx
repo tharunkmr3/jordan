@@ -161,10 +161,10 @@ function truncate(str: string | undefined | null, len: number): string {
 function DetailSection({ title, children, defaultOpen = true, action }: { title: string; children: React.ReactNode; defaultOpen?: boolean; action?: React.ReactNode }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <div className="border-b border-[#ebebeb]">
+    <div>
       <button
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-between px-4 py-3 hover:bg-[#fafafa] transition-colors"
+        className="flex w-full items-center justify-between px-4 py-2.5 hover:bg-[#fafafa] transition-colors"
       >
         <span className="text-[12px] font-medium text-[#0a0a0a]">{title}</span>
         <div className="flex items-center gap-1">
@@ -173,6 +173,14 @@ function DetailSection({ title, children, defaultOpen = true, action }: { title:
         </div>
       </button>
       {open && <div className="px-4 pb-3">{children}</div>}
+    </div>
+  )
+}
+
+function DetailPanel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg bg-white ring-1 ring-[#ebebeb] overflow-hidden divide-y divide-[#f0f0f0]">
+      {children}
     </div>
   )
 }
@@ -663,9 +671,9 @@ export default function InboxPage() {
       {/* RIGHT: Details */}
       {/* ============================================================= */}
       {detail?.contact && (
-        <div className="flex w-[300px] flex-shrink-0 flex-col border-l border-[#ebebeb] bg-white">
+        <div className="flex w-[320px] flex-shrink-0 flex-col border-l border-[#ebebeb] bg-[#f5f5f5]">
           {/* Tabs */}
-          <div className="flex border-b border-[#ebebeb]">
+          <div className="flex bg-white border-b border-[#ebebeb]">
             {(['details', 'copilot'] as const).map((t) => (
               <button
                 key={t}
@@ -681,104 +689,109 @@ export default function InboxPage() {
 
           {rightTab === 'details' ? (
             <ScrollArea className="flex-1">
-              {/* Assignee */}
-              <DetailSection title="Assignee">
-                <div className="flex items-center gap-2 py-1">
-                  <Avatar className="h-6 w-6"><AvatarFallback className="bg-[#0a0a0a] text-[9px] text-white">{getInitials(userName)}</AvatarFallback></Avatar>
-                  <span className="text-[12px] text-[#0a0a0a]">{userName}</span>
-                </div>
-                <button className="flex items-center gap-2 mt-2 text-[11px] text-[#737373] hover:text-[#0a0a0a]">
-                  <UserCircle size={14} />
-                  <span>Team Inbox</span>
-                </button>
-              </DetailSection>
-
-              {/* Conversation attributes */}
-              <DetailSection title="Conversation">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-[#a3a3a3]">ID</span>
-                    <span className="text-[11px] text-[#0a0a0a] font-mono">{detail.id.slice(0, 8)}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-[#a3a3a3]">Channel</span>
-                    <div className="flex items-center gap-1">
-                      {channelIcon(detail.channel, 12)}
-                      <span className="text-[11px] text-[#0a0a0a]">{channelLabel(detail.channel)}</span>
+              <div className="p-3 space-y-3">
+                {/* Panel 1: Conversation */}
+                <DetailPanel>
+                  <DetailSection title="Assignee">
+                    <div className="flex items-center gap-2 py-1">
+                      <Avatar className="h-6 w-6"><AvatarFallback className="bg-[#0a0a0a] text-[9px] text-white">{getInitials(userName)}</AvatarFallback></Avatar>
+                      <span className="text-[12px] text-[#0a0a0a]">{userName}</span>
                     </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-[#a3a3a3]">Status</span>
-                    <span className="text-[11px] text-[#0a0a0a] capitalize">{detail.status}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-[#a3a3a3]">Started</span>
-                    <span className="text-[11px] text-[#0a0a0a]">{timeAgo(detail.started_at)} ago</span>
-                  </div>
-                </div>
-              </DetailSection>
-
-              {/* Contact */}
-              <DetailSection title="Contact" action={<Plus size={12} className="text-[#a3a3a3]" />}>
-                <div className="space-y-2">
-                  {detail.contact.email && (
-                    <div>
-                      <div className="text-[10px] text-[#a3a3a3] uppercase tracking-wider mb-0.5">Email</div>
-                      <div className="text-[12px] text-[#0a0a0a] break-all">{detail.contact.email}</div>
+                    <button className="flex items-center gap-2 mt-2 text-[11px] text-[#737373] hover:text-[#0a0a0a]">
+                      <UserCircle size={14} />
+                      <span>Team Inbox</span>
+                    </button>
+                  </DetailSection>
+                  <DetailSection title="Conversation">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-[#a3a3a3]">ID</span>
+                        <span className="text-[11px] text-[#0a0a0a] font-mono">{detail.id.slice(0, 8)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-[#a3a3a3]">Channel</span>
+                        <div className="flex items-center gap-1">
+                          {channelIcon(detail.channel, 12)}
+                          <span className="text-[11px] text-[#0a0a0a]">{channelLabel(detail.channel)}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-[#a3a3a3]">Status</span>
+                        <span className="text-[11px] text-[#0a0a0a] capitalize">{detail.status}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-[#a3a3a3]">Started</span>
+                        <span className="text-[11px] text-[#0a0a0a]">{timeAgo(detail.started_at)} ago</span>
+                      </div>
                     </div>
-                  )}
-                  {detail.contact.phone && (
-                    <div>
-                      <div className="text-[10px] text-[#a3a3a3] uppercase tracking-wider mb-0.5">Phone</div>
-                      <div className="text-[12px] text-[#0a0a0a]">{detail.contact.phone}</div>
+                  </DetailSection>
+                </DetailPanel>
+
+                {/* Panel 2: Contact */}
+                <DetailPanel>
+                  <DetailSection title="Contact" action={<Plus size={12} className="text-[#a3a3a3]" />}>
+                    <div className="space-y-2">
+                      {detail.contact.email && (
+                        <div>
+                          <div className="text-[10px] text-[#a3a3a3] uppercase tracking-wider mb-0.5">Email</div>
+                          <div className="text-[12px] text-[#0a0a0a] break-all">{detail.contact.email}</div>
+                        </div>
+                      )}
+                      {detail.contact.phone && (
+                        <div>
+                          <div className="text-[10px] text-[#a3a3a3] uppercase tracking-wider mb-0.5">Phone</div>
+                          <div className="text-[12px] text-[#0a0a0a]">{detail.contact.phone}</div>
+                        </div>
+                      )}
+                      {detail.contact.language && (
+                        <div>
+                          <div className="text-[10px] text-[#a3a3a3] uppercase tracking-wider mb-0.5">Language</div>
+                          <div className="text-[12px] text-[#0a0a0a] uppercase">{detail.contact.language}</div>
+                        </div>
+                      )}
+                      {!detail.contact.email && !detail.contact.phone && !detail.contact.language && (
+                        <span className="text-[11px] text-[#a3a3a3]">No contact info</span>
+                      )}
                     </div>
-                  )}
-                  {detail.contact.language && (
-                    <div>
-                      <div className="text-[10px] text-[#a3a3a3] uppercase tracking-wider mb-0.5">Language</div>
-                      <div className="text-[12px] text-[#0a0a0a] uppercase">{detail.contact.language}</div>
-                    </div>
-                  )}
-                </div>
-              </DetailSection>
+                  </DetailSection>
+                  <DetailSection title="Tags" action={<Plus size={12} className="text-[#a3a3a3]" />}>
+                    {detail.contact.tags && detail.contact.tags.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {detail.contact.tags.map((tag) => (
+                          <Badge key={tag} variant="secondary" className="text-[10px]">{tag}</Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-[11px] text-[#a3a3a3]">No tags</span>
+                    )}
+                  </DetailSection>
+                  <DetailSection title="Recent conversations" defaultOpen={false}>
+                    <div className="text-[11px] text-[#737373]">{detail.conversation_count} total with this contact</div>
+                  </DetailSection>
+                </DetailPanel>
 
-              {/* Tags */}
-              <DetailSection title="Tags" action={<Plus size={12} className="text-[#a3a3a3]" />}>
-                {detail.contact.tags && detail.contact.tags.length > 0 ? (
-                  <div className="flex flex-wrap gap-1">
-                    {detail.contact.tags.map((tag) => (
-                      <Badge key={tag} variant="secondary" className="text-[10px]">{tag}</Badge>
-                    ))}
-                  </div>
-                ) : (
-                  <span className="text-[11px] text-[#a3a3a3]">No tags</span>
-                )}
-              </DetailSection>
-
-              {/* Recent conversations */}
-              <DetailSection title="Recent conversations" defaultOpen={false}>
-                <div className="text-[11px] text-[#737373]">{detail.conversation_count} total with this contact</div>
-              </DetailSection>
-
-              {/* Notes */}
-              <DetailSection title="Notes">
-                <Textarea
-                  placeholder="Add notes about this contact..."
-                  value={contactNotes}
-                  onChange={(e) => setContactNotes(e.target.value)}
-                  rows={3}
-                  className="text-[12px] resize-none border-[#ebebeb]"
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-2 h-7 w-full text-[11px]"
-                  onClick={handleSaveNotes}
-                  disabled={savingNotes}
-                >
-                  {savingNotes ? 'Saving...' : 'Save notes'}
-                </Button>
-              </DetailSection>
+                {/* Panel 3: Notes */}
+                <DetailPanel>
+                  <DetailSection title="Notes">
+                    <Textarea
+                      placeholder="Add notes about this contact..."
+                      value={contactNotes}
+                      onChange={(e) => setContactNotes(e.target.value)}
+                      rows={3}
+                      className="text-[12px] resize-none border-[#ebebeb]"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-2 h-7 w-full text-[11px]"
+                      onClick={handleSaveNotes}
+                      disabled={savingNotes}
+                    >
+                      {savingNotes ? 'Saving...' : 'Save notes'}
+                    </Button>
+                  </DetailSection>
+                </DetailPanel>
+              </div>
             </ScrollArea>
           ) : (
             <div className="flex-1 flex items-center justify-center p-6 text-center">
