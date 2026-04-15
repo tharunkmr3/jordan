@@ -4,7 +4,6 @@
 -- ============================================================================
 
 -- Extensions
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "vector";
 
 -- ============================================================================
@@ -33,7 +32,7 @@ CREATE TYPE webhook_source AS ENUM ('stripe', 'whatsapp', 'facebook', 'twilio');
 -- ============================================================================
 
 CREATE TABLE organizations (
-  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name          TEXT NOT NULL,
   slug          TEXT NOT NULL UNIQUE,
   logo_url      TEXT,
@@ -90,7 +89,7 @@ CREATE TRIGGER on_auth_user_created
 -- ============================================================================
 
 CREATE TABLE org_members (
-  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id     UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   user_id    UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   role       org_role NOT NULL DEFAULT 'viewer',
@@ -106,7 +105,7 @@ CREATE INDEX idx_org_members_user_id ON org_members (user_id);
 -- ============================================================================
 
 CREATE TABLE agents (
-  id                   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id               UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   name                 TEXT NOT NULL,
   description          TEXT,
@@ -140,7 +139,7 @@ CREATE INDEX idx_agents_org_status ON agents (org_id, status);
 -- ============================================================================
 
 CREATE TABLE agent_channels (
-  id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   agent_id       UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
   org_id         UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   channel_type   channel_type NOT NULL,
@@ -158,7 +157,7 @@ CREATE INDEX idx_agent_channels_org_id ON agent_channels (org_id);
 -- ============================================================================
 
 CREATE TABLE knowledge_bases (
-  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id      UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   agent_id    UUID REFERENCES agents(id) ON DELETE SET NULL,
   name        TEXT NOT NULL,
@@ -175,7 +174,7 @@ CREATE INDEX idx_knowledge_bases_agent_id ON knowledge_bases (agent_id);
 -- ============================================================================
 
 CREATE TABLE kb_documents (
-  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   kb_id        UUID NOT NULL REFERENCES knowledge_bases(id) ON DELETE CASCADE,
   org_id       UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   name         TEXT NOT NULL,
@@ -196,7 +195,7 @@ CREATE INDEX idx_kb_documents_status ON kb_documents (status);
 -- ============================================================================
 
 CREATE TABLE kb_chunks (
-  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   document_id UUID NOT NULL REFERENCES kb_documents(id) ON DELETE CASCADE,
   kb_id       UUID NOT NULL REFERENCES knowledge_bases(id) ON DELETE CASCADE,
   org_id      UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -220,7 +219,7 @@ CREATE INDEX idx_kb_chunks_embedding ON kb_chunks
 -- ============================================================================
 
 CREATE TABLE contacts (
-  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id          UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   name            TEXT,
   email           TEXT,
@@ -244,7 +243,7 @@ CREATE INDEX idx_contacts_channel_user ON contacts (org_id, channel, channel_use
 -- ============================================================================
 
 CREATE TABLE conversations (
-  id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id                  UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   agent_id                UUID REFERENCES agents(id) ON DELETE SET NULL,
   contact_id              UUID REFERENCES contacts(id) ON DELETE SET NULL,
@@ -269,7 +268,7 @@ CREATE INDEX idx_conversations_created_at ON conversations (created_at DESC);
 -- ============================================================================
 
 CREATE TABLE messages (
-  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
   org_id          UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   role            message_role NOT NULL,
@@ -288,7 +287,7 @@ CREATE INDEX idx_messages_created_at ON messages (conversation_id, created_at);
 -- ============================================================================
 
 CREATE TABLE appointments (
-  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id          UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   contact_id      UUID REFERENCES contacts(id) ON DELETE SET NULL,
   conversation_id UUID REFERENCES conversations(id) ON DELETE SET NULL,
@@ -310,7 +309,7 @@ CREATE INDEX idx_appointments_start_time ON appointments (org_id, start_time);
 -- ============================================================================
 
 CREATE TABLE subscriptions (
-  id                     UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id                 UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   stripe_subscription_id TEXT,
   stripe_price_id        TEXT,
@@ -331,7 +330,7 @@ CREATE INDEX idx_subscriptions_status ON subscriptions (status);
 -- ============================================================================
 
 CREATE TABLE usage_logs (
-  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id     UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   agent_id   UUID REFERENCES agents(id) ON DELETE SET NULL,
   event_type usage_event_type NOT NULL,
@@ -350,7 +349,7 @@ CREATE INDEX idx_usage_logs_created_at ON usage_logs (org_id, created_at DESC);
 -- ============================================================================
 
 CREATE TABLE webhook_events (
-  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id     UUID REFERENCES organizations(id) ON DELETE SET NULL,
   source     webhook_source NOT NULL,
   event_type TEXT NOT NULL,
