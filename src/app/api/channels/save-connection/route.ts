@@ -29,6 +29,29 @@ export async function POST(request: NextRequest) {
 
   if (!agent) return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
 
+  // Auto-subscribe Facebook page to our webhook so messages flow in
+  if (channelType === 'facebook' && config.page_id && config.page_access_token) {
+    try {
+      const subRes = await fetch(
+        `https://graph.facebook.com/v21.0/${config.page_id}/subscribed_apps`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            subscribed_fields: 'messages,messaging_postbacks',
+            access_token: config.page_access_token,
+          }),
+        }
+      )
+      const subData = await subRes.json()
+      if (!subData.success) {
+        console.error('[save-connection] Failed to subscribe page:', subData)
+      }
+    } catch (err) {
+      console.error('[save-connection] Page subscription error:', err)
+    }
+  }
+
   // Upsert channel
   const { data: existing } = await supabase
     .from('agent_channels')
