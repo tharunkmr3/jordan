@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,14 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 export default function VerifyEmailPage() {
+  return (
+    <Suspense fallback={<div className="text-sm text-muted-foreground">Loading...</div>}>
+      <VerifyEmailInner />
+    </Suspense>
+  );
+}
+
+function VerifyEmailInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const userId = searchParams.get("userId");
