@@ -194,7 +194,6 @@ export default function InboxPage() {
   const [loading, setLoading] = useState(true)
   const [detailLoading, setDetailLoading] = useState(false)
   const [tab, setTab] = useState<'all' | 'active' | 'escalated'>('all')
-  const [sortBy, setSortBy] = useState<'activity' | 'created'>('activity')
   const [search, setSearch] = useState('')
   const [replyText, setReplyText] = useState('')
   const [sending, setSending] = useState(false)
@@ -376,7 +375,6 @@ export default function InboxPage() {
     }
   }
 
-  const openCount = conversations.filter(c => c.status === 'active' || c.status === 'waiting' || c.status === 'escalated').length
 
   return (
     <div className="flex h-[calc(100vh-49px)] bg-white overflow-hidden">
@@ -384,31 +382,19 @@ export default function InboxPage() {
       {/* LEFT: Conversation List */}
       {/* ============================================================= */}
       <div className="flex w-[320px] flex-shrink-0 flex-col border-r border-[#ebebeb] bg-white">
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#ebebeb]">
-          <div className="flex items-center gap-2">
-            <Avatar className="h-7 w-7">
-              <AvatarFallback className="bg-[#0a0a0a] text-[10px] text-white">{getInitials(userName)}</AvatarFallback>
-            </Avatar>
-            <span className="text-[13px] font-medium text-[#0a0a0a]">{userName}</span>
-          </div>
-        </div>
-
-        {/* Sort row */}
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#ebebeb]">
-          <button className="text-[12px] font-medium text-[#0a0a0a]">
-            {openCount} Open
-            <CaretDown size={10} className="inline ml-1 text-[#a3a3a3]" />
-          </button>
-          <Select value={sortBy} onValueChange={(v) => v && setSortBy(v as typeof sortBy)}>
-            <SelectTrigger className="h-7 border-0 shadow-none text-[12px] text-[#737373] px-0 w-auto gap-1 hover:text-[#0a0a0a]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent align="end">
-              <SelectItem value="activity" className="text-[12px]">Last activity</SelectItem>
-              <SelectItem value="created" className="text-[12px]">Created at</SelectItem>
-            </SelectContent>
-          </Select>
+        {/* Filter tabs */}
+        <div className="flex items-center gap-1 px-3 py-2.5 border-b border-[#ebebeb]">
+          {(['all', 'active', 'escalated'] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                tab === t ? 'bg-[#0a0a0a] text-white' : 'text-[#737373] hover:bg-[#f5f5f5]'
+              }`}
+            >
+              {t === 'all' ? 'All' : t === 'active' ? 'Active' : 'Escalated'}
+            </button>
+          ))}
         </div>
 
         {/* Search */}
@@ -422,21 +408,6 @@ export default function InboxPage() {
               className="h-8 pl-8 text-[12px] border-[#ebebeb] bg-[#fafafa] focus-visible:ring-1"
             />
           </div>
-        </div>
-
-        {/* Filter tabs */}
-        <div className="flex items-center gap-1 px-3 py-2 border-b border-[#ebebeb]">
-          {(['all', 'active', 'escalated'] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
-                tab === t ? 'bg-[#0a0a0a] text-white' : 'text-[#737373] hover:bg-[#f5f5f5]'
-              }`}
-            >
-              {t === 'all' ? 'All' : t === 'active' ? 'Active' : 'Escalated'}
-            </button>
-          ))}
         </div>
 
         {/* List */}
