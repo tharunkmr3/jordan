@@ -225,7 +225,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               >
                 <SidebarSimple size={18} weight="duotone" />
               </button>
-              <span className="text-[13px] font-[500] text-[#0a0a0a]">{pageTitle}</span>
+              <span className="text-[15px] font-semibold text-[#0a0a0a]">{pageTitle}</span>
             </div>
             <div />
 
