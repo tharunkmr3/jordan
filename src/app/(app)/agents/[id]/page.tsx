@@ -573,28 +573,78 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                     </>
                   )}
 
-                  {/* Phone — manual setup */}
+                  {/* Phone — auto-provision */}
                   {setupChannel === "phone" && (
                     <>
                       <DialogHeader>
                         <div className="flex items-center gap-2">
                           <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-purple-50 text-purple-600"><Phone size={18} /></div>
-                          <DialogTitle>Set Up Phone Number</DialogTitle>
+                          <DialogTitle>Get a Phone Number</DialogTitle>
                         </div>
                       </DialogHeader>
-                      <div className="space-y-4 py-2">
-                        <p className="text-xs text-muted-foreground">Customers can call this number and talk to your AI agent.</p>
-                        <div>
-                          <Label className="text-xs">Phone Number</Label>
-                          <Input className="mt-1.5" placeholder="+91 98765 43210" value={setupData.twilio_phone_number || ""} onChange={e => setSetupData({ ...setupData, twilio_phone_number: e.target.value })} />
+                      {setupStep === 0 ? (
+                        <div className="space-y-4 py-2">
+                          <p className="text-sm text-muted-foreground">We&apos;ll generate a phone number for your agent. Customers can call it and talk to your AI.</p>
+                          <div>
+                            <Label className="text-xs">Country</Label>
+                            <Select value={setupData.country || "US"} onValueChange={v => v && setSetupData({ ...setupData, country: v })}>
+                              <SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="US">United States (+1)</SelectItem>
+                                <SelectItem value="GB">United Kingdom (+44)</SelectItem>
+                                <SelectItem value="IN">India (+91)</SelectItem>
+                                <SelectItem value="CA">Canada (+1)</SelectItem>
+                                <SelectItem value="AU">Australia (+61)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <DialogFooter>
+                            <Button variant="outline" onClick={() => setSetupChannel(null)}>Cancel</Button>
+                            <Button disabled={channelSaving !== null} onClick={async () => {
+                              setChannelSaving("phone")
+                              setSetupStep(1)
+                              try {
+                                const res = await fetch("/api/channels/provision-phone", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ agentId: id, country: setupData.country || "US" }),
+                                })
+                                const data = await res.json()
+                                if (data.phoneNumber) {
+                                  setSetupData({ ...setupData, phoneNumber: data.phoneNumber })
+                                  setSetupStep(2)
+                                  loadChannels()
+                                } else {
+                                  alert(data.error || "Failed to get phone number")
+                                  setSetupStep(0)
+                                }
+                              } catch {
+                                alert("Failed to provision number")
+                                setSetupStep(0)
+                              }
+                              setChannelSaving(null)
+                            }}>
+                              Generate Number
+                            </Button>
+                          </DialogFooter>
                         </div>
-                        <DialogFooter>
-                          <Button variant="outline" onClick={() => setSetupChannel(null)}>Cancel</Button>
-                          <Button onClick={completeSetup} disabled={channelSaving !== null}>
-                            {channelSaving ? "Setting up..." : "Activate Phone"}
-                          </Button>
-                        </DialogFooter>
-                      </div>
+                      ) : setupStep === 1 ? (
+                        <div className="flex flex-col items-center py-8 gap-3">
+                          <Loader variant="circular" size="sm" />
+                          <p className="text-sm text-muted-foreground">Getting your phone number...</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-4 py-2">
+                          <div className="rounded-lg bg-green-50 border border-green-200 p-4 text-center">
+                            <p className="text-xs text-green-700 font-medium mb-1">Your agent&apos;s phone number</p>
+                            <p className="text-xl font-bold text-green-800">{setupData.phoneNumber}</p>
+                          </div>
+                          <p className="text-xs text-muted-foreground text-center">Call this number to talk to your AI agent. Share it with your customers.</p>
+                          <DialogFooter>
+                            <Button onClick={() => { setSetupChannel(null); setSetupStep(0) }}>Done</Button>
+                          </DialogFooter>
+                        </div>
+                      )}
                     </>
                   )}
                 </DialogContent>
