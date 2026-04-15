@@ -50,24 +50,21 @@ export async function POST(request: Request) {
 
 async function handleWebhook(body: Record<string, unknown>): Promise<void> {
   const supabase = createAdminClient()
-  const token = process.env.FACEBOOK_PAGE_TOKEN
-
-  if (!token) {
-    console.error('[facebook-webhook] FACEBOOK_PAGE_TOKEN not configured')
-    return
-  }
+  const fallbackToken = process.env.FACEBOOK_PAGE_TOKEN || null
 
   // Handle non-text messages (attachments, images, etc.)
   if (isNonTextMessage(body)) {
     const meta = extractFacebookMetadata(body)
     if (meta) {
       const agent = await findAgentByPageId(supabase, meta.pageId)
-      const pageToken = agent?.pageToken || token
-      await sendFacebookMessage(
-        meta.senderId,
-        'I can only respond to text messages for now.',
-        pageToken
-      )
+      const pageToken = agent?.pageToken || fallbackToken
+      if (pageToken) {
+        await sendFacebookMessage(
+          meta.senderId,
+          'I can only respond to text messages for now.',
+          pageToken
+        )
+      }
       await logWebhookEvent(supabase, agent?.org_id || null, 'non_text_message', body)
     }
     return
@@ -108,7 +105,11 @@ async function handleWebhook(body: Record<string, unknown>): Promise<void> {
   }
 
   // Use agent-specific page token if available, otherwise fall back to env var
-  const pageToken = agent.pageToken || token
+  const pageToken = agent.pageToken || fallbackToken
+  if (!pageToken) {
+    console.error('[facebook-webhook] No page token available for agent:', agent.agent_id)
+    return
+  }
 
   // Log the webhook event
   await logWebhookEvent(supabase, agent.org_id, 'message', {
