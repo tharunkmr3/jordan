@@ -420,7 +420,11 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                     <div><Label>Status</Label><Select value={editData.status} onValueChange={v => v && setEditData({...editData, status: v})}><SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="draft">Draft</SelectItem><SelectItem value="active">Active</SelectItem><SelectItem value="paused">Paused</SelectItem></SelectContent></Select></div>
                   </TabsContent>
                   <TabsContent value="model" className="space-y-4 pt-4">
-                    <div><Label>Model Provider</Label><Select value={editData.model_provider} onValueChange={v => v && setEditData({...editData, model_provider: v})}><SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="sarvam">Sarvam 30B (Free)</SelectItem><SelectItem value="openai">OpenAI GPT-4o</SelectItem><SelectItem value="anthropic">Claude 3.5 Sonnet</SelectItem><SelectItem value="gemini">Gemini Pro</SelectItem></SelectContent></Select></div>
+                    <div><Label>Model Provider</Label><Select value={editData.model_provider} onValueChange={v => {
+                      if (!v) return
+                      const defaults: Record<string, string> = { openai: "gpt-4o-mini", anthropic: "claude-sonnet-4-20250514", sarvam: "sarvam-m", gemini: "gemini-pro" }
+                      setEditData({...editData, model_provider: v, model_name: defaults[v] || editData.model_name})
+                    }}><SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="sarvam">Sarvam 30B (Free)</SelectItem><SelectItem value="openai">OpenAI GPT-4o mini</SelectItem><SelectItem value="anthropic">Claude Sonnet 4</SelectItem><SelectItem value="gemini">Gemini Pro</SelectItem></SelectContent></Select></div>
                     <div><Label>System Prompt</Label><Textarea value={editData.system_prompt || ""} onChange={e => setEditData({...editData, system_prompt: e.target.value})} className="mt-1.5 min-h-[120px]" /></div>
                     <div><Label>Temperature ({editData.temperature ?? 0.7})</Label><Input type="range" min={0} max={1} step={0.1} value={editData.temperature ?? 0.7} onChange={e => setEditData({...editData, temperature: parseFloat(e.target.value)})} className="mt-1.5" /></div>
                   </TabsContent>

@@ -307,7 +307,7 @@ async function loadHistory(supabase: SupabaseAdmin, conversationId: string, limi
     .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
 }
 
-function buildPrompt(agent: Agent, history: ChatMessage[], _currentMessage: string, kbContext: string): ChatMessage[] {
+function buildPrompt(agent: Agent, history: ChatMessage[], currentMessage: string, kbContext: string): ChatMessage[] {
   const messages: ChatMessage[] = []
   let systemPrompt = agent.system_prompt || 'You are a helpful assistant.'
 
@@ -316,7 +316,13 @@ function buildPrompt(agent: Agent, history: ChatMessage[], _currentMessage: stri
   }
 
   messages.push({ role: 'system', content: systemPrompt })
-  messages.push(...history)
+  // Exclude the current user message from history (race with parallel save) — we'll append it explicitly
+  const filteredHistory = history.filter(
+    (m, idx) => !(idx === history.length - 1 && m.role === 'user' && m.content === currentMessage)
+  )
+  messages.push(...filteredHistory)
+  // Always append the current user message to guarantee it's present
+  messages.push({ role: 'user', content: currentMessage })
   return messages
 }
 
