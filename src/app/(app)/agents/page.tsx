@@ -46,14 +46,6 @@ export default function AgentsPage() {
 
   return (
     <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-[15px] font-semibold text-[#0a0a0a]">Agents</h1>
-        <Link href="/agents/new" className={cn(buttonVariants({ size: "sm" }), "h-8 gap-1.5 text-[13px]")}>
-            <Plus size={14} weight="bold" />
-            Create Agent
-        </Link>
-      </div>
-
       {loading && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (

@@ -18,8 +18,10 @@ import {
   CaretDown,
   SidebarSimple,
   SignOut,
+  Plus,
 } from "@phosphor-icons/react"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
 import { createBrowserClient } from "@supabase/ssr"
 
 const nav = [
@@ -227,7 +229,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </button>
               <span className="text-[15px] font-semibold text-[#0a0a0a]">{pageTitle}</span>
             </div>
-            <div />
+            <div className="flex items-center gap-2">
+              {pathname === "/agents" && (
+                <Link href="/agents/new">
+                  <Button size="sm" className="h-8 gap-1.5 text-[13px]">
+                    <Plus size={14} weight="bold" />
+                    Create Agent
+                  </Button>
+                </Link>
+              )}
+            </div>
 
           </header>
 
