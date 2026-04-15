@@ -124,7 +124,7 @@ async function callAnthropic(
     .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
 
   const response = await anthropic.messages.create({
-    model: config.model || 'claude-3-5-sonnet-20241022',
+    model: config.model || 'claude-sonnet-4-20250514',
     max_tokens: config.maxTokens ?? 1024,
     system: systemMsg,
     messages: chatMessages,
@@ -144,7 +144,7 @@ async function* streamAnthropic(
     .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
 
   const stream = anthropic.messages.stream({
-    model: config.model || 'claude-3-5-sonnet-20241022',
+    model: config.model || 'claude-sonnet-4-20250514',
     max_tokens: config.maxTokens ?? 1024,
     system: systemMsg,
     messages: chatMessages,
