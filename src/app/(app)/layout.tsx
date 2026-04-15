@@ -215,39 +215,45 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      {/* Main area — single inset white card holding header + content */}
-      <div className="flex flex-1 flex-col overflow-hidden bg-[#f5f5f5] p-3">
-        <div className="flex h-full flex-col overflow-hidden rounded-xl bg-white ring-1 ring-[#ebebeb]">
-          {/* Header (inside card) */}
-          <header className="flex h-12 items-center justify-between border-b border-[#ebebeb] px-5 flex-shrink-0">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setCollapsed(!collapsed)}
-                className="rounded-md p-1 text-[#737373] hover:bg-[#f5f5f5] hover:text-[#0a0a0a]"
-              >
-                <SidebarSimple size={18} weight="duotone" />
-              </button>
-              <span className="text-[15px] font-semibold text-[#0a0a0a]">{pageTitle}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              {pathname === "/agents" && (
-                <Link href="/agents/new">
-                  <Button size="sm" className="h-8 gap-1.5 text-[13px]">
-                    <Plus size={14} weight="bold" />
-                    Create Agent
-                  </Button>
-                </Link>
-              )}
-            </div>
-
-          </header>
-
-          {/* Page content */}
-          <main className="flex-1 overflow-y-auto">
-            {children}
-          </main>
+      {/* Main area */}
+      {pathname === "/inbox" ? (
+        /* Inbox owns its own layout — no outer header/card */
+        <div className="flex flex-1 flex-col overflow-hidden bg-[#f5f5f5]">
+          <main className="flex-1 overflow-hidden">{children}</main>
         </div>
-      </div>
+      ) : (
+        <div className="flex flex-1 flex-col overflow-hidden bg-[#f5f5f5] p-3">
+          <div className="flex h-full flex-col overflow-hidden rounded-xl bg-white ring-1 ring-[#ebebeb]">
+            {/* Header (inside card) */}
+            <header className="flex h-12 items-center justify-between border-b border-[#ebebeb] px-5 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setCollapsed(!collapsed)}
+                  className="rounded-md p-1 text-[#737373] hover:bg-[#f5f5f5] hover:text-[#0a0a0a]"
+                >
+                  <SidebarSimple size={18} weight="duotone" />
+                </button>
+                <span className="text-[15px] font-semibold text-[#0a0a0a]">{pageTitle}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {pathname === "/agents" && (
+                  <Link href="/agents/new">
+                    <Button size="sm" className="h-8 gap-1.5 text-[13px]">
+                      <Plus size={14} weight="bold" />
+                      Create Agent
+                    </Button>
+                  </Link>
+                )}
+              </div>
+            </header>
+
+            {/* Page content */}
+            <main className="flex-1 overflow-y-auto">
+              {children}
+            </main>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

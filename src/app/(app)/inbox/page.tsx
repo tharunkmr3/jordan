@@ -378,11 +378,16 @@ export default function InboxPage() {
 
 
   return (
-    <div className="flex h-full bg-[#f5f5f5] overflow-hidden gap-3 p-3">
+    <div className="flex h-full bg-[#f5f5f5] overflow-hidden gap-3 p-3 pt-3">
       {/* ============================================================= */}
       {/* LEFT: Conversation List */}
       {/* ============================================================= */}
       <div className="flex w-[320px] flex-shrink-0 flex-col bg-white rounded-xl ring-1 ring-[#ebebeb] overflow-hidden">
+        {/* Header */}
+        <div className="flex h-12 items-center gap-3 px-4 border-b border-[#ebebeb] flex-shrink-0">
+          <span className="text-[15px] font-semibold text-[#0a0a0a]">Inbox</span>
+        </div>
+
         {/* Filter tabs */}
         <div className="flex items-center gap-1 px-3 py-2.5 border-b border-[#ebebeb]">
           {(['all', 'active', 'escalated'] as const).map((t) => (
