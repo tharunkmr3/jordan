@@ -21,18 +21,18 @@ import {
   Plus,
 } from "@phosphor-icons/react"
 import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
 import { createBrowserClient } from "@supabase/ssr"
 
 const nav = [
   { label: "Dashboard", href: "/dashboard", icon: SquaresFour },
-  { label: "Agents", href: "/agents", icon: Robot },
   { label: "Inbox", href: "/inbox", icon: ChatCircleDots },
   { label: "Contacts", href: "/contacts", icon: UsersThree },
   { label: "Knowledge", href: "/knowledge", icon: BookOpenText },
   { label: "Analytics", href: "/analytics", icon: ChartBar },
   { label: "Channels", href: "/channels", icon: Broadcast },
 ]
+
+interface SidebarAgent { id: string; name: string; status: string }
 
 const bottomNav = [
   { label: "Billing", href: "/billing", icon: CreditCard },
@@ -84,6 +84,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [userName, setUserName] = useState("")
   const [userEmail, setUserEmail] = useState("")
   const [showUserMenu, setShowUserMenu] = useState(false)
+  const [agents, setAgents] = useState<SidebarAgent[]>([])
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -99,7 +100,25 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       }
     }
     loadUser()
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load agents for sidebar section
+  useEffect(() => {
+    async function loadAgents() {
+      try {
+        const res = await fetch("/api/agents")
+        if (res.ok) {
+          const data = await res.json()
+          if (Array.isArray(data)) setAgents(data.map((a: SidebarAgent) => ({ id: a.id, name: a.name, status: a.status })))
+        }
+      } catch { /* ignore */ }
+    }
+    loadAgents()
+    // Reload when navigating to agents list/new
+    const handler = () => loadAgents()
+    window.addEventListener("refresh-agents", handler)
+    return () => window.removeEventListener("refresh-agents", handler)
+  }, [pathname])
 
   async function handleSignOut() {
     await supabase.auth.signOut()
@@ -129,6 +148,25 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           )}
         </div>
 
+        {/* New Agent */}
+        {!collapsed ? (
+          <div className="px-3 pt-2">
+            <Link
+              href="/agents/new"
+              className="flex items-center justify-center gap-1.5 rounded-md bg-[#0a0a0a] hover:bg-[#262626] text-white px-3 py-2 text-[13px] font-medium transition-colors"
+            >
+              <Plus size={14} weight="bold" />
+              New Agent
+            </Link>
+          </div>
+        ) : (
+          <div className="flex justify-center pt-2">
+            <Link href="/agents/new" className="rounded-md bg-[#0a0a0a] hover:bg-[#262626] text-white p-2" title="New Agent">
+              <Plus size={16} weight="bold" />
+            </Link>
+          </div>
+        )}
+
         {/* Search */}
         {!collapsed && (
           <div className="px-3 pt-3">
@@ -151,7 +189,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         )}
 
         {/* Main nav */}
-        <nav className="flex-1 space-y-0.5 px-2 pt-3">
+        <nav className="flex-1 overflow-y-auto space-y-0.5 px-2 pt-3">
           {nav.map((item) => (
             <NavItem
               key={item.href}
@@ -160,6 +198,35 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               collapsed={collapsed}
             />
           ))}
+
+          {/* Agents section */}
+          {!collapsed && agents.length > 0 && (
+            <div className="pt-4">
+              <div className="flex items-center justify-between px-3 mb-1">
+                <span className="text-[10px] font-semibold text-[#a3a3a3] uppercase tracking-wider">Agents</span>
+                <span className="text-[10px] text-[#a3a3a3]">{agents.length}</span>
+              </div>
+              <div className="space-y-0.5">
+                {agents.map((a) => {
+                  const isActive = pathname === `/agents/${a.id}`
+                  return (
+                    <Link
+                      key={a.id}
+                      href={`/agents/${a.id}`}
+                      className={cn(
+                        "flex items-center gap-2 rounded-md px-3 py-1.5 text-[12px] font-[500] transition-colors",
+                        isActive ? "bg-[#ebebeb] text-[#0a0a0a]" : "text-[#525252] hover:bg-[#ebebeb]"
+                      )}
+                    >
+                      <Robot size={14} weight={isActive ? "fill" : "regular"} className={isActive ? "text-[#0a0a0a]" : "text-[#737373]"} />
+                      <span className="truncate flex-1">{a.name}</span>
+                      {a.status === "active" && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 flex-shrink-0" />}
+                    </Link>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </nav>
 
         {/* Bottom nav */}
@@ -242,16 +309,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </button>
                 <span className="text-[15px] font-semibold text-[#0a0a0a]">{pageTitle}</span>
               </div>
-              <div className="flex items-center gap-2">
-                {pathname === "/agents" && (
-                  <Link href="/agents/new">
-                    <Button size="sm" className="h-8 gap-1.5 text-[13px]">
-                      <Plus size={14} weight="bold" />
-                      Create Agent
-                    </Button>
-                  </Link>
-                )}
-              </div>
+              <div />
+
             </header>
 
             {/* Page content */}
