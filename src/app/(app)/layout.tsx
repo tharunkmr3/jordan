@@ -210,27 +210,31 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Main area */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Header */}
-        <header className="flex h-12 items-center justify-between border-b border-[#ebebeb] bg-white px-5">
+        <header className="flex h-12 items-center justify-between bg-[#f5f5f5] px-5">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setCollapsed(!collapsed)}
-              className="rounded-md p-1 text-[#737373] hover:bg-[#f5f5f5] hover:text-[#0a0a0a]"
+              className="rounded-md p-1 text-[#737373] hover:bg-[#ebebeb] hover:text-[#0a0a0a]"
             >
               <SidebarSimple size={18} weight="duotone" />
             </button>
             <span className="text-[13px] font-[500] text-[#0a0a0a]">{pageTitle}</span>
           </div>
           <div className="flex items-center gap-1">
-            <button className="relative rounded-md p-1.5 text-[#737373] hover:bg-[#f5f5f5] hover:text-[#0a0a0a]">
+            <button className="relative rounded-md p-1.5 text-[#737373] hover:bg-[#ebebeb] hover:text-[#0a0a0a]">
               <Bell size={16} weight="regular" />
               <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-[#0a0a0a]" />
             </button>
           </div>
         </header>
 
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto bg-white">
-          {children}
+        {/* Page content — inset white card on gray background */}
+        <main className="flex-1 overflow-hidden bg-[#f5f5f5] px-3 pb-3">
+          <div className="h-full overflow-hidden rounded-xl bg-white ring-1 ring-[#ebebeb]">
+            <div className="h-full overflow-y-auto">
+              {children}
+            </div>
+          </div>
         </main>
       </div>
     </div>

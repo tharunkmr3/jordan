@@ -383,7 +383,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
   }
 
   if (loading) return (
-    <div className="flex h-[calc(100vh-48px)]">
+    <div className="flex h-full">
       <div className="flex-1 overflow-y-auto border-r border-[#ebebeb] p-6">
         <div className="max-w-xl mx-auto space-y-5">
           <div className="flex items-start justify-between">
@@ -414,7 +414,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
   if (!agent) return <div className="p-6 text-sm text-red-600">Agent not found</div>
 
   return (
-    <div className="flex h-[calc(100vh-48px)]">
+    <div className="flex h-full">
       {/* Left: Agent details */}
       <div className="flex-1 overflow-y-auto border-r border-[#ebebeb] p-6">
         <div className="max-w-xl mx-auto space-y-5">
