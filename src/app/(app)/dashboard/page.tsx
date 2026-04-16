@@ -245,7 +245,7 @@ export default function DashboardPage() {
             View all <ArrowUpRight size={13} />
           </a>
         </div>
-        <Card>
+        <Card className="gap-0 py-2">
           {recentConversations.map((conv, i) => {
             const ch = channelIcon[conv.channel]
             const ChIcon = ch.icon
@@ -253,7 +253,7 @@ export default function DashboardPage() {
               <a
                 key={i}
                 href="/inbox"
-                className="flex items-center gap-4 px-5 py-3 hover:bg-[#fafafa] transition-colors"
+                className="flex items-center gap-4 px-5 py-2 hover:bg-[#fafafa] transition-colors"
               >
                 <Avatar className="h-8 w-8">
                   <AvatarFallback className="text-xs font-semibold bg-muted">
