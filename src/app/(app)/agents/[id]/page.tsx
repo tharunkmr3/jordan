@@ -1289,17 +1289,25 @@ function AssistantBubble({ msg }: { msg: ChatMsg }) {
     return <MessageContent className={bubble}>{msg.content}</MessageContent>
   }
 
-  const hasThoughts = (msg.thoughts?.length ?? 0) > 0
   const hasContent = msg.content.trim().length > 0
+
+  // Once the final answer is here, drop the placeholder "thinking"
+  // steps — they were loading-state labels, not meaningful history.
+  // Keep tool_call / tool_done steps because they show which tools
+  // the agent actually ran, which is worth keeping as a receipt.
+  const visibleThoughts = (msg.thoughts ?? []).filter(t =>
+    hasContent ? t.kind !== "thinking" : true,
+  )
+  const hasVisibleThoughts = visibleThoughts.length > 0
 
   return (
     // Stack the CoT rail (quiet, no bubble) above the actual reply
     // bubble so the two read as distinct blocks — reasoning on top,
     // final answer below.
     <div className="flex flex-col gap-2 min-w-[220px] max-w-[640px]">
-      {hasThoughts && (
+      {hasVisibleThoughts && (
         <ChainOfThought className="px-1 py-1">
-          {msg.thoughts!.map((t, idx) => <ThoughtRow key={`${t.kind}-${('id' in t ? t.id : idx)}-${idx}`} step={t} />)}
+          {visibleThoughts.map((t, idx) => <ThoughtRow key={`${t.kind}-${('id' in t ? t.id : idx)}-${idx}`} step={t} />)}
         </ChainOfThought>
       )}
       {hasContent ? (
