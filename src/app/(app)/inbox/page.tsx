@@ -8,6 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Panel } from '@/components/ui/panel'
 import { Markdown } from '@/components/ui/markdown'
 import { AiWidgetProvider } from '@/components/ui/ai-widget'
+import { Loader } from '@/components/ui/loader'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { ContactAvatar } from '@/components/ui/contact-avatar'
 import { Badge } from '@/components/ui/badge'
@@ -907,6 +908,25 @@ function InboxInner() {
                       </div>
                     )
                   })
+                )}
+                {/* Typing indicator — only for internal-agent mode,
+                    where an AI reply is expected after the user's
+                    send. Customer-facing handleSendReply posts a
+                    human_agent message with no AI follow-up, so no
+                    typing indicator there. */}
+                {sending && isInternalAgent && (
+                  <div className="flex items-end gap-2 justify-start">
+                    <ContactAvatar
+                      src={filteredAgent?.avatar_url}
+                      name={filteredAgent?.name || 'Assistant'}
+                      seed={filteredAgent?.id || 'agent'}
+                      size={24}
+                      className="flex-shrink-0"
+                    />
+                    <div className="bg-white rounded-3xl px-4 py-3 ring-1 ring-black/[0.04]">
+                      <Loader variant="typing" size="sm" />
+                    </div>
+                  </div>
                 )}
                 <div ref={messagesEndRef} />
               </div>

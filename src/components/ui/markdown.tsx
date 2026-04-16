@@ -64,6 +64,27 @@ const INITIAL_COMPONENTS: Partial<Components> = {
   pre: function PreComponent({ children }) {
     return <>{children}</>
   },
+  a: function LinkComponent({ className, children, href, ...props }) {
+    // Links in chat open in a new tab so the conversation stays in
+    // place, and get overflow-wrap + word-break so long URLs (like
+    // Google Calendar event links) wrap instead of stretching the
+    // bubble. rel="noopener noreferrer" for tabnabbing safety;
+    // third-party destinations in assistant responses aren't trusted.
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={cn(
+          "text-[#2e2e2e] underline underline-offset-2 decoration-[#a3a3a3] hover:decoration-[#2e2e2e] break-words [overflow-wrap:anywhere]",
+          className
+        )}
+        {...props}
+      >
+        {children}
+      </a>
+    )
+  },
 }
 
 const MemoizedMarkdownBlock = memo(
