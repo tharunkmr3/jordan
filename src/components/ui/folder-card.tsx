@@ -22,7 +22,7 @@ export function FolderCard({ name, docCount, lastUpdated, onClick, className }: 
     <button
       onClick={onClick}
       className={cn(
-        "group relative w-full text-left rounded-2xl p-3 transition-all duration-200 hover:bg-[#f5f5f5] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "group relative w-full text-left rounded-2xl pt-5 px-3 pb-3 transition-all duration-200 hover:bg-[#f5f5f5] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         className
       )}
     >
@@ -78,7 +78,7 @@ export function FolderCard({ name, docCount, lastUpdated, onClick, className }: 
       </svg>
 
       {/* Text below folder */}
-      <div className="text-center mt-2">
+      <div className="text-center mt-1">
         <h3 className="text-sm font-semibold text-[#0a0a0a] truncate">{name}</h3>
         <p className="text-xs text-[#737373] mt-0.5">
           {docCount} {docCount === 1 ? "Document" : "Documents"}
