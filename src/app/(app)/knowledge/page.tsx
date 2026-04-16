@@ -26,7 +26,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import type { Agent, KnowledgeBase, KbDocument } from '@/types/database'
-import { Plus, Trash, Upload, ChatDots, Database, ArrowLeft, FileText, X, PencilSimple } from '@phosphor-icons/react'
+import { Plus, Trash, Upload, Database, ArrowLeft, FileText, X, PencilSimple } from '@phosphor-icons/react'
 
 interface KnowledgeBaseWithDocs extends KnowledgeBase {
   kb_documents: KbDocument[]
@@ -62,12 +62,6 @@ export default function KnowledgePage() {
   const [editAgent, setEditAgent] = useState<string>('')
   const [editColor, setEditColor] = useState<string>('Blue')
   const [savingEdit, setSavingEdit] = useState(false)
-
-  // FAQ dialog
-  const [faqOpen, setFaqOpen] = useState(false)
-  const [faqQuestion, setFaqQuestion] = useState('')
-  const [faqAnswer, setFaqAnswer] = useState('')
-  const [addingFaq, setAddingFaq] = useState(false)
 
   // Upload
   const [uploading, setUploading] = useState(false)
@@ -192,26 +186,6 @@ export default function KnowledgePage() {
     await fetchKbs()
   }
 
-  async function handleAddFaq() {
-    if (!selectedKb || !faqQuestion.trim() || !faqAnswer.trim()) return
-    setAddingFaq(true)
-    try {
-      await fetch(`/api/knowledge-base/${selectedKb}/faq`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: faqQuestion, answer: faqAnswer }),
-      })
-      setFaqOpen(false)
-      setFaqQuestion('')
-      setFaqAnswer('')
-      await fetchKbs()
-    } catch {
-      setError('Failed to add FAQ')
-    } finally {
-      setAddingFaq(false)
-    }
-  }
-
   // ---- Detail view ----
   if (selectedKb && activeKb) {
     const docs = activeKb.kb_documents || []
@@ -239,9 +213,6 @@ export default function KnowledgePage() {
             className="hidden"
             onChange={e => { if (e.target.files?.[0]) handleUpload(e.target.files[0]); e.target.value = '' }}
           />
-          <Button variant="secondary" size="sm" onClick={() => { setFaqOpen(true) }}>
-            <ChatDots size={14} className="mr-1.5" />Add FAQ
-          </Button>
           <Button variant="secondary" size="sm" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
             <Upload size={14} className="mr-1.5" />{uploading ? 'Uploading...' : 'Upload'}
           </Button>
@@ -257,15 +228,10 @@ export default function KnowledgePage() {
               <FileText size={22} className="text-[#a3a3a3]" />
             </div>
             <div className="text-sm font-medium text-[#525252]">No documents yet</div>
-            <div className="text-xs text-[#a3a3a3] mt-1 mb-4">Upload a file or add an FAQ to get started</div>
-            <div className="flex gap-2">
-              <Button variant="secondary" size="sm" onClick={() => setFaqOpen(true)}>
-                <ChatDots size={14} className="mr-1.5" />Add FAQ
-              </Button>
-              <Button size="sm" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
-                <Upload size={14} className="mr-1.5" />Upload File
-              </Button>
-            </div>
+            <div className="text-xs text-[#a3a3a3] mt-1 mb-4">Upload a file to get started</div>
+            <Button size="sm" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
+              <Upload size={14} className="mr-1.5" />Upload File
+            </Button>
           </div>
         ) : (
           <div className="space-y-1">
@@ -291,31 +257,6 @@ export default function KnowledgePage() {
             ))}
           </div>
         )}
-
-        {/* FAQ dialog */}
-        <Dialog open={faqOpen} onOpenChange={setFaqOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add FAQ</DialogTitle>
-              <DialogDescription>Add a question-answer pair to train your agent.</DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-2">
-              <div className="grid gap-2">
-                <Label className="text-sm">Question</Label>
-                <Textarea placeholder="e.g. What are your business hours?" value={faqQuestion} onChange={e => setFaqQuestion(e.target.value)} rows={2} />
-              </div>
-              <div className="grid gap-2">
-                <Label className="text-sm">Answer</Label>
-                <Textarea placeholder="e.g. We're open Mon-Fri 9am to 6pm IST." value={faqAnswer} onChange={e => setFaqAnswer(e.target.value)} rows={3} />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button size="sm" onClick={handleAddFaq} disabled={addingFaq || !faqQuestion.trim() || !faqAnswer.trim()}>
-                {addingFaq ? 'Adding...' : 'Add FAQ'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
 
         <p className="text-xs text-[#a3a3a3] mt-4 text-center">Supports .txt, .csv, .pdf, .docx</p>
       </div>
@@ -464,7 +405,6 @@ export default function KnowledgePage() {
                 { label: "Edit", icon: <PencilSimple size={14} />, onClick: () => openEditDialog(kb) },
                 { label: "Rename", icon: <FileText size={14} />, onClick: () => {} },
                 { label: "Upload file", icon: <Upload size={14} />, onClick: () => { setSelectedKb(kb.id); setTimeout(() => fileInputRef.current?.click(), 100) } },
-                { label: "Add FAQ", icon: <ChatDots size={14} />, onClick: () => { setSelectedKb(kb.id); setTimeout(() => setFaqOpen(true), 100) } },
                 { label: "Delete", icon: <Trash size={14} />, onClick: () => handleDeleteKb(kb.id), destructive: true, divider: true },
               ] as FolderAction[]}
             />
