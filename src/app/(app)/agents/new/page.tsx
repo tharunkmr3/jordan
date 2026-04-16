@@ -136,7 +136,7 @@ export default function NewAgentPage() {
   return (
     <div className="p-6 max-w-3xl">
       <div className="mb-6">
-        <h1 className="text-[15px] font-semibold text-[#1f1f1f]">Create Agent</h1>
+        <h1 className="text-[15px] font-semibold text-[#2e2e2e]">Create Agent</h1>
         <p className="text-[12px] text-[#a3a3a3] mt-1">Configure your new AI agent</p>
       </div>
 
@@ -259,7 +259,7 @@ export default function NewAgentPage() {
                     step="0.1"
                     value={form.temperature}
                     onChange={(e) => update('temperature', parseFloat(e.target.value))}
-                    className="w-full accent-[#1f1f1f]"
+                    className="w-full accent-[#2e2e2e]"
                   />
                   <div className="flex justify-between text-[11px] text-[#a3a3a3]">
                     <span>Precise</span>

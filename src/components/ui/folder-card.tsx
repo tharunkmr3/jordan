@@ -166,10 +166,10 @@ export function FolderCard({ id, name, docCount, color, lastUpdated, onClick, co
             onBlur={handleRenameSubmit}
             onKeyDown={e => { if (e.key === "Enter") handleRenameSubmit(); if (e.key === "Escape") setRenaming(false) }}
             onClick={e => e.stopPropagation()}
-            className="text-sm font-semibold text-[#1f1f1f] text-center w-full bg-transparent border-b border-[#1f1f1f]/20 outline-none focus:border-[#1f1f1f]/50 px-1"
+            className="text-sm font-semibold text-[#2e2e2e] text-center w-full bg-transparent border-b border-[#2e2e2e]/20 outline-none focus:border-[#2e2e2e]/50 px-1"
           />
         ) : (
-          <h3 className="text-sm font-semibold text-[#1f1f1f] truncate" onDoubleClick={(e) => { e.stopPropagation(); if (onRename) startRename() }}>{name}</h3>
+          <h3 className="text-sm font-semibold text-[#2e2e2e] truncate" onDoubleClick={(e) => { e.stopPropagation(); if (onRename) startRename() }}>{name}</h3>
         )}
         <p className="text-xs text-[#737373] mt-0.5">
           {docCount} {docCount === 1 ? "Document" : "Documents"}
@@ -199,7 +199,7 @@ export function FolderCard({ id, name, docCount, color, lastUpdated, onClick, co
               }}
               className={cn(
                 "flex w-full items-center gap-2.5 px-3 py-1.5 text-sm transition-colors",
-                action.destructive ? "text-red-600 hover:bg-red-50" : "text-[#1f1f1f] hover:bg-[#f5f5f5]"
+                action.destructive ? "text-red-600 hover:bg-red-50" : "text-[#2e2e2e] hover:bg-[#f5f5f5]"
               )}
             >
               {action.icon}
@@ -224,7 +224,7 @@ export function FolderColorPicker({ value, onChange }: { value?: string; onChang
           onClick={() => onChange(c.name)}
           className={cn(
             "h-7 w-7 rounded-full transition-all",
-            value === c.name ? "ring-2 ring-offset-2 ring-[#1f1f1f] scale-110" : "hover:scale-110"
+            value === c.name ? "ring-2 ring-offset-2 ring-[#2e2e2e] scale-110" : "hover:scale-110"
           )}
           style={{ background: c.main }}
           title={c.name}

@@ -66,7 +66,7 @@ function Field({ label, description, children }: { label: string; description?: 
   return (
     <div className="grid grid-cols-[1fr_1.2fr] gap-6 py-4 border-b border-black/[0.04] last:border-0">
       <div>
-        <div className="text-sm font-medium text-[#1f1f1f]">{label}</div>
+        <div className="text-sm font-medium text-[#2e2e2e]">{label}</div>
         {description && <p className="text-xs text-[#737373] mt-1 leading-relaxed">{description}</p>}
       </div>
       <div>{children}</div>
@@ -487,7 +487,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
       <div className="flex-1 flex flex-col rounded-xl bg-white ring-1 ring-black/[0.06] shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
         {/* Header with avatar + name + save */}
         <div className="flex items-center gap-3 px-5 py-3 border-b border-black/[0.06] flex-shrink-0">
-          <button onClick={() => router.push(`/inbox?agentId=${id}`)} className="rounded-md p-1 text-[#737373] hover:bg-[#f5f5f5] hover:text-[#1f1f1f]" title="Back to conversations">
+          <button onClick={() => router.push(`/inbox?agentId=${id}`)} className="rounded-md p-1 text-[#737373] hover:bg-[#f5f5f5] hover:text-[#2e2e2e]" title="Back to conversations">
             <ArrowLeft size={16} />
           </button>
           <div className="relative group shrink-0">
@@ -504,7 +504,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
               {uploadingAvatar ? <Loader variant="circular" size="sm" /> : <Camera size={14} className="text-white" />}
             </button>
           </div>
-          <span className="text-base font-semibold text-[#1f1f1f] flex-1">{agent.name}</span>
+          <span className="text-base font-semibold text-[#2e2e2e] flex-1">{agent.name}</span>
           <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
           <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}><Trash2 size={14} /></Button>
         </div>
@@ -521,7 +521,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
               key={t.key}
               onClick={() => setActiveTab(t.key)}
               className={`px-3 py-2.5 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
-                activeTab === t.key ? "border-[#1f1f1f] text-[#1f1f1f]" : "border-transparent text-[#737373] hover:text-[#1f1f1f]"
+                activeTab === t.key ? "border-[#2e2e2e] text-[#2e2e2e]" : "border-transparent text-[#737373] hover:text-[#2e2e2e]"
               }`}
             >
               {t.label}
@@ -568,7 +568,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
 
                 {/* Models section */}
                 <div className="pt-6">
-                  <div className="text-sm font-semibold text-[#1f1f1f]">Models</div>
+                  <div className="text-sm font-semibold text-[#2e2e2e]">Models</div>
                 </div>
                 <Field label="AI model" description="The model that powers this agent's responses.">
                   <Select value={editData.model_provider} onValueChange={v => {
@@ -637,7 +637,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
             {/* System Prompt tab */}
             {activeTab === "model" && (
               <div>
-                <div className="text-sm font-medium text-[#1f1f1f]">System Prompt</div>
+                <div className="text-sm font-medium text-[#2e2e2e]">System Prompt</div>
                 <p className="text-xs text-[#737373] mt-1 mb-3">Instructions that define how the agent behaves, what it knows, and how it should respond.</p>
                 <Textarea value={editData.system_prompt || ""} onChange={e => setEditData({...editData, system_prompt: e.target.value})} className="min-h-[500px] text-sm" />
               </div>
@@ -657,7 +657,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                           <div className="flex items-center gap-3">
                             <div className={`flex items-center justify-center w-8 h-8 rounded-lg ${isActive && configured ? "bg-green-50 text-green-700" : "bg-muted text-muted-foreground"}`}>{meta.icon}</div>
                             <div>
-                              <span className="text-sm font-medium text-[#1f1f1f]">{meta.label}</span>
+                              <span className="text-sm font-medium text-[#2e2e2e]">{meta.label}</span>
                               <div className="text-xs text-[#737373]">
                                 {isActive && configured ? meta.connectedLabel(config) : meta.description}
                               </div>
@@ -960,13 +960,13 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
           <div className="space-y-4">
             {messages.map((msg, i) => (
               <Message key={i} className={msg.role === "user" ? "flex-row-reverse" : ""}>
-                <MessageAvatar src={msg.role === "assistant" ? (agent.avatar_url || "") : ""} alt={msg.role === "assistant" ? agent.name : "You"} fallback={msg.role === "assistant" ? (agent.name[0]?.toUpperCase() || "J") : "Y"} className={msg.role === "assistant" ? "bg-[#1f1f1f] text-white" : "bg-[#ebebeb]"} />
-                <MessageContent className={msg.role === "user" ? "bg-[#1f1f1f] text-white rounded-2xl rounded-tr-sm px-4 py-2.5" : "bg-[#f5f5f5] rounded-2xl rounded-tl-sm px-4 py-2.5"}>{msg.content}</MessageContent>
+                <MessageAvatar src={msg.role === "assistant" ? (agent.avatar_url || "") : ""} alt={msg.role === "assistant" ? agent.name : "You"} fallback={msg.role === "assistant" ? (agent.name[0]?.toUpperCase() || "J") : "Y"} className={msg.role === "assistant" ? "bg-[#2e2e2e] text-white" : "bg-[#ebebeb]"} />
+                <MessageContent className={msg.role === "user" ? "bg-[#2e2e2e] text-white rounded-2xl rounded-tr-sm px-4 py-2.5" : "bg-[#f5f5f5] rounded-2xl rounded-tl-sm px-4 py-2.5"}>{msg.content}</MessageContent>
               </Message>
             ))}
             {chatLoading && (
               <Message>
-                <MessageAvatar src={agent.avatar_url || ""} alt={agent.name} fallback={agent.name[0]?.toUpperCase() || "J"} className="bg-[#1f1f1f] text-white" />
+                <MessageAvatar src={agent.avatar_url || ""} alt={agent.name} fallback={agent.name[0]?.toUpperCase() || "J"} className="bg-[#2e2e2e] text-white" />
                 <div className="bg-[#f5f5f5] rounded-2xl rounded-tl-sm px-4 py-3"><Loader variant="typing" size="sm" /></div>
               </Message>
             )}

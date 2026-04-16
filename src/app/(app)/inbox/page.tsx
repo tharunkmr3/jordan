@@ -170,7 +170,7 @@ function DetailSection({ title, children, defaultOpen = true, action }: { title:
         onClick={() => setOpen(!open)}
         className="flex w-full items-center justify-between px-4 py-2.5 hover:bg-[#fafafa] transition-colors"
       >
-        <span className="text-[13px] font-medium text-[#1f1f1f]">{title}</span>
+        <span className="text-[13px] font-medium text-[#2e2e2e]">{title}</span>
         <div className="flex items-center gap-1">
           {action}
           {open ? <CaretUp size={14} className="text-[#a3a3a3]" /> : <CaretDown size={14} className="text-[#a3a3a3]" />}
@@ -419,13 +419,13 @@ function InboxInner() {
                   {filteredAgent.name[0]?.toUpperCase() || 'A'}
                 </div>
               ) })()}
-              <span className="text-base font-semibold text-[#1f1f1f] truncate flex-1">{filteredAgent.name}</span>
-              <Link href={`/agents/${filteredAgent.id}`} className="rounded-md p-1 text-[#737373] hover:bg-[#f5f5f5] hover:text-[#1f1f1f]" title="Agent settings">
+              <span className="text-base font-semibold text-[#2e2e2e] truncate flex-1">{filteredAgent.name}</span>
+              <Link href={`/agents/${filteredAgent.id}`} className="rounded-md p-1 text-[#737373] hover:bg-[#f5f5f5] hover:text-[#2e2e2e]" title="Agent settings">
                 <GearSix size={16} weight="regular" />
               </Link>
             </>
           ) : (
-            <span className="text-base font-semibold text-[#1f1f1f]">All conversations</span>
+            <span className="text-base font-semibold text-[#2e2e2e]">All conversations</span>
           )}
         </div>
 
@@ -436,7 +436,7 @@ function InboxInner() {
               key={t}
               onClick={() => setTab(t)}
               className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                tab === t ? 'bg-[#ebebeb] text-[#1f1f1f]' : 'text-[#737373] hover:bg-[#f5f5f5]'
+                tab === t ? 'bg-[#ebebeb] text-[#2e2e2e]' : 'text-[#737373] hover:bg-[#f5f5f5]'
               }`}
             >
               {t === 'all' ? 'All' : t === 'active' ? 'Active' : 'Escalated'}
@@ -479,7 +479,7 @@ function InboxInner() {
               <div className="h-12 w-12 rounded-full bg-[#f5f5f5] flex items-center justify-center mb-3">
                 <MagnifyingGlass size={20} className="text-[#a3a3a3]" />
               </div>
-              <div className="text-sm font-medium text-[#1f1f1f]">No conversations</div>
+              <div className="text-sm font-medium text-[#2e2e2e]">No conversations</div>
               <div className="mt-1 text-xs text-[#a3a3a3] text-center">
                 {tab === 'all' ? 'Messages will appear here when customers reach out' : `No ${tab} conversations`}
               </div>
@@ -504,7 +504,7 @@ function InboxInner() {
                     {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-sm font-semibold text-[#1f1f1f]">{contactName}</span>
+                        <span className="truncate text-sm font-semibold text-[#2e2e2e]">{contactName}</span>
                         <span className="flex-shrink-0 text-xs text-[#a3a3a3]">
                           {conv.last_message ? timeAgo(conv.last_message.created_at) : timeAgo(conv.updated_at)}
                         </span>
@@ -537,7 +537,7 @@ function InboxInner() {
               <div className="h-14 w-14 rounded-full bg-[#f5f5f5] flex items-center justify-center mx-auto mb-3">
                 <PaperPlaneTilt size={22} className="text-[#a3a3a3]" />
               </div>
-              <div className="text-sm font-medium text-[#1f1f1f]">Select a conversation</div>
+              <div className="text-sm font-medium text-[#2e2e2e]">Select a conversation</div>
               <div className="mt-1 text-[13px] text-[#a3a3a3]">Choose one from the left to view messages</div>
             </div>
           </div>
@@ -571,7 +571,7 @@ function InboxInner() {
                     </Avatar>
                   )
                 })()}
-                <span className="text-[15px] font-semibold text-[#1f1f1f]">{detail.contact?.name || detail.contact?.phone || detail.contact?.email || 'Unknown'}</span>
+                <span className="text-[15px] font-semibold text-[#2e2e2e]">{detail.contact?.name || detail.contact?.phone || detail.contact?.email || 'Unknown'}</span>
               </div>
               <div className="flex items-center gap-1">
                 <button onClick={() => toggleStar(detail.id)} className="p-1.5 rounded hover:bg-[#f5f5f5]">
@@ -637,8 +637,8 @@ function InboxInner() {
                           <div
                             className={`rounded-2xl px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap ${
                               isOutgoing
-                                ? 'bg-[#dbeafe] text-[#1f1f1f] rounded-br-md'
-                                : 'bg-white text-[#1f1f1f] rounded-bl-md ring-1 ring-[#ebebeb]'
+                                ? 'bg-[#dbeafe] text-[#2e2e2e] rounded-br-md'
+                                : 'bg-white text-[#2e2e2e] rounded-bl-md ring-1 ring-[#ebebeb]'
                             }`}
                           >
                             {msg.content}
@@ -665,10 +665,10 @@ function InboxInner() {
 
             {/* Input — single bordered box with no top divider */}
             <div className="bg-white px-4 pb-4 pt-2 flex-shrink-0">
-              <div className="rounded-xl border border-black/[0.06] bg-white overflow-hidden focus-within:ring-1 focus-within:ring-[#1f1f1f]/10">
+              <div className="rounded-xl border border-black/[0.06] bg-white overflow-hidden focus-within:ring-1 focus-within:ring-[#2e2e2e]/10">
                 {/* Channel selector */}
                 <div className="flex items-center gap-2 px-3 pt-2">
-                  <button className="flex items-center gap-1.5 px-1.5 py-1 rounded-md hover:bg-[#f5f5f5] text-sm text-[#1f1f1f]">
+                  <button className="flex items-center gap-1.5 px-1.5 py-1 rounded-md hover:bg-[#f5f5f5] text-sm text-[#2e2e2e]">
                     {channelIcon(detail.channel, 14)}
                     <span className="font-semibold">{channelLabel(detail.channel)}</span>
                     <CaretDown size={10} />
@@ -687,7 +687,7 @@ function InboxInner() {
                 {/* Bottom toolbar */}
                 <div className="flex items-center justify-between px-3 pb-2">
                   <div className="flex items-center gap-0.5">
-                    <button className="p-1.5 rounded hover:bg-[#f5f5f5] text-[#1f1f1f]" title="Shortcuts"><Lightning size={16} weight="fill" /></button>
+                    <button className="p-1.5 rounded hover:bg-[#f5f5f5] text-[#2e2e2e]" title="Shortcuts"><Lightning size={16} weight="fill" /></button>
                     <button className="p-1.5 rounded hover:bg-[#f5f5f5] text-[#737373]" title="Attach"><Paperclip size={15} /></button>
                     <button className="p-1.5 rounded hover:bg-[#f5f5f5] text-[#737373]" title="Emoji"><Smiley size={15} /></button>
                     <button className="p-1.5 rounded hover:bg-[#f5f5f5] text-[#737373]" title="Mention"><At size={15} /></button>
@@ -700,7 +700,7 @@ function InboxInner() {
                   <button
                     onClick={handleSendReply}
                     disabled={!replyText.trim() || sending}
-                    className="flex items-center gap-1 text-[13px] text-[#737373] hover:text-[#1f1f1f] disabled:opacity-40 disabled:cursor-not-allowed px-2 py-1"
+                    className="flex items-center gap-1 text-[13px] text-[#737373] hover:text-[#2e2e2e] disabled:opacity-40 disabled:cursor-not-allowed px-2 py-1"
                   >
                     {sending ? 'Sending...' : 'Send'}
                     <CaretDown size={10} />
@@ -724,7 +724,7 @@ function InboxInner() {
                 key={t}
                 onClick={() => setRightTab(t)}
                 className={`flex-1 px-4 text-[13px] font-medium transition-colors border-b-2 ${
-                  rightTab === t ? 'border-[#1f1f1f] text-[#1f1f1f]' : 'border-transparent text-[#737373] hover:text-[#1f1f1f]'
+                  rightTab === t ? 'border-[#2e2e2e] text-[#2e2e2e]' : 'border-transparent text-[#737373] hover:text-[#2e2e2e]'
                 }`}
               >
                 {t === 'details' ? 'Details' : 'Copilot'}
@@ -740,9 +740,9 @@ function InboxInner() {
                       {(() => { const c = avatarColor(userName); return (
                       <Avatar className="h-6 w-6"><AvatarFallback className={`text-[9px] font-semibold ${c.bg} ${c.text}`}>{getInitials(userName)}</AvatarFallback></Avatar>
                       ) })()}
-                      <span className="text-[13px] text-[#1f1f1f]">{userName}</span>
+                      <span className="text-[13px] text-[#2e2e2e]">{userName}</span>
                     </div>
-                    <button className="flex items-center gap-2 mt-2 text-xs text-[#737373] hover:text-[#1f1f1f]">
+                    <button className="flex items-center gap-2 mt-2 text-xs text-[#737373] hover:text-[#2e2e2e]">
                       <UserCircle size={14} />
                       <span>Team Inbox</span>
                     </button>
@@ -751,22 +751,22 @@ function InboxInner() {
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-[#a3a3a3]">ID</span>
-                        <span className="text-xs text-[#1f1f1f] font-mono">{detail.id.slice(0, 8)}</span>
+                        <span className="text-xs text-[#2e2e2e] font-mono">{detail.id.slice(0, 8)}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-[#a3a3a3]">Channel</span>
                         <div className="flex items-center gap-1">
                           {channelIcon(detail.channel, 12)}
-                          <span className="text-xs text-[#1f1f1f]">{channelLabel(detail.channel)}</span>
+                          <span className="text-xs text-[#2e2e2e]">{channelLabel(detail.channel)}</span>
                         </div>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-[#a3a3a3]">Status</span>
-                        <span className="text-xs text-[#1f1f1f] capitalize">{detail.status}</span>
+                        <span className="text-xs text-[#2e2e2e] capitalize">{detail.status}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-[#a3a3a3]">Started</span>
-                        <span className="text-xs text-[#1f1f1f]">{timeAgo(detail.started_at)} ago</span>
+                        <span className="text-xs text-[#2e2e2e]">{timeAgo(detail.started_at)} ago</span>
                       </div>
                     </div>
                   </DetailSection>
@@ -775,19 +775,19 @@ function InboxInner() {
                       {detail.contact.email && (
                         <div>
                           <div className="text-[11px] text-[#a3a3a3] uppercase tracking-wider mb-0.5">Email</div>
-                          <div className="text-[13px] text-[#1f1f1f] break-all">{detail.contact.email}</div>
+                          <div className="text-[13px] text-[#2e2e2e] break-all">{detail.contact.email}</div>
                         </div>
                       )}
                       {detail.contact.phone && (
                         <div>
                           <div className="text-[11px] text-[#a3a3a3] uppercase tracking-wider mb-0.5">Phone</div>
-                          <div className="text-[13px] text-[#1f1f1f]">{detail.contact.phone}</div>
+                          <div className="text-[13px] text-[#2e2e2e]">{detail.contact.phone}</div>
                         </div>
                       )}
                       {detail.contact.language && (
                         <div>
                           <div className="text-[11px] text-[#a3a3a3] uppercase tracking-wider mb-0.5">Language</div>
-                          <div className="text-[13px] text-[#1f1f1f] uppercase">{detail.contact.language}</div>
+                          <div className="text-[13px] text-[#2e2e2e] uppercase">{detail.contact.language}</div>
                         </div>
                       )}
                       {!detail.contact.email && !detail.contact.phone && !detail.contact.language && (
@@ -832,7 +832,7 @@ function InboxInner() {
           ) : (
             <div className="flex-1 flex items-center justify-center p-6 text-center">
               <div>
-                <div className="text-sm font-medium text-[#1f1f1f] mb-1">AI Copilot</div>
+                <div className="text-sm font-medium text-[#2e2e2e] mb-1">AI Copilot</div>
                 <div className="text-xs text-[#a3a3a3]">Coming soon — AI suggestions, summaries, and actions</div>
               </div>
             </div>

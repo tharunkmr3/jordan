@@ -49,4 +49,4 @@ Global CSS in `globals.css` sets `cursor: pointer` on `button`, `a`, `[role="but
 
 ### Text color: softened black
 
-Use `#1f1f1f` for primary text — not pure `#000` or harsh `#0a0a0a`. The extra brightness is tiring on eyes. Secondary text stays at `#525252` / `#737373`, tertiary/hint at `#a3a3a3`. Avoid introducing new shades; pick from the existing palette.
+Use `#2e2e2e` for primary text — not pure `#000` or harsh `#0a0a0a`. The extra brightness is tiring on eyes. Secondary text stays at `#525252` / `#737373`, tertiary/hint at `#a3a3a3`. Avoid introducing new shades; pick from the existing palette.
