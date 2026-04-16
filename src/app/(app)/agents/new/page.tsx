@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Phone, Globe, Database } from 'lucide-react'
+import { WhatsappLogo, MessengerLogo } from '@phosphor-icons/react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -89,7 +90,7 @@ const LANG_LABELS: Record<string, string> = {
 export default function NewAgentPage() {
   const router = useRouter()
   const [form, setForm] = useState<FormData>(initialForm)
-  const [activeTab, setActiveTab] = useState<'agent' | 'model'>('agent')
+  const [activeTab, setActiveTab] = useState<'agent' | 'model' | 'channels' | 'knowledge'>('agent')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -174,15 +175,18 @@ export default function NewAgentPage() {
           </Button>
         </div>
 
-        {/* Tabs — Channels / Knowledge Base come online post-create */}
+        {/* Tabs — same shape as settings. Channels + Knowledge Base are
+            shown with pre-create guidance since they attach to an id. */}
         <div className="flex items-center gap-1 px-5 border-b border-black/[0.04] flex-shrink-0 overflow-x-auto">
           {[
             { key: 'agent', label: 'Agent' },
             { key: 'model', label: 'System Prompt' },
+            { key: 'channels', label: 'Channels' },
+            { key: 'knowledge', label: 'Knowledge Base' },
           ].map(t => (
             <button
               key={t.key}
-              onClick={() => setActiveTab(t.key as 'agent' | 'model')}
+              onClick={() => setActiveTab(t.key as typeof activeTab)}
               className={`px-3 py-2.5 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
                 activeTab === t.key ? 'border-[#F4511E] text-[#2e2e2e]' : 'border-transparent text-[#737373] hover:text-[#2e2e2e]'
               }`}
@@ -374,9 +378,88 @@ export default function NewAgentPage() {
                 />
               </div>
             )}
+
+            {activeTab === 'channels' && (
+              <div>
+                <div className="space-y-0 opacity-60 pointer-events-none select-none">
+                  {[
+                    { label: 'WhatsApp', icon: <WhatsappLogo size={18} weight="fill" />, tint: 'bg-green-50 text-green-700', desc: 'Receive messages on WhatsApp' },
+                    { label: 'Messenger', icon: <MessengerLogo size={18} weight="fill" />, tint: 'bg-blue-50 text-blue-600', desc: 'Facebook page messages' },
+                    { label: 'Phone', icon: <Phone size={18} />, tint: 'bg-purple-50 text-purple-700', desc: 'Inbound & outbound voice calls' },
+                    { label: 'Website', icon: <Globe size={18} />, tint: 'bg-amber-50 text-amber-700', desc: 'Embed a chat widget on your site' },
+                  ].map(ch => (
+                    <div key={ch.label} className="py-4 border-b border-black/[0.04] last:border-0 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`flex items-center justify-center w-8 h-8 rounded-lg ${ch.tint}`}>{ch.icon}</div>
+                        <div>
+                          <span className="text-sm font-medium text-[#2e2e2e]">{ch.label}</span>
+                          <div className="text-xs text-[#737373]">{ch.desc}</div>
+                        </div>
+                      </div>
+                      <Switch checked={false} />
+                    </div>
+                  ))}
+                </div>
+                <PostCreateNudge
+                  title="Connect channels after creating"
+                  body="Channels attach to an agent id — tokens, webhooks, and the website embed snippet all need the agent to exist first. Save the agent and you'll land directly on this tab to finish setup."
+                  canCreate={Boolean(form.name.trim())}
+                  saving={saving}
+                  onCreate={handleCreate}
+                />
+              </div>
+            )}
+
+            {activeTab === 'knowledge' && (
+              <div>
+                <div className="flex flex-col items-center justify-center py-10 border border-dashed border-[#d4d4d4] rounded-xl bg-[#fafafa] mb-4">
+                  <div className="h-12 w-12 rounded-full bg-[#f0f0f0] flex items-center justify-center mb-3">
+                    <Database size={22} className="text-[#a3a3a3]" />
+                  </div>
+                  <div className="text-sm font-medium text-[#525252]">No knowledge base linked</div>
+                  <div className="text-xs text-[#a3a3a3] mt-1">Upload documents or link an existing knowledge base after creating.</div>
+                </div>
+                <PostCreateNudge
+                  title="Link a knowledge base after creating"
+                  body="Documents and FAQs are attached to an agent's id. Create the agent and you'll be able to upload files or link an existing knowledge base from this tab."
+                  canCreate={Boolean(form.name.trim())}
+                  saving={saving}
+                  onCreate={handleCreate}
+                />
+              </div>
+            )}
           </div>
         </div>
       </Panel>
+    </div>
+  )
+}
+
+function PostCreateNudge({
+  title,
+  body,
+  canCreate,
+  saving,
+  onCreate,
+}: {
+  title: string
+  body: string
+  canCreate: boolean
+  saving: boolean
+  onCreate: () => void
+}) {
+  return (
+    <div className="mt-6 rounded-xl border border-black/[0.04] bg-[#fafafa] p-5">
+      <div className="text-sm font-medium text-[#2e2e2e]">{title}</div>
+      <p className="text-xs text-[#737373] mt-1 leading-relaxed">{body}</p>
+      <div className="mt-3">
+        <Button size="sm" onClick={onCreate} disabled={saving || !canCreate}>
+          {saving ? 'Creating…' : 'Create agent'}
+        </Button>
+        {!canCreate && (
+          <span className="ml-3 text-xs text-[#a3a3a3]">Add a name in the Agent tab first.</span>
+        )}
+      </div>
     </div>
   )
 }
