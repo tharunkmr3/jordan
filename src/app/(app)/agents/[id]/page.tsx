@@ -75,12 +75,38 @@ function Field({ label, description, children }: { label: string; description?: 
   )
 }
 
+// Defaults used when this page is rendered at /agents/new (create mode).
+// Keep in sync with what /api/agents POST treats as unset.
+const NEW_AGENT_DEFAULTS: Partial<Agent> = {
+  name: "",
+  description: "",
+  status: "draft",
+  system_prompt: "",
+  model_provider: "sarvam",
+  model_name: "sarvam-m",
+  voice_provider: "none",
+  voice_id: "",
+  language: "en",
+  supported_languages: ["en"],
+  temperature: 0.7,
+  greeting_message: "",
+  fallback_message: "I'm not sure about that. Let me connect you with someone who can help.",
+  escalation_enabled: true,
+  escalation_email: "",
+  avatar_url: null,
+  settings: { is_customer_facing: true, show_test_in_inbox: false },
+}
+
 export default function AgentViewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
+  // /agents/new is routed to this same component via the dynamic segment.
+  // In create mode we skip the fetch, seed defaults, disable Channels/KB
+  // tabs, swap Save→Create, and redirect to /agents/<newId> on success.
+  const isNew = id === "new"
   const [agent, setAgent] = useState<Agent | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [editData, setEditData] = useState<Partial<Agent>>({})
+  const [loading, setLoading] = useState(!isNew)
+  const [editData, setEditData] = useState<Partial<Agent>>(isNew ? NEW_AGENT_DEFAULTS : {})
   const [saving, setSaving] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("agent")
@@ -130,6 +156,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
   }, [id])
 
   useEffect(() => {
+    if (isNew) return // create mode: no record to fetch yet
     fetch(`/api/agents/${id}`).then(r => r.json()).then(data => {
       setAgent(data)
       setEditData(data)
@@ -138,14 +165,15 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
     })
     loadChannels()
     loadKnowledgeBases()
-  }, [id, loadChannels, loadKnowledgeBases])
+  }, [id, isNew, loadChannels, loadKnowledgeBases])
 
   // Auto-load the current user's prior test chat with this agent so
   // history persists across sessions instead of starting fresh each
   // time the Test Chat panel opens. The /api/chat/history?agentId
   // endpoint scopes by the authenticated user, so two operators see
-  // separate threads.
+  // separate threads. Skipped in create mode — no agent id yet.
   useEffect(() => {
+    if (isNew) return
     let cancelled = false
     fetch(`/api/chat/history?agentId=${id}`)
       .then(r => r.ok ? r.json() : null)
@@ -163,7 +191,32 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
       })
       .catch(() => { /* fresh start on failure — non-critical */ })
     return () => { cancelled = true }
-  }, [id])
+  }, [id, isNew])
+
+  async function handleCreate() {
+    if (!editData.name?.trim()) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editData),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Failed to create agent')
+      }
+      const created = (await res.json()) as Agent
+      // Refresh the sidebar list so the new agent row appears in the
+      // right bucket (customer-facing vs internal) immediately.
+      window.dispatchEvent(new CustomEvent('refresh-agents'))
+      // Replace the URL so the back button doesn't bounce to /agents/new.
+      router.replace(`/agents/${created.id}`)
+    } catch (err) {
+      console.error('[agents/new] create failed:', err)
+      setSaving(false)
+    }
+  }
 
   async function handleSave() {
     // Optimistic: update UI + sidebar immediately
@@ -509,7 +562,14 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
       </Panel>
     </div>
   )
-  if (!agent) return <div className="p-6 text-sm text-red-600">Agent not found</div>
+  if (!isNew && !agent) return <div className="p-6 text-sm text-red-600">Agent not found</div>
+
+  // Avatar seed: real agent id when editing, typed name when creating so
+  // the placeholder has some identity before the DB row exists.
+  const avatarSeed = isNew ? (editData.name?.trim() || 'new-agent') : (agent?.id ?? id)
+  const displayName = isNew
+    ? (editData.name?.trim() || '')
+    : (agent?.name ?? '')
 
   return (
     <div className="flex h-full gap-3 p-3 bg-[#f5f5f5] overflow-hidden">
@@ -517,26 +577,47 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
       <Panel className="flex-1 min-w-0">
         {/* Header with avatar + name + save */}
         <div className="flex items-center gap-3 px-5 py-3 border-b border-black/[0.04] flex-shrink-0">
-          <button onClick={() => router.push(`/inbox?agentId=${id}`)} className="rounded-md p-1 text-[#737373] hover:bg-[#f5f5f5] hover:text-[#2e2e2e]" title="Back to conversations">
+          <button
+            onClick={() => isNew ? router.back() : router.push(`/inbox?agentId=${id}`)}
+            className="rounded-md p-1 text-[#737373] hover:bg-[#f5f5f5] hover:text-[#2e2e2e]"
+            title={isNew ? "Back" : "Back to conversations"}
+          >
             <ArrowLeft size={16} />
           </button>
           <div className="relative group shrink-0">
             <Avatar className="h-9 w-9">
-              {agent.avatar_url && <AvatarImage src={agent.avatar_url} alt={agent.name} />}
-              {(() => { const c = avatarColor(agent.id); return (
+              {!isNew && agent?.avatar_url && <AvatarImage src={agent.avatar_url} alt={agent.name} />}
+              {(() => { const c = avatarColor(avatarSeed); return (
                 <AvatarFallback className={`text-sm font-semibold ${c.bg} ${c.text}`}>
-                  {avatarInitial(agent.name) || 'A'}
+                  {avatarInitial(displayName) || 'A'}
                 </AvatarFallback>
               ) })()}
             </Avatar>
-            <input ref={avatarInputRef} type="file" className="hidden" accept="image/png,image/jpeg,image/webp,image/gif" onChange={e => { if (e.target.files?.[0]) uploadAvatar(e.target.files[0]); e.target.value = "" }} />
-            <button onClick={() => avatarInputRef.current?.click()} disabled={uploadingAvatar} className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" title="Upload avatar">
-              {uploadingAvatar ? <Loader variant="circular" size="sm" /> : <Camera size={14} className="text-white" />}
-            </button>
+            {!isNew && (
+              <>
+                <input ref={avatarInputRef} type="file" className="hidden" accept="image/png,image/jpeg,image/webp,image/gif" onChange={e => { if (e.target.files?.[0]) uploadAvatar(e.target.files[0]); e.target.value = "" }} />
+                <button onClick={() => avatarInputRef.current?.click()} disabled={uploadingAvatar} className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" title="Upload avatar">
+                  {uploadingAvatar ? <Loader variant="circular" size="sm" /> : <Camera size={14} className="text-white" />}
+                </button>
+              </>
+            )}
           </div>
-          <span className="text-base font-semibold text-[#2e2e2e] flex-1">{agent.name}</span>
-          <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
-          <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}><Trash2 size={14} /></Button>
+          <span className="text-base font-semibold text-[#2e2e2e] flex-1 truncate">
+            {displayName || <span className="text-[#a3a3a3]">New agent</span>}
+          </span>
+          {isNew ? (
+            <>
+              <Button variant="secondary" size="sm" onClick={() => router.back()} disabled={saving}>Cancel</Button>
+              <Button size="sm" onClick={handleCreate} disabled={saving || !editData.name?.trim()}>
+                {saving ? "Creating…" : "Create"}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
+              <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}><Trash2 size={14} /></Button>
+            </>
+          )}
         </div>
 
         {/* Tabs */}
@@ -684,7 +765,32 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
             {/* Channels tab */}
             {activeTab === "channels" && (
               <div>
-                  {Object.entries(channelMeta).map(([type, meta]) => {
+                {isNew && (
+                  <div className="opacity-60 pointer-events-none select-none mb-4">
+                    {Object.entries(channelMeta).map(([type, meta]) => (
+                      <div key={type} className="py-4 border-b border-black/[0.04] last:border-0 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted text-muted-foreground">{meta.icon}</div>
+                          <div>
+                            <span className="text-sm font-medium text-[#2e2e2e]">{meta.label}</span>
+                            <div className="text-xs text-[#737373]">{meta.description}</div>
+                          </div>
+                        </div>
+                        <Switch checked={false} disabled />
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {isNew && (
+                  <PostCreateNudge
+                    title="Connect channels after creating"
+                    body="Channels attach to an agent id — tokens, webhooks, and the website embed snippet all need the agent to exist first. Save the agent and you'll land right back on this tab."
+                    canCreate={Boolean(editData.name?.trim())}
+                    saving={saving}
+                    onCreate={handleCreate}
+                  />
+                )}
+                {!isNew && Object.entries(channelMeta).map(([type, meta]) => {
                     const ch = channels.find(c => c.channel_type === type)
                     const isActive = ch?.is_active ?? false
                     const config = (ch?.channel_config || {}) as Record<string, unknown>
@@ -904,7 +1010,24 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
             {/* Knowledge Base tab */}
             {activeTab === "knowledge" && (
               <div>
-                  {kbLoading ? (
+                  {isNew ? (
+                    <>
+                      <div className="flex flex-col items-center justify-center py-10 border border-dashed border-[#d4d4d4] rounded-xl bg-[#fafafa] mb-4">
+                        <div className="h-12 w-12 rounded-full bg-[#f0f0f0] flex items-center justify-center mb-3">
+                          <FileText size={22} className="text-[#a3a3a3]" />
+                        </div>
+                        <div className="text-sm font-medium text-[#525252]">No knowledge base linked</div>
+                        <div className="text-xs text-[#a3a3a3] mt-1">Upload documents or link an existing knowledge base after creating.</div>
+                      </div>
+                      <PostCreateNudge
+                        title="Link a knowledge base after creating"
+                        body="Documents and FAQs attach to an agent's id. Create the agent and come back to upload files or link an existing knowledge base."
+                        canCreate={Boolean(editData.name?.trim())}
+                        saving={saving}
+                        onCreate={handleCreate}
+                      />
+                    </>
+                  ) : kbLoading ? (
                     <div className="flex items-center justify-center py-6"><Loader variant="circular" size="sm" /></div>
                   ) : linkedKb ? (
                     <div className="space-y-3">
@@ -988,7 +1111,8 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
         </div>
       </Panel>
 
-      {/* Right: Chat test panel */}
+      {/* Right: Chat test panel — hidden in create mode (no agent to test yet) */}
+      {!isNew && (
       <Panel
         resizable
         defaultWidth={400}
@@ -1020,13 +1144,13 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
           <div className="space-y-4">
             {messages.map((msg, i) => (
               <Message key={i} className={msg.role === "user" ? "flex-row-reverse" : ""}>
-                <MessageAvatar src={msg.role === "assistant" ? (agent.avatar_url || "") : ""} alt={msg.role === "assistant" ? agent.name : "You"} fallback={msg.role === "assistant" ? (agent.name[0]?.toUpperCase() || "J") : "Y"} className={msg.role === "assistant" ? "bg-[#2e2e2e] text-white" : "bg-[#ebebeb]"} />
+                <MessageAvatar src={msg.role === "assistant" ? (agent?.avatar_url || "") : ""} alt={msg.role === "assistant" ? (agent?.name || "Assistant") : "You"} fallback={msg.role === "assistant" ? (agent?.name?.[0]?.toUpperCase() || "J") : "Y"} className={msg.role === "assistant" ? "bg-[#2e2e2e] text-white" : "bg-[#ebebeb]"} />
                 <MessageContent className={msg.role === "user" ? "bg-[#f7f7f7] text-[#2e2e2e] rounded-3xl px-4 py-2.5" : "bg-white text-[#2e2e2e] rounded-3xl px-4 py-2.5 ring-1 ring-black/[0.04]"}>{msg.content}</MessageContent>
               </Message>
             ))}
             {chatLoading && (
               <Message>
-                <MessageAvatar src={agent.avatar_url || ""} alt={agent.name} fallback={agent.name[0]?.toUpperCase() || "J"} className="bg-[#2e2e2e] text-white" />
+                <MessageAvatar src={agent?.avatar_url || ""} alt={agent?.name || "Assistant"} fallback={agent?.name?.[0]?.toUpperCase() || "J"} className="bg-[#2e2e2e] text-white" />
                 <div className="bg-white rounded-3xl px-4 py-3 ring-1 ring-black/[0.04]"><Loader variant="typing" size="sm" /></div>
               </Message>
             )}
@@ -1051,10 +1175,42 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
           </PromptInput>
         </div>
       </Panel>
+      )}
 
+      {!isNew && (
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent><DialogHeader><DialogTitle>Delete Agent</DialogTitle></DialogHeader><p className="text-sm text-muted-foreground">Are you sure you want to delete &quot;{agent.name}&quot;? This cannot be undone.</p><DialogFooter><Button variant="secondary" onClick={() => setDeleteOpen(false)}>Cancel</Button><Button variant="destructive" onClick={handleDelete}>Delete</Button></DialogFooter></DialogContent>
+        <DialogContent><DialogHeader><DialogTitle>Delete Agent</DialogTitle></DialogHeader><p className="text-sm text-muted-foreground">Are you sure you want to delete &quot;{agent?.name}&quot;? This cannot be undone.</p><DialogFooter><Button variant="secondary" onClick={() => setDeleteOpen(false)}>Cancel</Button><Button variant="destructive" onClick={handleDelete}>Delete</Button></DialogFooter></DialogContent>
       </Dialog>
+      )}
+    </div>
+  )
+}
+
+function PostCreateNudge({
+  title,
+  body,
+  canCreate,
+  saving,
+  onCreate,
+}: {
+  title: string
+  body: string
+  canCreate: boolean
+  saving: boolean
+  onCreate: () => void
+}) {
+  return (
+    <div className="mt-6 rounded-xl border border-black/[0.04] bg-[#fafafa] p-5">
+      <div className="text-sm font-medium text-[#2e2e2e]">{title}</div>
+      <p className="text-xs text-[#737373] mt-1 leading-relaxed">{body}</p>
+      <div className="mt-3 flex items-center gap-3">
+        <Button size="sm" onClick={onCreate} disabled={saving || !canCreate}>
+          {saving ? 'Creating…' : 'Create agent'}
+        </Button>
+        {!canCreate && (
+          <span className="text-xs text-[#a3a3a3]">Add a name in the Agent tab first.</span>
+        )}
+      </div>
     </div>
   )
 }
