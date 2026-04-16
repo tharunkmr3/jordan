@@ -19,6 +19,8 @@ import { Loader } from "@/components/ui/loader"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { avatarColor } from "@/lib/utils"
+import { Slider } from "@/components/ui/slider"
+import { useSliderWithInput } from "@/hooks/use-slider-with-input"
 import { ArrowUp, ArrowLeft, Copy, Check, Trash2, Pencil, Phone, Mail, Globe, Upload, FileText, X, Plus, Camera } from "lucide-react"
 import { WhatsappLogo, MessengerLogo } from "@phosphor-icons/react"
 
@@ -601,25 +603,43 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                 <Field label="Primary language" description="The language the agent primarily speaks in.">
                   <Select value={editData.language || "en"} onValueChange={v => v && setEditData({...editData, language: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{["en","hi","ta","te","kn","bn","mr","gu","ml","pa"].map(l => <SelectItem key={l} value={l}>{({en:"English",hi:"Hindi",ta:"Tamil",te:"Telugu",kn:"Kannada",bn:"Bengali",mr:"Marathi",gu:"Gujarati",ml:"Malayalam",pa:"Punjabi"} as Record<string,string>)[l]}</SelectItem>)}</SelectContent></Select>
                 </Field>
+                <Field label="Temperature" description="Lower = more focused and deterministic. Higher = more creative and varied.">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <Slider
+                        className="grow"
+                        value={[editData.temperature ?? 0.7]}
+                        onValueChange={([v]) => setEditData({...editData, temperature: Math.round(v * 100) / 100})}
+                        min={0}
+                        max={1}
+                        step={0.01}
+                      />
+                      <Input
+                        className="h-8 w-14 px-2 text-center text-[13px]"
+                        type="text"
+                        inputMode="decimal"
+                        value={editData.temperature ?? 0.7}
+                        onChange={e => {
+                          const v = parseFloat(e.target.value)
+                          if (!isNaN(v) && v >= 0 && v <= 1) setEditData({...editData, temperature: v})
+                        }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-[#a3a3a3]">
+                      <span>Precise</span>
+                      <span>Creative</span>
+                    </div>
+                  </div>
+                </Field>
               </div>
             )}
 
             {/* System Prompt tab */}
             {activeTab === "model" && (
-              <div className="space-y-4">
-                <div>
-                  <div className="text-[13px] font-medium text-[#0a0a0a]">System Prompt</div>
-                  <p className="text-[11px] text-[#737373] mt-1 mb-3">Instructions that define how the agent behaves, what it knows, and how it should respond.</p>
-                  <Textarea value={editData.system_prompt || ""} onChange={e => setEditData({...editData, system_prompt: e.target.value})} className="min-h-[400px] text-[13px]" />
-                </div>
-                <div>
-                  <div className="flex items-center justify-between">
-                    <div className="text-[13px] font-medium text-[#0a0a0a]">Temperature</div>
-                    <span className="text-[13px] text-[#737373]">{editData.temperature ?? 0.7}</span>
-                  </div>
-                  <p className="text-[11px] text-[#737373] mt-1 mb-2">Lower = more focused. Higher = more creative.</p>
-                  <Input type="range" min={0} max={1} step={0.1} value={editData.temperature ?? 0.7} onChange={e => setEditData({...editData, temperature: parseFloat(e.target.value)})} />
-                </div>
+              <div>
+                <div className="text-[13px] font-medium text-[#0a0a0a]">System Prompt</div>
+                <p className="text-[11px] text-[#737373] mt-1 mb-3">Instructions that define how the agent behaves, what it knows, and how it should respond.</p>
+                <Textarea value={editData.system_prompt || ""} onChange={e => setEditData({...editData, system_prompt: e.target.value})} className="min-h-[500px] text-[13px]" />
               </div>
             )}
 
