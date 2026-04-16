@@ -567,8 +567,8 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                 </Field>
 
                 {/* Models section */}
-                <div className="pt-2 mt-4 border-t border-black/[0.06]">
-                  <div className="text-sm font-semibold text-[#0a0a0a] pt-2">Models</div>
+                <div className="pt-6">
+                  <div className="text-sm font-semibold text-[#0a0a0a]">Models</div>
                 </div>
                 <Field label="AI model" description="The model that powers this agent's responses.">
                   <Select value={editData.model_provider} onValueChange={v => {
