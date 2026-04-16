@@ -638,17 +638,17 @@ function InboxInner() {
                         })()}
                         <div className={`max-w-[75%] flex flex-col ${isOutgoing ? 'items-end' : 'items-start'}`}>
                           <div
-                            className={`rounded-3xl px-4 py-2 text-sm leading-relaxed ${
+                            className={`rounded-3xl px-4 py-2 text-sm leading-relaxed whitespace-pre-wrap ${
                               isOutgoing
-                                ? 'bg-[#ebebeb] text-[#2e2e2e]'
+                                ? 'bg-[#f3f3f3] text-[#2e2e2e]'
                                 : 'bg-white text-[#2e2e2e] ring-1 ring-black/[0.04]'
                             }`}
                           >
-                            <span className="whitespace-pre-wrap">{msg.content}</span>
-                            <span className="inline-flex items-center gap-1 align-baseline ml-2 text-[10px] text-[#a3a3a3] leading-none select-none">
-                              {formatTimestamp(msg.created_at)}
-                              {isOutgoing && <Check size={10} weight="bold" className="text-[#3b82f6]" />}
-                            </span>
+                            {msg.content}
+                          </div>
+                          <div className="mt-1 px-2 flex items-center gap-1 text-[10px] text-[#a3a3a3] leading-none select-none">
+                            <span>{formatTimestamp(msg.created_at)}</span>
+                            {isOutgoing && <Check size={10} weight="bold" className="text-[#3b82f6]" />}
                           </div>
                         </div>
                       </div>
