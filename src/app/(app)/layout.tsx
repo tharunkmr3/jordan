@@ -68,7 +68,7 @@ function NavItem({ item, isActive, collapsed }: { item: typeof nav[0]; isActive:
           : "text-[#525252] hover:bg-[#ebebeb] hover:text-[#2e2e2e]"
       )}
     >
-      <Icon size={18} weight="regular" className={isActive ? "text-[#2e2e2e]" : "text-[#737373]"} />
+      <Icon size={16} weight="regular" className={isActive ? "text-[#2e2e2e]" : "text-[#737373]"} />
       {!collapsed && item.label}
     </Link>
   )
@@ -187,7 +187,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <span className="transition-opacity group-hover/logo:opacity-0">
                 <JordonLogo />
               </span>
-              <SidebarSimple size={18} weight="duotone" className="absolute text-[#737373] opacity-0 group-hover/logo:opacity-100 transition-opacity" />
+              <SidebarSimple size={16} weight="duotone" className="absolute text-[#737373] opacity-0 group-hover/logo:opacity-100 transition-opacity" />
             </button>
           ) : (
             <>
@@ -222,7 +222,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 collapsed && "justify-center px-0"
               )}
             >
-              <MagnifyingGlass size={18} weight="regular" className="text-[#737373]" />
+              <MagnifyingGlass size={16} weight="regular" className="text-[#737373]" />
               {!collapsed && <span className="flex-1 text-left">Search</span>}
               {!collapsed && <span className="text-[11px] text-[#a3a3a3]">⌘K</span>}
             </button>
@@ -258,7 +258,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     pathname === "/agents/new" ? "bg-white text-[#2e2e2e] shadow-[0_1px_3px_rgba(0,0,0,0.04)] ring-1 ring-black/[0.06]" : "text-[#737373] hover:bg-[#ebebeb] hover:text-[#2e2e2e]"
                   )}
                 >
-                  <PlusCircle size={18} weight="regular" className="flex-shrink-0 text-[#737373]" />
+                  <PlusCircle size={16} weight="regular" className="flex-shrink-0 text-[#737373]" />
                   <span className="truncate flex-1">New Agent</span>
                 </Link>
                 {agents.map((a) => {
@@ -276,9 +276,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         )}
                       >
                         {a.avatar_url ? (
-                          <img src={a.avatar_url} alt={a.name} className="h-[18px] w-[18px] rounded-full object-cover flex-shrink-0" />
+                          <img src={a.avatar_url} alt={a.name} className="h-4 w-4 rounded-full object-cover flex-shrink-0" />
                         ) : (() => { const c = avatarColor(a.id); return (
-                          <div className={cn("h-[18px] w-[18px] rounded-full text-[9px] font-semibold flex items-center justify-center flex-shrink-0", c.bg, c.text)}>
+                          <div className={cn("h-4 w-4 rounded-full text-[9px] font-semibold flex items-center justify-center flex-shrink-0", c.bg, c.text)}>
                             {a.name[0]?.toUpperCase() || 'A'}
                           </div>
                         ) })()}
