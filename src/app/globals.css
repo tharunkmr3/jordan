@@ -124,9 +124,9 @@
     @apply border-border outline-ring/50;
     scrollbar-width: none;
   }
-  /* Icon stroke weight: match font-weight 500 */
+  /* Icon stroke weight */
   svg.lucide {
-    stroke-width: 2.25;
+    stroke-width: 2;
   }
   *:hover {
     scrollbar-width: thin;
