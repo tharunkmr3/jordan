@@ -41,7 +41,7 @@ const bottomNav = [
 
 function JordonLogo() {
   return (
-    <svg width="22" height="24" viewBox="0 0 30 34" fill="none">
+    <svg width="18" height="20" viewBox="0 0 30 34" fill="none">
       <path
         d="M13.4352 0.0177586C18.7894 -0.00801237 24.1436 -0.00573525 29.4977 0.0245945C29.5506 10.2795 30.7276 20.1341 22.5553 27.882C16.2625 33.848 10.6984 33.8766 2.58067 33.717C2.45856 29.4152 2.55535 24.5842 2.55039 20.2424C4.91134 20.2126 7.31537 20.2382 9.68028 20.2424L9.70078 27.1047C15.4825 25.4291 19.2874 22.8085 21.5172 16.9875C22.9124 13.3454 22.7719 10.6081 22.7545 6.7951L13.4078 6.77362L13.4352 0.0177586ZM0.0181674 6.75213C4.44548 6.72359 8.87328 6.72359 13.3004 6.75213L13.2877 13.8937L0.0767611 13.884C-0.048528 11.6958 0.0169779 8.98811 0.0181674 6.75213Z"
         fill="currentColor"
@@ -151,7 +151,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         collapsed ? "w-[60px]" : "w-[220px]"
       )}>
         {/* Logo */}
-        <div className={cn("flex h-12 items-center gap-2.5 px-4", collapsed && "justify-center px-0")}>
+        <div className={cn("flex h-12 items-center gap-3 px-5", collapsed && "justify-center px-0")}>
           <JordonLogo />
           {!collapsed && (
             <span className="text-[15px] font-medium tracking-tight text-[#0a0a0a]">
