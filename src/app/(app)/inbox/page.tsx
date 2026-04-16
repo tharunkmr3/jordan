@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { avatarColor } from '@/lib/utils'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -411,11 +412,11 @@ function InboxInner() {
             <>
               {filteredAgent.avatar_url ? (
                 <img src={filteredAgent.avatar_url} alt={filteredAgent.name} className="h-7 w-7 rounded-full object-cover" />
-              ) : (
-                <div className="h-7 w-7 rounded-full bg-[#0a0a0a] text-white text-[11px] font-semibold flex items-center justify-center">
+              ) : (() => { const c = avatarColor(filteredAgent.id); return (
+                <div className={`h-7 w-7 rounded-full text-[11px] font-semibold flex items-center justify-center ${c.bg} ${c.text}`}>
                   {filteredAgent.name[0]?.toUpperCase() || 'A'}
                 </div>
-              )}
+              ) })()}
               <span className="text-[15px] font-semibold text-[#0a0a0a] truncate">{filteredAgent.name}</span>
             </>
           ) : (
@@ -430,7 +431,7 @@ function InboxInner() {
               key={t}
               onClick={() => setTab(t)}
               className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
-                tab === t ? 'bg-[#0a0a0a] text-white' : 'text-[#737373] hover:bg-[#f5f5f5]'
+                tab === t ? 'bg-[#ebebeb] text-[#0a0a0a]' : 'text-[#737373] hover:bg-[#f5f5f5]'
               }`}
             >
               {t === 'all' ? 'All' : t === 'active' ? 'Active' : 'Escalated'}
@@ -556,9 +557,15 @@ function InboxInner() {
             {/* Header */}
             <div className="flex h-12 items-center justify-between border-b border-[#ebebeb] px-5 flex-shrink-0">
               <div className="flex items-center gap-3">
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback className="bg-[#0a0a0a] text-[10px] text-white">{getInitials(detail.contact?.name)}</AvatarFallback>
-                </Avatar>
+                {(() => {
+                  const seed = detail.contact?.id || detail.contact?.name || ''
+                  const c = avatarColor(seed)
+                  return (
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback className={`text-[10px] font-semibold ${c.bg} ${c.text}`}>{getInitials(detail.contact?.name)}</AvatarFallback>
+                    </Avatar>
+                  )
+                })()}
                 <span className="text-[14px] font-semibold text-[#0a0a0a]">{detail.contact?.name || detail.contact?.phone || detail.contact?.email || 'Unknown'}</span>
               </div>
               <div className="flex items-center gap-1">
@@ -611,13 +618,16 @@ function InboxInner() {
 
                     return (
                       <div key={msg.id} className={`flex items-end gap-2 ${isOutgoing ? 'justify-end' : 'justify-start'}`}>
-                        {!isOutgoing && (
-                          <Avatar className={`h-6 w-6 flex-shrink-0 ${showAvatar ? '' : 'invisible'}`}>
-                            <AvatarFallback className="bg-[#e5e5e5] text-[8px] text-[#737373]">
-                              {getInitials(detail.contact?.name)}
-                            </AvatarFallback>
-                          </Avatar>
-                        )}
+                        {!isOutgoing && (() => {
+                          const c = avatarColor(detail.contact?.id || detail.contact?.name || '')
+                          return (
+                            <Avatar className={`h-6 w-6 flex-shrink-0 ${showAvatar ? '' : 'invisible'}`}>
+                              <AvatarFallback className={`text-[8px] font-semibold ${c.bg} ${c.text}`}>
+                                {getInitials(detail.contact?.name)}
+                              </AvatarFallback>
+                            </Avatar>
+                          )
+                        })()}
                         <div className={`max-w-[75%] flex flex-col ${isOutgoing ? 'items-end' : 'items-start'}`}>
                           <div
                             className={`rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed whitespace-pre-wrap ${
@@ -722,7 +732,9 @@ function InboxInner() {
               <div className="divide-y divide-[#f0f0f0]">
                   <DetailSection title="Assignee">
                     <div className="flex items-center gap-2 py-1">
-                      <Avatar className="h-6 w-6"><AvatarFallback className="bg-[#0a0a0a] text-[9px] text-white">{getInitials(userName)}</AvatarFallback></Avatar>
+                      {(() => { const c = avatarColor(userName); return (
+                      <Avatar className="h-6 w-6"><AvatarFallback className={`text-[9px] font-semibold ${c.bg} ${c.text}`}>{getInitials(userName)}</AvatarFallback></Avatar>
+                      ) })()}
                       <span className="text-[12px] text-[#0a0a0a]">{userName}</span>
                     </div>
                     <button className="flex items-center gap-2 mt-2 text-[11px] text-[#737373] hover:text-[#0a0a0a]">

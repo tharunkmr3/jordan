@@ -21,7 +21,7 @@ import {
   PlusCircle,
   DotsThreeVertical,
 } from "@phosphor-icons/react"
-import { cn } from "@/lib/utils"
+import { cn, avatarColor } from "@/lib/utils"
 import { createBrowserClient } from "@supabase/ssr"
 
 const nav = [
@@ -270,11 +270,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                       >
                         {a.avatar_url ? (
                           <img src={a.avatar_url} alt={a.name} className="h-5 w-5 rounded-full object-cover flex-shrink-0" />
-                        ) : (
-                          <div className="h-5 w-5 rounded-full bg-[#0a0a0a] text-white text-[9px] font-medium flex items-center justify-center flex-shrink-0">
+                        ) : (() => { const c = avatarColor(a.id); return (
+                          <div className={cn("h-5 w-5 rounded-full text-[9px] font-semibold flex items-center justify-center flex-shrink-0", c.bg, c.text)}>
                             {a.name[0]?.toUpperCase() || 'A'}
                           </div>
-                        )}
+                        ) })()}
                         <span className="truncate flex-1">{a.name}</span>
                         {a.status === "active" && !menuOpen && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 flex-shrink-0 group-hover/agent:hidden" />}
                       </Link>
@@ -341,9 +341,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 collapsed && "justify-center px-0 flex-none"
               )}
             >
-              <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-[#0a0a0a] text-[11px] font-medium text-white">
-                {userName ? userName.charAt(0).toUpperCase() : "U"}
-              </div>
+              {(() => { const c = avatarColor(userName || userEmail); return (
+                <div className={cn("flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-semibold", c.bg, c.text)}>
+                  {userName ? userName.charAt(0).toUpperCase() : "U"}
+                </div>
+              ) })()}
               {!collapsed && (
                 <>
                   <div className="flex-1 min-w-0">

@@ -18,6 +18,7 @@ import { PromptInput, PromptInputTextarea, PromptInputActions, PromptInputAction
 import { Loader } from "@/components/ui/loader"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
+import { avatarColor } from "@/lib/utils"
 import { ArrowUp, Copy, Check, Trash2, Pencil, Phone, Mail, Globe, Upload, FileText, X, Plus, Camera } from "lucide-react"
 import { WhatsappLogo, MessengerLogo } from "@phosphor-icons/react"
 
@@ -473,9 +474,11 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
               <div className="relative group shrink-0">
                 <Avatar className="h-14 w-14">
                   {agent.avatar_url && <AvatarImage src={agent.avatar_url} alt={agent.name} />}
-                  <AvatarFallback className="bg-[#0a0a0a] text-white text-sm font-semibold">
-                    {agent.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
-                  </AvatarFallback>
+                  {(() => { const c = avatarColor(agent.id); return (
+                    <AvatarFallback className={`text-sm font-semibold ${c.bg} ${c.text}`}>
+                      {agent.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  ) })()}
                 </Avatar>
                 <input
                   ref={avatarInputRef}
