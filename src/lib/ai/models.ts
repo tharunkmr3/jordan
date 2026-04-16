@@ -134,7 +134,9 @@ async function callOpenAI(
     model: config.model || 'gpt-5.4',
     messages: messages.map(toOpenAiMessage),
     temperature: config.temperature ?? 0.7,
-    max_tokens: config.maxTokens ?? 1024,
+    // GPT-5+ rejects the legacy `max_tokens` param; use the new
+    // `max_completion_tokens` which is supported on all current models.
+    max_completion_tokens: config.maxTokens ?? 1024,
   })
   return response.choices[0]?.message?.content || ''
 }
@@ -173,7 +175,7 @@ async function generateWithToolsOpenAI(
     tools: tools.length > 0 ? tools : undefined,
     tool_choice: tools.length > 0 ? 'auto' : undefined,
     temperature: config.temperature ?? 0.7,
-    max_tokens: config.maxTokens ?? 1024,
+    max_completion_tokens: config.maxTokens ?? 1024,
   })
   const choice = response.choices[0]?.message
   const rawCalls = (choice?.tool_calls ?? []) as Array<{
@@ -328,7 +330,7 @@ async function* streamOpenAI(
     model: config.model || 'gpt-5.4',
     messages: messages.map(toOpenAiMessage),
     temperature: config.temperature ?? 0.7,
-    max_tokens: config.maxTokens ?? 1024,
+    max_completion_tokens: config.maxTokens ?? 1024,
     stream: true,
   })
   for await (const chunk of stream) {
