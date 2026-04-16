@@ -407,7 +407,7 @@ function InboxInner() {
       {/* ============================================================= */}
       {/* LEFT: Conversation List */}
       {/* ============================================================= */}
-      <div className="flex w-[320px] flex-shrink-0 flex-col bg-white rounded-xl ring-1 ring-black/[0.06] shadow-sm overflow-hidden">
+      <div className="flex w-[320px] flex-shrink-0 flex-col bg-white rounded-xl ring-1 ring-black/[0.06] shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
         {/* Header */}
         <div className="flex h-12 items-center gap-2.5 px-4 border-b border-black/[0.06] flex-shrink-0">
           {filteredAgent ? (
@@ -530,7 +530,7 @@ function InboxInner() {
       {/* ============================================================= */}
       {/* CENTER: Conversation */}
       {/* ============================================================= */}
-      <div className="flex flex-1 flex-col bg-white min-w-0 min-h-0 rounded-xl ring-1 ring-black/[0.06] shadow-sm overflow-hidden">
+      <div className="flex flex-1 flex-col bg-white min-w-0 min-h-0 rounded-xl ring-1 ring-black/[0.06] shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
         {!selectedId ? (
           <div className="flex flex-1 items-center justify-center">
             <div className="text-center">
@@ -716,7 +716,7 @@ function InboxInner() {
       {/* RIGHT: Details */}
       {/* ============================================================= */}
       {detail?.contact && (
-        <div className="flex w-[320px] flex-shrink-0 flex-col bg-white rounded-xl ring-1 ring-black/[0.06] shadow-sm overflow-hidden">
+        <div className="flex w-[320px] flex-shrink-0 flex-col bg-white rounded-xl ring-1 ring-black/[0.06] shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
           {/* Tabs */}
           <div className="flex h-12 bg-white border-b border-black/[0.06] flex-shrink-0">
             {(['details', 'copilot'] as const).map((t) => (

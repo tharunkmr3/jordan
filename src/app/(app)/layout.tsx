@@ -64,7 +64,7 @@ function NavItem({ item, isActive, collapsed }: { item: typeof nav[0]; isActive:
         "flex items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium transition-colors",
         collapsed && "justify-center px-0",
         isActive
-          ? "bg-white text-[#0a0a0a] shadow-sm ring-1 ring-black/[0.06]"
+          ? "bg-white text-[#0a0a0a] shadow-[0_1px_3px_rgba(0,0,0,0.04)] ring-1 ring-black/[0.06]"
           : "text-[#0a0a0a] hover:bg-[#ebebeb]"
       )}
     >
@@ -255,7 +255,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   href="/agents/new"
                   className={cn(
                     "flex items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium transition-colors",
-                    pathname === "/agents/new" ? "bg-white text-[#0a0a0a] shadow-sm ring-1 ring-black/[0.06]" : "text-[#737373] hover:bg-[#ebebeb] hover:text-[#0a0a0a]"
+                    pathname === "/agents/new" ? "bg-white text-[#0a0a0a] shadow-[0_1px_3px_rgba(0,0,0,0.04)] ring-1 ring-black/[0.06]" : "text-[#737373] hover:bg-[#ebebeb] hover:text-[#0a0a0a]"
                   )}
                 >
                   <PlusCircle size={18} weight="regular" className="flex-shrink-0 text-[#737373]" />
@@ -272,7 +272,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         href={href}
                         className={cn(
                           "flex items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium transition-colors",
-                          isActive ? "bg-white text-[#0a0a0a] shadow-sm ring-1 ring-black/[0.06]" : "text-[#525252] hover:bg-[#ebebeb]"
+                          isActive ? "bg-white text-[#0a0a0a] shadow-[0_1px_3px_rgba(0,0,0,0.04)] ring-1 ring-black/[0.06]" : "text-[#525252] hover:bg-[#ebebeb]"
                         )}
                       >
                         {a.avatar_url ? (
