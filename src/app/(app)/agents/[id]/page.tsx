@@ -606,32 +606,39 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
 
             {/* System Prompt tab */}
             {activeTab === "model" && (
-              <div>
-                <Field label="System prompt" description="Instructions that define how the agent behaves, what it knows, and how it should respond.">
-                  <Textarea value={editData.system_prompt || ""} onChange={e => setEditData({...editData, system_prompt: e.target.value})} className="min-h-[300px]" />
-                </Field>
-                <Field label={`Temperature (${editData.temperature ?? 0.7})`} description="Lower = more focused and deterministic. Higher = more creative and varied.">
+              <div className="space-y-4">
+                <div>
+                  <div className="text-[13px] font-medium text-[#0a0a0a]">System Prompt</div>
+                  <p className="text-[11px] text-[#737373] mt-1 mb-3">Instructions that define how the agent behaves, what it knows, and how it should respond.</p>
+                  <Textarea value={editData.system_prompt || ""} onChange={e => setEditData({...editData, system_prompt: e.target.value})} className="min-h-[400px] text-[13px]" />
+                </div>
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div className="text-[13px] font-medium text-[#0a0a0a]">Temperature</div>
+                    <span className="text-[13px] text-[#737373]">{editData.temperature ?? 0.7}</span>
+                  </div>
+                  <p className="text-[11px] text-[#737373] mt-1 mb-2">Lower = more focused. Higher = more creative.</p>
                   <Input type="range" min={0} max={1} step={0.1} value={editData.temperature ?? 0.7} onChange={e => setEditData({...editData, temperature: parseFloat(e.target.value)})} />
-                </Field>
+                </div>
               </div>
             )}
 
             {/* Channels tab */}
             {activeTab === "channels" && (
-              <div className="space-y-1">
+              <div>
                   {Object.entries(channelMeta).map(([type, meta]) => {
                     const ch = channels.find(c => c.channel_type === type)
                     const isActive = ch?.is_active ?? false
                     const config = (ch?.channel_config || {}) as Record<string, unknown>
                     const configured = isChannelConfigured(type, config)
                     return (
-                      <div key={type}>
-                        <div className="flex items-center justify-between py-2.5 px-1 rounded-lg hover:bg-muted/50 transition-colors">
+                      <div key={type} className="py-4 border-b border-black/[0.04] last:border-0">
+                        <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <div className={`flex items-center justify-center w-8 h-8 rounded-lg ${isActive && configured ? "bg-green-50 text-green-700" : "bg-muted text-muted-foreground"}`}>{meta.icon}</div>
                             <div>
-                              <span className="text-sm font-medium">{meta.label}</span>
-                              <div className="text-xs text-muted-foreground">
+                              <span className="text-[13px] font-medium text-[#0a0a0a]">{meta.label}</span>
+                              <div className="text-[11px] text-[#737373]">
                                 {isActive && configured ? meta.connectedLabel(config) : meta.description}
                               </div>
                             </div>
