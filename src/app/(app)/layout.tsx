@@ -18,7 +18,7 @@ import {
   CaretDown,
   SidebarSimple,
   SignOut,
-  Plus,
+  PlusCircle,
 } from "@phosphor-icons/react"
 import { cn } from "@/lib/utils"
 import { createBrowserClient } from "@supabase/ssr"
@@ -160,25 +160,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           )}
         </div>
 
-        {/* New Agent */}
-        {!collapsed ? (
-          <div className="px-3 pt-2">
-            <Link
-              href="/agents/new"
-              className="flex items-center justify-center gap-1.5 rounded-md bg-[#0a0a0a] hover:bg-[#262626] text-white px-3 py-2 text-[13px] font-medium transition-colors"
-            >
-              <Plus size={14} weight="bold" />
-              New Agent
-            </Link>
-          </div>
-        ) : (
-          <div className="flex justify-center pt-2">
-            <Link href="/agents/new" className="rounded-md bg-[#0a0a0a] hover:bg-[#262626] text-white p-2" title="New Agent">
-              <Plus size={16} weight="bold" />
-            </Link>
-          </div>
-        )}
-
         {/* Search */}
         {!collapsed && (
           <div className="px-3 pt-3">
@@ -212,11 +193,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           ))}
 
           {/* Agents section */}
-          {!collapsed && agents.length > 0 && (
+          {!collapsed && (
             <div className="pt-4">
               <div className="flex items-center justify-between px-3 mb-1">
                 <span className="text-[10px] font-semibold text-[#a3a3a3] uppercase tracking-wider">Agents</span>
-                <span className="text-[10px] text-[#a3a3a3]">{agents.length}</span>
+                {agents.length > 0 && <span className="text-[10px] text-[#a3a3a3]">{agents.length}</span>}
               </div>
               <div className="space-y-0.5">
                 {agents.map((a) => {
@@ -242,6 +223,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     </Link>
                   )
                 })}
+                <Link
+                  href="/agents/new"
+                  className={cn(
+                    "flex items-center gap-2 rounded-md px-3 py-1.5 text-[12px] font-[500] transition-colors",
+                    pathname === "/agents/new" ? "bg-[#ebebeb] text-[#0a0a0a]" : "text-[#737373] hover:bg-[#ebebeb] hover:text-[#0a0a0a]"
+                  )}
+                >
+                  <PlusCircle size={18} weight="regular" className="flex-shrink-0 text-[#737373]" />
+                  <span className="truncate flex-1">New Agent</span>
+                </Link>
               </div>
             </div>
           )}
