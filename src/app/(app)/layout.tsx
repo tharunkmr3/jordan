@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import {
@@ -84,6 +84,17 @@ function NavItem({ item, isActive, collapsed }: { item: typeof nav[0]; isActive:
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
+  // useSearchParams() inside AppLayoutInner forces a client-side
+  // render bail-out during static prerender. Wrap in Suspense so
+  // Next can handle the boundary cleanly at build time.
+  return (
+    <Suspense fallback={null}>
+      <AppLayoutInner>{children}</AppLayoutInner>
+    </Suspense>
+  )
+}
+
+function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const searchParams = useSearchParams()
