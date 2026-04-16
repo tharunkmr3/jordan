@@ -73,6 +73,7 @@ export async function PATCH(
   if ('name' in body) updates.name = body.name
   if ('description' in body) updates.description = body.description
   if ('agent_id' in body) updates.agent_id = body.agent_id
+  if ('color' in body) updates.color = body.color
 
   const admin = createAdminClient()
   const { data, error } = await admin

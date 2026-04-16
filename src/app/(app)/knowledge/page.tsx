@@ -25,7 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import type { Agent, KnowledgeBase, KbDocument } from '@/types/database'
-import { Plus, Trash, Upload, ChatDots, Database, ArrowLeft, FileText, X } from '@phosphor-icons/react'
+import { Plus, Trash, Upload, ChatDots, Database, ArrowLeft, FileText, X, PencilSimple } from '@phosphor-icons/react'
 
 interface KnowledgeBaseWithDocs extends KnowledgeBase {
   kb_documents: KbDocument[]
@@ -52,6 +52,15 @@ export default function KnowledgePage() {
   const [createAgent, setCreateAgent] = useState<string>('')
   const [createColor, setCreateColor] = useState<string>('Blue')
   const [creating, setCreating] = useState(false)
+
+  // Edit KB dialog
+  const [editOpen, setEditOpen] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editDesc, setEditDesc] = useState('')
+  const [editAgent, setEditAgent] = useState<string>('')
+  const [editColor, setEditColor] = useState<string>('Blue')
+  const [savingEdit, setSavingEdit] = useState(false)
 
   // FAQ dialog
   const [faqOpen, setFaqOpen] = useState(false)
@@ -128,6 +137,43 @@ export default function KnowledgePage() {
       body: JSON.stringify({ name: newName }),
     })
     setKbs(prev => prev.map(kb => kb.id === kbId ? { ...kb, name: newName } : kb))
+  }
+
+  function openEditDialog(kb: KnowledgeBaseWithDocs) {
+    setEditingId(kb.id)
+    setEditName(kb.name)
+    setEditDesc(kb.description || '')
+    setEditAgent(kb.agent_id || '')
+    setEditColor((kb as unknown as { color?: string }).color || 'Blue')
+    setEditOpen(true)
+  }
+
+  async function handleSaveEdit() {
+    if (!editingId || !editName.trim()) return
+    setSavingEdit(true)
+    // Optimistic update
+    setKbs(prev => prev.map(kb => kb.id === editingId
+      ? { ...kb, name: editName, description: editDesc || null, agent_id: editAgent || null, color: editColor } as KnowledgeBaseWithDocs
+      : kb))
+    setEditOpen(false)
+    try {
+      await fetch(`/api/knowledge-base/${editingId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editName,
+          description: editDesc || null,
+          agent_id: editAgent || null,
+          color: editColor,
+        }),
+      })
+      await fetchKbs()
+    } catch {
+      setError('Failed to save changes')
+      await fetchKbs()
+    } finally {
+      setSavingEdit(false)
+    }
   }
 
   async function handleUpload(file: File) {
@@ -324,6 +370,48 @@ export default function KnowledgePage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Edit knowledge base dialog */}
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Knowledge Base</DialogTitle>
+              <DialogDescription>Update the name, description, color, or assigned agent.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-2">
+              <div className="grid gap-2">
+                <Label className="text-sm">Name</Label>
+                <Input value={editName} onChange={e => setEditName(e.target.value)} />
+              </div>
+              <div className="grid gap-2">
+                <Label className="text-sm">Description</Label>
+                <Textarea value={editDesc} onChange={e => setEditDesc(e.target.value)} rows={2} />
+              </div>
+              <div className="grid gap-2">
+                <Label className="text-sm">Color</Label>
+                <FolderColorPicker value={editColor} onChange={setEditColor} />
+              </div>
+              <div className="grid gap-2">
+                <Label className="text-sm">Assigned agent</Label>
+                <Select value={editAgent} onValueChange={v => setEditAgent(v === '__none__' || !v ? '' : String(v))}>
+                  <SelectTrigger><SelectValue placeholder="No agent" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">No agent</SelectItem>
+                    {agents.map(agent => (
+                      <SelectItem key={agent.id} value={agent.id}>{agent.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" size="sm" onClick={() => setEditOpen(false)}>Cancel</Button>
+              <Button size="sm" onClick={handleSaveEdit} disabled={savingEdit || !editName.trim()}>
+                {savingEdit ? 'Saving...' : 'Save changes'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {error && (
@@ -373,6 +461,7 @@ export default function KnowledgePage() {
               onRename={(newName) => handleRenameKb(kb.id, newName)}
               contextActions={[
                 { label: "Open", icon: <ArrowLeft size={14} className="rotate-180" />, onClick: () => setSelectedKb(kb.id) },
+                { label: "Edit", icon: <PencilSimple size={14} />, onClick: () => openEditDialog(kb) },
                 { label: "Rename", icon: <FileText size={14} />, onClick: () => {} },
                 { label: "Upload file", icon: <Upload size={14} />, onClick: () => { setSelectedKb(kb.id); setTimeout(() => fileInputRef.current?.click(), 100) } },
                 { label: "Add FAQ", icon: <ChatDots size={14} />, onClick: () => { setSelectedKb(kb.id); setTimeout(() => setFaqOpen(true), 100) } },
