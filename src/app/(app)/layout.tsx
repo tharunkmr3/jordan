@@ -24,6 +24,7 @@ import {
 } from "@phosphor-icons/react"
 import { cn, avatarColor } from "@/lib/utils"
 import { createBrowserClient } from "@supabase/ssr"
+import { PageHeaderTitleProvider, usePageHeaderTitle } from "@/components/ui/header-actions"
 
 const navGroup1 = [
   { label: "Home", href: "/dashboard", icon: House },
@@ -53,6 +54,12 @@ function JordonLogo() {
       />
     </svg>
   )
+}
+
+function HeaderTitleArea({ defaultTitle }: { defaultTitle: string }) {
+  const custom = usePageHeaderTitle()
+  if (custom) return <div className="flex min-w-0 items-center gap-2">{custom}</div>
+  return <span className="text-base font-semibold text-[#2e2e2e]">{defaultTitle}</span>
 }
 
 function NavItem({ item, isActive, collapsed }: { item: typeof nav[0]; isActive: boolean; collapsed: boolean }) {
@@ -172,6 +179,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <IconContext.Provider value={{ weight: "bold" }}>
+    <PageHeaderTitleProvider>
     <div className="flex h-screen bg-[#f5f5f5]">
       {/* Sidebar */}
       <aside className={cn(
@@ -401,7 +409,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="flex h-full flex-col overflow-hidden rounded-xl bg-white ring-1 ring-black/[0.04]">
             {/* Header (inside card) */}
             <header className="flex h-12 items-center justify-between gap-3 border-b border-black/[0.04] px-5 flex-shrink-0">
-              <span className="text-base font-semibold text-[#2e2e2e]">{pageTitle}</span>
+              <HeaderTitleArea defaultTitle={pageTitle} />
               {/* Pages mount filters / actions here via <HeaderActions> */}
               <div id="page-header-actions" className="flex items-center gap-2" />
             </header>
@@ -414,6 +422,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       )}
     </div>
+    </PageHeaderTitleProvider>
     </IconContext.Provider>
   )
 }

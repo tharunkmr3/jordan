@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { FolderCard, FolderColorPicker, type FolderAction } from '@/components/ui/folder-card'
-import { HeaderActions } from '@/components/ui/header-actions'
+import { HeaderActions, HeaderTitle } from '@/components/ui/header-actions'
 import {
   Dialog,
   DialogContent,
@@ -219,37 +219,36 @@ export default function KnowledgePage() {
 
     return (
       <div className="p-6">
-        {/* Back + title */}
-        <div className="flex items-center gap-3 mb-6">
-          <button onClick={() => setSelectedKb(null)} className="rounded-md p-1 text-[#737373] hover:bg-[#f5f5f5] hover:text-[#2e2e2e]">
-            <ArrowLeft size={18} />
+        <HeaderTitle>
+          <button
+            onClick={() => setSelectedKb(null)}
+            className="rounded-md p-1 text-[#737373] hover:bg-[#f5f5f5] hover:text-[#2e2e2e]"
+            aria-label="Back to knowledge bases"
+          >
+            <ArrowLeft size={16} />
           </button>
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <h1 className="text-base font-semibold text-[#2e2e2e]">{activeKb.name}</h1>
-              {agentName && <Badge variant="secondary" className="text-xs">{agentName}</Badge>}
-            </div>
-            {activeKb.description && <p className="text-xs text-[#737373] mt-0.5">{activeKb.description}</p>}
-          </div>
-          <div className="flex items-center gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".txt,.csv,.pdf,.docx"
-              className="hidden"
-              onChange={e => { if (e.target.files?.[0]) handleUpload(e.target.files[0]); e.target.value = '' }}
-            />
-            <Button variant="secondary" size="sm" onClick={() => { setFaqOpen(true) }}>
-              <ChatDots size={14} className="mr-1.5" />Add FAQ
-            </Button>
-            <Button variant="secondary" size="sm" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
-              <Upload size={14} className="mr-1.5" />{uploading ? 'Uploading...' : 'Upload'}
-            </Button>
-            <Button variant="destructive" size="sm" onClick={() => handleDeleteKb(activeKb.id)}>
-              <Trash size={14} />
-            </Button>
-          </div>
-        </div>
+          <span className="text-base font-semibold text-[#2e2e2e] truncate">{activeKb.name}</span>
+          {agentName && <Badge variant="secondary" className="text-xs">{agentName}</Badge>}
+        </HeaderTitle>
+
+        <HeaderActions>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".txt,.csv,.pdf,.docx"
+            className="hidden"
+            onChange={e => { if (e.target.files?.[0]) handleUpload(e.target.files[0]); e.target.value = '' }}
+          />
+          <Button variant="secondary" size="sm" onClick={() => { setFaqOpen(true) }}>
+            <ChatDots size={14} className="mr-1.5" />Add FAQ
+          </Button>
+          <Button variant="secondary" size="sm" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
+            <Upload size={14} className="mr-1.5" />{uploading ? 'Uploading...' : 'Upload'}
+          </Button>
+          <Button variant="destructive" size="icon-sm" onClick={() => handleDeleteKb(activeKb.id)} aria-label="Delete knowledge base">
+            <Trash size={14} />
+          </Button>
+        </HeaderActions>
 
         {/* Documents grid */}
         {docs.length === 0 ? (
