@@ -1281,30 +1281,38 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
  */
 function AssistantBubble({ msg }: { msg: ChatMsg }) {
   const isUser = msg.role === "user"
-  const base = isUser
+  const bubble = isUser
     ? "bg-[#f7f7f7] text-[#2e2e2e] rounded-3xl px-3.5 py-2 text-[13px] leading-relaxed"
     : "bg-white text-[#2e2e2e] rounded-3xl px-3.5 py-2 text-[13px] leading-relaxed ring-1 ring-black/[0.04]"
 
   if (isUser) {
-    return <MessageContent className={base}>{msg.content}</MessageContent>
+    return <MessageContent className={bubble}>{msg.content}</MessageContent>
   }
 
   const hasThoughts = (msg.thoughts?.length ?? 0) > 0
   const hasContent = msg.content.trim().length > 0
 
   return (
-    <div className={cn(base, "min-w-[220px] max-w-[640px]")}>
+    // Stack the CoT rail (quiet, no bubble) above the actual reply
+    // bubble so the two read as distinct blocks — reasoning on top,
+    // final answer below.
+    <div className="flex flex-col gap-2 min-w-[220px] max-w-[640px]">
       {hasThoughts && (
-        <ChainOfThought className="mb-2">
+        <ChainOfThought className="px-1 py-1">
           {msg.thoughts!.map((t, idx) => <ThoughtRow key={`${t.kind}-${('id' in t ? t.id : idx)}-${idx}`} step={t} />)}
         </ChainOfThought>
       )}
       {hasContent ? (
-        <Markdown className="prose prose-sm max-w-none text-[#2e2e2e] prose-headings:mt-3 prose-headings:mb-1 prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0 prose-a:text-[#2e2e2e] prose-a:underline prose-code:text-[#2e2e2e] prose-code:bg-[#f3f3f3] prose-code:rounded prose-code:px-1">
-          {msg.content}
-        </Markdown>
+        <div className={bubble}>
+          <Markdown className="prose prose-sm max-w-none text-[#2e2e2e] prose-headings:mt-3 prose-headings:mb-1 prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0 prose-a:text-[#2e2e2e] prose-a:underline prose-code:text-[#2e2e2e] prose-code:bg-[#f3f3f3] prose-code:rounded prose-code:px-1">
+            {msg.content}
+          </Markdown>
+        </div>
       ) : (
-        <div className="py-1"><Loader variant="typing" size="md" /></div>
+        // No final text yet — typing indicator sits by itself (no
+        // bubble) so the CoT above doesn't look attached to an empty
+        // shape.
+        <div className="px-2 py-1"><Loader variant="typing" size="md" /></div>
       )}
     </div>
   )
@@ -1312,10 +1320,11 @@ function AssistantBubble({ msg }: { msg: ChatMsg }) {
 
 function ThoughtRow({ step }: { step: ThoughtStep }) {
   if (step.kind === "thinking") {
+    const hasItems = step.items.length > 0
     return (
       <ChainOfThoughtStep>
-        <ChainOfThoughtTrigger>{step.trigger}</ChainOfThoughtTrigger>
-        {step.items.length > 0 && (
+        <ChainOfThoughtTrigger collapsible={hasItems}>{step.trigger}</ChainOfThoughtTrigger>
+        {hasItems && (
           <ChainOfThoughtContent>
             {step.items.map((it, i) => <ChainOfThoughtItem key={i}>{it}</ChainOfThoughtItem>)}
           </ChainOfThoughtContent>
@@ -1329,7 +1338,7 @@ function ThoughtRow({ step }: { step: ThoughtStep }) {
       : JSON.stringify(step.args)
     return (
       <ChainOfThoughtStep>
-        <ChainOfThoughtTrigger>
+        <ChainOfThoughtTrigger collapsible={Boolean(argPreview)}>
           <span className="inline-flex items-center gap-1.5">
             <Loader variant="typing" size="sm" />
             Calling <code className="text-[11px] font-mono text-[#737373]">{step.tool}</code>
@@ -1345,7 +1354,7 @@ function ThoughtRow({ step }: { step: ThoughtStep }) {
       </ChainOfThoughtStep>
     )
   }
-  // tool_done
+  // tool_done — always has a resultPreview so always collapsible
   return (
     <ChainOfThoughtStep>
       <ChainOfThoughtTrigger>

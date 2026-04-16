@@ -130,16 +130,40 @@ export function ChainOfThoughtStep({
 // <ChainOfThoughtTrigger>
 // ---------------------------------------------------------------------------
 
+export interface ChainOfThoughtTriggerProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  /**
+   * When true, render as a plain label with no caret and no click
+   * behaviour — for steps that don't have any expandable content.
+   * Avoids showing a chevron that does nothing.
+   */
+  collapsible?: boolean
+}
+
 export function ChainOfThoughtTrigger({
   children,
   className,
+  collapsible = true,
   ...rest
-}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+}: ChainOfThoughtTriggerProps) {
   const stepKey = useContext(StepContext)
   const { isOpen, toggle } = useChain()
   if (!stepKey) throw new Error("<ChainOfThoughtTrigger> must be inside <ChainOfThoughtStep>")
 
   const open = isOpen(stepKey)
+
+  if (!collapsible) {
+    return (
+      <div
+        className={cn(
+          "flex w-full items-center gap-1.5 py-1 text-left text-[13px] font-medium text-[#2e2e2e]",
+          className,
+        )}
+      >
+        <span className="flex-1 truncate">{children}</span>
+      </div>
+    )
+  }
+
   return (
     <button
       type="button"
