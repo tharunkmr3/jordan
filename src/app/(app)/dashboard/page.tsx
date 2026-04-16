@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { HeaderActions } from "@/components/ui/header-actions"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Separator } from "@/components/ui/separator"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -87,12 +88,10 @@ export default function DashboardPage() {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Filters */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-sm font-medium mr-1">Overview</span>
-        <Select value={dateRange} onValueChange={(v) => v && setDateRange(v)}>
-          <SelectTrigger className="h-8 w-[130px] text-xs">
-            <SelectValue />
+      <HeaderActions>
+        <Select value={dateRange} onValueChange={(v) => v && setDateRange(String(v))}>
+          <SelectTrigger className="h-8 w-[130px] rounded-full border-0 bg-[#f5f5f5] hover:bg-[#ebebeb] text-[13px] focus-visible:ring-0 focus-visible:border-transparent">
+            <SelectValue>{(v) => (v === "30" ? "Last 30 days" : v === "90" ? "Last 90 days" : "Last 7 days")}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="7">Last 7 days</SelectItem>
@@ -101,11 +100,11 @@ export default function DashboardPage() {
           </SelectContent>
         </Select>
         <Select>
-          <SelectTrigger className="h-8 w-[130px] text-xs">
-            <SelectValue placeholder="All Channels" />
+          <SelectTrigger className="h-8 w-[130px] rounded-full border-0 bg-[#f5f5f5] hover:bg-[#ebebeb] text-[13px] focus-visible:ring-0 focus-visible:border-transparent">
+            <SelectValue placeholder="All channels" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Channels</SelectItem>
+            <SelectItem value="all">All channels</SelectItem>
             <SelectItem value="whatsapp">WhatsApp</SelectItem>
             <SelectItem value="phone">Phone</SelectItem>
             <SelectItem value="facebook">Facebook</SelectItem>
@@ -113,16 +112,16 @@ export default function DashboardPage() {
           </SelectContent>
         </Select>
         <Select>
-          <SelectTrigger className="h-8 w-[120px] text-xs">
-            <SelectValue placeholder="All Agents" />
+          <SelectTrigger className="h-8 w-[120px] rounded-full border-0 bg-[#f5f5f5] hover:bg-[#ebebeb] text-[13px] focus-visible:ring-0 focus-visible:border-transparent">
+            <SelectValue placeholder="All agents" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Agents</SelectItem>
+            <SelectItem value="all">All agents</SelectItem>
             <SelectItem value="support">Support Bot</SelectItem>
             <SelectItem value="sales">Sales Assistant</SelectItem>
           </SelectContent>
         </Select>
-      </div>
+      </HeaderActions>
 
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4">

@@ -398,19 +398,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="flex flex-1 flex-col overflow-hidden bg-[#f5f5f5] p-3">
           <div className="flex h-full flex-col overflow-hidden rounded-xl bg-white ring-1 ring-black/[0.04]">
             {/* Header (inside card) */}
-            <header className="flex h-12 items-center justify-between border-b border-black/[0.04] px-5 flex-shrink-0">
+            <header className="flex h-12 items-center justify-between gap-3 border-b border-black/[0.04] px-5 flex-shrink-0">
               <span className="text-base font-semibold text-[#2e2e2e]">{pageTitle}</span>
-              <div>
-                {pathname === "/knowledge" && (
-                  <button
-                    onClick={() => window.dispatchEvent(new Event("create-kb"))}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium hover:bg-primary/90 transition-colors"
-                  >
-                    <PlusCircle size={14} weight="regular" />
-                    New Knowledge Base
-                  </button>
-                )}
-              </div>
+              {/* Pages mount filters / actions here via <HeaderActions> */}
+              <div id="page-header-actions" className="flex items-center gap-2" />
             </header>
 
             {/* Page content */}

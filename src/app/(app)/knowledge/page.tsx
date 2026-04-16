@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { FolderCard, FolderColorPicker, type FolderAction } from '@/components/ui/folder-card'
+import { HeaderActions } from '@/components/ui/header-actions'
 import {
   Dialog,
   DialogContent,
@@ -93,12 +94,6 @@ export default function KnowledgePage() {
 
   useEffect(() => { fetchKbs(); fetchAgents() }, [fetchKbs, fetchAgents])
 
-  // Listen for header button click
-  useEffect(() => {
-    const handler = () => setCreateOpen(true)
-    window.addEventListener("create-kb", handler)
-    return () => window.removeEventListener("create-kb", handler)
-  }, [])
 
   const activeKb = kbs.find(kb => kb.id === selectedKb)
 
@@ -331,6 +326,12 @@ export default function KnowledgePage() {
   // ---- Folder grid view ----
   return (
     <div className="p-6">
+      <HeaderActions>
+        <Button size="sm" className="rounded-full" onClick={() => setCreateOpen(true)}>
+          <Plus size={14} weight="regular" />
+          New Knowledge Base
+        </Button>
+      </HeaderActions>
       <div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogContent>
