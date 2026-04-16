@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { FolderCard } from '@/components/ui/folder-card'
+import { FolderCard, FolderColorPicker } from '@/components/ui/folder-card'
 import {
   Dialog,
   DialogContent,
@@ -50,6 +50,7 @@ export default function KnowledgePage() {
   const [createName, setCreateName] = useState('')
   const [createDesc, setCreateDesc] = useState('')
   const [createAgent, setCreateAgent] = useState<string>('')
+  const [createColor, setCreateColor] = useState<string>('Blue')
   const [creating, setCreating] = useState(false)
 
   // FAQ dialog
@@ -293,6 +294,10 @@ export default function KnowledgePage() {
               <div className="grid gap-2">
                 <Label className="text-sm">Description</Label>
                 <Textarea placeholder="What kind of knowledge will this contain?" value={createDesc} onChange={e => setCreateDesc(e.target.value)} rows={2} />
+              </div>
+              <div className="grid gap-2">
+                <Label className="text-sm">Color</Label>
+                <FolderColorPicker value={createColor} onChange={setCreateColor} />
               </div>
               <div className="grid gap-2">
                 <Label className="text-sm">Assign to Agent</Label>
