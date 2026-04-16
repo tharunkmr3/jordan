@@ -50,3 +50,7 @@ Global CSS in `globals.css` sets `cursor: pointer` on `button`, `a`, `[role="but
 ### Text color: softened black
 
 Use `#2e2e2e` for primary text — not pure `#000` or harsh `#0a0a0a`. The extra brightness is tiring on eyes. Secondary text stays at `#525252` / `#737373`, tertiary/hint at `#a3a3a3`. Avoid introducing new shades; pick from the existing palette.
+
+### Text casing: no uppercase except abbreviations
+
+Never use `uppercase` Tailwind class or manual ALL-CAPS strings in UI labels. Section headers, form labels, button text, nav items — all use sentence case. The only exception is genuine abbreviations (ISO codes like EN/HI, acronyms like AI/API/URL/ID). Use `font-semibold`/`font-medium` + color for hierarchy instead of uppercase.

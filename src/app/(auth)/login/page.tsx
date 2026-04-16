@@ -123,7 +123,7 @@ export default function LoginPage() {
       {/* Divider */}
       <div className="relative flex items-center">
         <Separator className="flex-1" />
-        <span className="px-4 text-xs uppercase text-muted-foreground">Or</span>
+        <span className="px-4 text-xs text-muted-foreground">or</span>
         <Separator className="flex-1" />
       </div>
 

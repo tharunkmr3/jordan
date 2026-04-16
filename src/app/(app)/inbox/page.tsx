@@ -774,19 +774,19 @@ function InboxInner() {
                     <div className="space-y-2">
                       {detail.contact.email && (
                         <div>
-                          <div className="text-[11px] text-[#a3a3a3] uppercase tracking-wider mb-0.5">Email</div>
+                          <div className="text-[11px] text-[#a3a3a3] font-medium mb-0.5">Email</div>
                           <div className="text-[13px] text-[#2e2e2e] break-all">{detail.contact.email}</div>
                         </div>
                       )}
                       {detail.contact.phone && (
                         <div>
-                          <div className="text-[11px] text-[#a3a3a3] uppercase tracking-wider mb-0.5">Phone</div>
+                          <div className="text-[11px] text-[#a3a3a3] font-medium mb-0.5">Phone</div>
                           <div className="text-[13px] text-[#2e2e2e]">{detail.contact.phone}</div>
                         </div>
                       )}
                       {detail.contact.language && (
                         <div>
-                          <div className="text-[11px] text-[#a3a3a3] uppercase tracking-wider mb-0.5">Language</div>
+                          <div className="text-[11px] text-[#a3a3a3] font-medium mb-0.5">Language</div>
                           <div className="text-[13px] text-[#2e2e2e] uppercase">{detail.contact.language}</div>
                         </div>
                       )}

@@ -247,7 +247,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {!collapsed && (
             <div>
               <div className="flex items-center justify-between px-3 mb-1">
-                <span className="text-xs font-medium text-[#a3a3a3] uppercase tracking-wider">Agents</span>
+                <span className="text-xs font-medium text-[#a3a3a3]">Agents</span>
                 {agents.length > 0 && <span className="text-xs text-[#a3a3a3]">{agents.length}</span>}
               </div>
               <div className="space-y-0.5">
