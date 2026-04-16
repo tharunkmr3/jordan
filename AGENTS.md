@@ -54,3 +54,75 @@ Use `#2e2e2e` for primary text — not pure `#000` or harsh `#0a0a0a`. The extra
 ### Text casing: no uppercase except abbreviations
 
 Never use `uppercase` Tailwind class or manual ALL-CAPS strings in UI labels. Section headers, form labels, button text, nav items — all use sentence case. The only exception is genuine abbreviations (ISO codes like EN/HI, acronyms like AI/API/URL/ID). Use `font-semibold`/`font-medium` + color for hierarchy instead of uppercase.
+
+### Brand color: deep orange (#F4511E)
+
+Defined in `globals.css` as `--color-brand: #F4511E` and `--color-brand-soft: #FFF4EE`. Use sparingly as an accent — NOT as a fill color for large surfaces.
+
+Currently applied to:
+- Active tab underlines (`border-[#F4511E]`) — agent settings tabs, inbox Details/Copilot tabs
+- Panel resize handle on hover
+
+Never use brand orange for primary CTAs, icons, or body text. The primary CTA stays black (`bg-black` / `bg-primary`). If a new accent need arises, ask before introducing a second brand shade.
+
+### Panel and Card primitives
+
+Two distinct elevation primitives, each with a clear role:
+
+- **`<Panel>`** (`src/components/ui/panel.tsx`) — page-level container. White rounded card with an optional 48px header slot and an optional drag-to-resize right edge. Use for the big chrome of a page: inbox's three columns, agent settings' form + test chat, etc. Supports `resizable`, `defaultWidth`, `minWidth`, `maxWidth`, and `storageKey` for persisting width across reloads. Import `<PanelTitle>` / `<PanelActions>` helpers if the header is a simple title + actions pair.
+
+- **`<Card>`** (`src/components/ui/card.tsx`) — content block inside a page. Same elevation style but lighter weight. Exposes a `size` prop with tiers `xs | sm | md | lg | xl` that drives:
+  - `py` + `gap` on the Card itself (e.g. `md` → `py-4 gap-4`)
+  - `px` on `CardHeader` / `CardContent` / `CardFooter` (e.g. `md` → `px-4`)
+  - Auto horizontal padding when a direct `<Table>` child is present
+  - A nudge to `CardTitle` font size at the extremes (`xs/sm` → `text-sm`, `xl` → `text-lg`)
+
+  Default is `md`. Use `sm` for single-metric / stat cards, `xs` for chip-dense tiles, `lg`/`xl` for feature or hero cards. **Never write hand-rolled padding like `<CardContent className="p-5">`** — pick the right size tier instead.
+
+**Elevation style for both:** soft shadow, no ring. Panel uses a two-layer drop shadow; Card uses a single subtle shadow + a `black/[0.04]` hairline ring. Never add `ring-1 ring-black/[0.06]` — that's the old darker look. For any new white-surface rounded container, use `<Card>` or `<Panel>` instead of a raw `<div>`.
+
+### Borders: subtle, `black/[0.04]`
+
+All panel borders, card hairlines, table dividers, and intra-panel dividers use `border-black/[0.04]` (or `ring-black/[0.04]`). Never `black/[0.06]` or darker. Internal dividers inside a panel header can go to `border-black/[0.03]` if they compete with content.
+
+### Tables: no lines, first column auto-medium
+
+`<Table>` (`src/components/ui/table.tsx`) is borderless by default:
+- No `border-b` on header, rows, or footer
+- `border-separate border-spacing-0` so rows sit flush
+- Header: `h-9 text-xs font-medium text-[#737373]` — reads as a quiet label row, not a divider
+- Body cells default to `text-[#525252]`, but **the first `<TableCell>` in each row automatically becomes `font-medium text-[#2e2e2e]`** — the leading column is the row's "name". Override per-cell only when needed.
+- Hover tint is `#fafafa`
+
+Never add row dividers. Never add `font-medium` to the first cell manually — it's already applied.
+
+### Header slot: `<HeaderActions>`
+
+The layout header exposes a portal slot (`#page-header-actions`) on the right side. Any page can mount filters, action buttons, or other controls there by wrapping them in `<HeaderActions>` from `src/components/ui/header-actions.tsx`. Use this instead of:
+- Adding `pathname === "/foo"` branches to the layout (no)
+- `CustomEvent` bridges to tell the layout to render a button (no)
+
+State stays in the page; the portal keeps UI composition clean.
+
+Example chip-style selects for header filters (rounded, subtle border):
+```tsx
+<SelectTrigger className="h-8 rounded-lg border-black/[0.06] text-[13px]">
+```
+
+### Icon weight: Phosphor `bold` by default
+
+Phosphor icons in the `(app)` tree default to `weight="bold"` via `<IconContext.Provider>` wrapping `AppLayout`. Do not set `weight="regular"` — it's redundant and lighter than the rest of the app. Override only for:
+- Logos / channel icons → `weight="fill"` (colored badges)
+- Empty-state illustrations → `weight="duotone"`
+- Active states of toggleable icons (e.g. starred) → `weight="fill"`
+
+Lucide icons (for shadcn primitives and forms) stay at stroke-width `2` — this is set globally in `globals.css` via `svg.lucide { stroke-width: 2 }`. Don't set `strokeWidth` per-icon.
+
+### Sidebar row alignment
+
+Every sidebar row (nav item, search, New Agent, agent list, user menu) uses:
+```tsx
+className="flex items-center gap-3 rounded-md px-3 py-2 text-[13px] leading-none font-medium"
+```
+
+`leading-none` is critical — without it the text's line-height makes its optical center sit below the icon's. Active row uses `bg-white text-[#2e2e2e] shadow-[0_2px_4px_-1px_rgba(0,0,0,0.08),0_1px_2px_-1px_rgba(0,0,0,0.04)]` — a bottom-biased drop shadow, no ring. Inactive icon is `#737373`; active icon is `#525252` (not `#2e2e2e` — the label carries the strongest text).
