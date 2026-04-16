@@ -66,8 +66,8 @@ function Field({ label, description, children }: { label: string; description?: 
   return (
     <div className="grid grid-cols-[1fr_1.2fr] gap-6 py-4 border-b border-black/[0.04] last:border-0">
       <div>
-        <div className="text-[13px] font-medium text-[#0a0a0a]">{label}</div>
-        {description && <p className="text-[11px] text-[#737373] mt-1 leading-relaxed">{description}</p>}
+        <div className="text-sm font-medium text-[#0a0a0a]">{label}</div>
+        {description && <p className="text-xs text-[#737373] mt-1 leading-relaxed">{description}</p>}
       </div>
       <div>{children}</div>
     </div>
@@ -504,7 +504,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
               {uploadingAvatar ? <Loader variant="circular" size="sm" /> : <Camera size={14} className="text-white" />}
             </button>
           </div>
-          <span className="text-[15px] font-semibold text-[#0a0a0a] flex-1">{agent.name}</span>
+          <span className="text-base font-semibold text-[#0a0a0a] flex-1">{agent.name}</span>
           <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
           <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}><Trash2 size={14} /></Button>
         </div>
@@ -520,7 +520,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
             <button
               key={t.key}
               onClick={() => setActiveTab(t.key)}
-              className={`px-3 py-2.5 text-[13px] font-medium whitespace-nowrap transition-colors border-b-2 ${
+              className={`px-3 py-2.5 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
                 activeTab === t.key ? "border-[#0a0a0a] text-[#0a0a0a]" : "border-transparent text-[#737373] hover:text-[#0a0a0a]"
               }`}
             >
@@ -568,7 +568,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
 
                 {/* Models section */}
                 <div className="pt-2 mt-4 border-t border-black/[0.06]">
-                  <div className="text-[13px] font-semibold text-[#0a0a0a] pt-2">Models</div>
+                  <div className="text-sm font-semibold text-[#0a0a0a] pt-2">Models</div>
                 </div>
                 <Field label="AI model" description="The model that powers this agent's responses.">
                   <Select value={editData.model_provider} onValueChange={v => {
@@ -615,7 +615,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                         step={0.01}
                       />
                       <Input
-                        className="h-8 w-14 px-2 text-center text-[13px]"
+                        className="h-8 w-14 px-2 text-center text-sm"
                         type="text"
                         inputMode="decimal"
                         value={editData.temperature ?? 0.7}
@@ -625,7 +625,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                         }}
                       />
                     </div>
-                    <div className="flex justify-between text-[10px] text-[#a3a3a3]">
+                    <div className="flex justify-between text-[11px] text-[#a3a3a3]">
                       <span>Precise</span>
                       <span>Creative</span>
                     </div>
@@ -637,9 +637,9 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
             {/* System Prompt tab */}
             {activeTab === "model" && (
               <div>
-                <div className="text-[13px] font-medium text-[#0a0a0a]">System Prompt</div>
-                <p className="text-[11px] text-[#737373] mt-1 mb-3">Instructions that define how the agent behaves, what it knows, and how it should respond.</p>
-                <Textarea value={editData.system_prompt || ""} onChange={e => setEditData({...editData, system_prompt: e.target.value})} className="min-h-[500px] text-[13px]" />
+                <div className="text-sm font-medium text-[#0a0a0a]">System Prompt</div>
+                <p className="text-xs text-[#737373] mt-1 mb-3">Instructions that define how the agent behaves, what it knows, and how it should respond.</p>
+                <Textarea value={editData.system_prompt || ""} onChange={e => setEditData({...editData, system_prompt: e.target.value})} className="min-h-[500px] text-sm" />
               </div>
             )}
 
@@ -657,8 +657,8 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                           <div className="flex items-center gap-3">
                             <div className={`flex items-center justify-center w-8 h-8 rounded-lg ${isActive && configured ? "bg-green-50 text-green-700" : "bg-muted text-muted-foreground"}`}>{meta.icon}</div>
                             <div>
-                              <span className="text-[13px] font-medium text-[#0a0a0a]">{meta.label}</span>
-                              <div className="text-[11px] text-[#737373]">
+                              <span className="text-sm font-medium text-[#0a0a0a]">{meta.label}</span>
+                              <div className="text-xs text-[#737373]">
                                 {isActive && configured ? meta.connectedLabel(config) : meta.description}
                               </div>
                             </div>
@@ -683,14 +683,14 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                         {type === "website" && isActive && (
                           <div className="ml-11 mt-1 mb-2">
                             <div className="flex items-center gap-2">
-                              <code className="flex-1 rounded-md bg-muted px-3 py-2 text-[11px] font-mono break-all">
+                              <code className="flex-1 rounded-md bg-muted px-3 py-2 text-xs font-mono break-all">
                                 {`<script src="${typeof window !== "undefined" ? window.location.origin : ""}/widget.js" data-agent-id="${id}"></script>`}
                               </code>
                               <Button variant="outline" size="icon-sm" onClick={copyWidget}>
                                 {copied ? <Check size={14} /> : <Copy size={14} />}
                               </Button>
                             </div>
-                            <p className="text-[10px] text-muted-foreground mt-1">Paste this in your website&apos;s HTML</p>
+                            <p className="text-[11px] text-muted-foreground mt-1">Paste this in your website&apos;s HTML</p>
                           </div>
                         )}
                       </div>
@@ -886,7 +886,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                               <div className="flex items-center gap-2 min-w-0">
                                 <FileText size={14} className="shrink-0 text-muted-foreground" />
                                 <span className="text-xs truncate">{doc.name}</span>
-                                <Badge variant="secondary" className={`text-[10px] px-1.5 py-0 shrink-0 ${doc.status === "ready" ? "bg-green-50 text-green-700" : doc.status === "error" ? "bg-red-50 text-red-700" : "bg-yellow-50 text-yellow-700"}`}>
+                                <Badge variant="secondary" className={`text-[11px] px-1.5 py-0 shrink-0 ${doc.status === "ready" ? "bg-green-50 text-green-700" : doc.status === "error" ? "bg-red-50 text-red-700" : "bg-yellow-50 text-yellow-700"}`}>
                                   {doc.status}
                                 </Badge>
                               </div>
@@ -903,7 +903,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                       <Button variant="outline" size="sm" className="w-full" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
                         <Upload size={14} className="mr-1.5" />{uploading ? "Uploading..." : "Upload Document"}
                       </Button>
-                      <p className="text-[10px] text-muted-foreground text-center">Supports .txt, .csv, .pdf, .docx</p>
+                      <p className="text-[11px] text-muted-foreground text-center">Supports .txt, .csv, .pdf, .docx</p>
                     </div>
                   ) : (
                     <div className="space-y-3 py-2">

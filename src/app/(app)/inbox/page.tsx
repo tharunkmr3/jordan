@@ -170,7 +170,7 @@ function DetailSection({ title, children, defaultOpen = true, action }: { title:
         onClick={() => setOpen(!open)}
         className="flex w-full items-center justify-between px-4 py-2.5 hover:bg-[#fafafa] transition-colors"
       >
-        <span className="text-[12px] font-medium text-[#0a0a0a]">{title}</span>
+        <span className="text-[13px] font-medium text-[#0a0a0a]">{title}</span>
         <div className="flex items-center gap-1">
           {action}
           {open ? <CaretUp size={14} className="text-[#a3a3a3]" /> : <CaretDown size={14} className="text-[#a3a3a3]" />}
@@ -415,17 +415,17 @@ function InboxInner() {
               {filteredAgent.avatar_url ? (
                 <img src={filteredAgent.avatar_url} alt={filteredAgent.name} className="h-7 w-7 rounded-full object-cover" />
               ) : (() => { const c = avatarColor(filteredAgent.id); return (
-                <div className={`h-7 w-7 rounded-full text-[11px] font-semibold flex items-center justify-center ${c.bg} ${c.text}`}>
+                <div className={`h-7 w-7 rounded-full text-xs font-semibold flex items-center justify-center ${c.bg} ${c.text}`}>
                   {filteredAgent.name[0]?.toUpperCase() || 'A'}
                 </div>
               ) })()}
-              <span className="text-[15px] font-semibold text-[#0a0a0a] truncate flex-1">{filteredAgent.name}</span>
+              <span className="text-base font-semibold text-[#0a0a0a] truncate flex-1">{filteredAgent.name}</span>
               <Link href={`/agents/${filteredAgent.id}`} className="rounded-md p-1 text-[#737373] hover:bg-[#f5f5f5] hover:text-[#0a0a0a]" title="Agent settings">
                 <GearSix size={16} weight="regular" />
               </Link>
             </>
           ) : (
-            <span className="text-[15px] font-semibold text-[#0a0a0a]">All conversations</span>
+            <span className="text-base font-semibold text-[#0a0a0a]">All conversations</span>
           )}
         </div>
 
@@ -435,7 +435,7 @@ function InboxInner() {
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
                 tab === t ? 'bg-[#ebebeb] text-[#0a0a0a]' : 'text-[#737373] hover:bg-[#f5f5f5]'
               }`}
             >
@@ -452,7 +452,7 @@ function InboxInner() {
               placeholder="Search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="h-8 pl-8 text-[12px] border-black/[0.06] bg-[#fafafa] focus-visible:ring-1"
+              className="h-8 pl-8 text-[13px] border-black/[0.06] bg-[#fafafa] focus-visible:ring-1"
             />
           </div>
         </div>
@@ -479,8 +479,8 @@ function InboxInner() {
               <div className="h-12 w-12 rounded-full bg-[#f5f5f5] flex items-center justify-center mb-3">
                 <MagnifyingGlass size={20} className="text-[#a3a3a3]" />
               </div>
-              <div className="text-[13px] font-medium text-[#0a0a0a]">No conversations</div>
-              <div className="mt-1 text-[11px] text-[#a3a3a3] text-center">
+              <div className="text-sm font-medium text-[#0a0a0a]">No conversations</div>
+              <div className="mt-1 text-xs text-[#a3a3a3] text-center">
                 {tab === 'all' ? 'Messages will appear here when customers reach out' : `No ${tab} conversations`}
               </div>
             </div>
@@ -504,13 +504,13 @@ function InboxInner() {
                     {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-[13px] font-semibold text-[#0a0a0a]">{contactName}</span>
-                        <span className="flex-shrink-0 text-[11px] text-[#a3a3a3]">
+                        <span className="truncate text-sm font-semibold text-[#0a0a0a]">{contactName}</span>
+                        <span className="flex-shrink-0 text-xs text-[#a3a3a3]">
                           {conv.last_message ? timeAgo(conv.last_message.created_at) : timeAgo(conv.updated_at)}
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="truncate text-[12px] text-[#737373]">
+                        <span className="truncate text-[13px] text-[#737373]">
                           {conv.last_message ? truncate(conv.last_message.content, 45) : 'No messages yet'}
                         </span>
                         {conv.status === 'escalated' && (
@@ -537,8 +537,8 @@ function InboxInner() {
               <div className="h-14 w-14 rounded-full bg-[#f5f5f5] flex items-center justify-center mx-auto mb-3">
                 <PaperPlaneTilt size={22} className="text-[#a3a3a3]" />
               </div>
-              <div className="text-[13px] font-medium text-[#0a0a0a]">Select a conversation</div>
-              <div className="mt-1 text-[12px] text-[#a3a3a3]">Choose one from the left to view messages</div>
+              <div className="text-sm font-medium text-[#0a0a0a]">Select a conversation</div>
+              <div className="mt-1 text-[13px] text-[#a3a3a3]">Choose one from the left to view messages</div>
             </div>
           </div>
         ) : detailLoading ? (
@@ -567,23 +567,23 @@ function InboxInner() {
                   const c = avatarColor(seed)
                   return (
                     <Avatar className="h-8 w-8">
-                      <AvatarFallback className={`text-[10px] font-semibold ${c.bg} ${c.text}`}>{getInitials(detail.contact?.name)}</AvatarFallback>
+                      <AvatarFallback className={`text-[11px] font-semibold ${c.bg} ${c.text}`}>{getInitials(detail.contact?.name)}</AvatarFallback>
                     </Avatar>
                   )
                 })()}
-                <span className="text-[14px] font-semibold text-[#0a0a0a]">{detail.contact?.name || detail.contact?.phone || detail.contact?.email || 'Unknown'}</span>
+                <span className="text-[15px] font-semibold text-[#0a0a0a]">{detail.contact?.name || detail.contact?.phone || detail.contact?.email || 'Unknown'}</span>
               </div>
               <div className="flex items-center gap-1">
                 <button onClick={() => toggleStar(detail.id)} className="p-1.5 rounded hover:bg-[#f5f5f5]">
                   <Star size={16} weight={starred.has(detail.id) ? 'fill' : 'regular'} className={starred.has(detail.id) ? 'text-yellow-500' : 'text-[#737373]'} />
                 </button>
                 <Select value={detail.status} onValueChange={(v) => v && handleStatusChange(v as ConversationStatus)}>
-                  <SelectTrigger className="h-8 w-[110px] text-[12px]"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-8 w-[110px] text-[13px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="active" className="text-[12px]">Active</SelectItem>
-                    <SelectItem value="waiting" className="text-[12px]">Waiting</SelectItem>
-                    <SelectItem value="resolved" className="text-[12px]">Resolved</SelectItem>
-                    <SelectItem value="escalated" className="text-[12px]">Escalated</SelectItem>
+                    <SelectItem value="active" className="text-[13px]">Active</SelectItem>
+                    <SelectItem value="waiting" className="text-[13px]">Waiting</SelectItem>
+                    <SelectItem value="resolved" className="text-[13px]">Resolved</SelectItem>
+                    <SelectItem value="escalated" className="text-[13px]">Escalated</SelectItem>
                   </SelectContent>
                 </Select>
                 <button className="p-1.5 rounded hover:bg-[#f5f5f5]">
@@ -603,14 +603,14 @@ function InboxInner() {
               <div className="mx-auto max-w-2xl space-y-3">
                 {detail.messages.length === 0 ? (
                   <div className="flex items-center justify-center py-16">
-                    <div className="text-[12px] text-[#a3a3a3]">No messages yet</div>
+                    <div className="text-[13px] text-[#a3a3a3]">No messages yet</div>
                   </div>
                 ) : (
                   detail.messages.map((msg, idx) => {
                     if (msg.role === 'system') {
                       return (
                         <div key={msg.id} className="flex justify-center">
-                          <span className="rounded-full bg-[#f0f0f0] px-3 py-1 text-[11px] text-[#737373]">{msg.content}</span>
+                          <span className="rounded-full bg-[#f0f0f0] px-3 py-1 text-xs text-[#737373]">{msg.content}</span>
                         </div>
                       )
                     }
@@ -635,7 +635,7 @@ function InboxInner() {
                         })()}
                         <div className={`max-w-[75%] flex flex-col ${isOutgoing ? 'items-end' : 'items-start'}`}>
                           <div
-                            className={`rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed whitespace-pre-wrap ${
+                            className={`rounded-2xl px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap ${
                               isOutgoing
                                 ? 'bg-[#dbeafe] text-[#0a0a0a] rounded-br-md'
                                 : 'bg-white text-[#0a0a0a] rounded-bl-md ring-1 ring-[#ebebeb]'
@@ -644,13 +644,13 @@ function InboxInner() {
                             {msg.content}
                           </div>
                           {isOutgoing && (
-                            <div className="mt-0.5 flex items-center gap-1 text-[10px] text-[#a3a3a3]">
+                            <div className="mt-0.5 flex items-center gap-1 text-[11px] text-[#a3a3a3]">
                               <span>Sent &middot; {timeAgo(msg.created_at)}</span>
                               <Check size={11} weight="bold" className="text-[#3b82f6]" />
                             </div>
                           )}
                           {!isOutgoing && (
-                            <div className="mt-0.5 text-[10px] text-[#a3a3a3]">
+                            <div className="mt-0.5 text-[11px] text-[#a3a3a3]">
                               {formatTimestamp(msg.created_at)}
                             </div>
                           )}
@@ -668,7 +668,7 @@ function InboxInner() {
               <div className="rounded-xl border border-black/[0.06] bg-white overflow-hidden focus-within:ring-1 focus-within:ring-[#0a0a0a]/10">
                 {/* Channel selector */}
                 <div className="flex items-center gap-2 px-3 pt-2">
-                  <button className="flex items-center gap-1.5 px-1.5 py-1 rounded-md hover:bg-[#f5f5f5] text-[13px] text-[#0a0a0a]">
+                  <button className="flex items-center gap-1.5 px-1.5 py-1 rounded-md hover:bg-[#f5f5f5] text-sm text-[#0a0a0a]">
                     {channelIcon(detail.channel, 14)}
                     <span className="font-semibold">{channelLabel(detail.channel)}</span>
                     <CaretDown size={10} />
@@ -682,7 +682,7 @@ function InboxInner() {
                   onChange={handleTextareaInput}
                   onKeyDown={handleKeyDown}
                   rows={1}
-                  className="min-h-[52px] max-h-[160px] resize-none text-[13px] border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-4 py-2"
+                  className="min-h-[52px] max-h-[160px] resize-none text-sm border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-4 py-2"
                 />
                 {/* Bottom toolbar */}
                 <div className="flex items-center justify-between px-3 pb-2">
@@ -694,13 +694,13 @@ function InboxInner() {
                     <div className="h-4 w-px bg-[#ebebeb] mx-1" />
                     <div className="flex items-center gap-1.5 ml-1">
                       <Switch checked={aiAutoReply} onCheckedChange={(v) => { setAiAutoReply(v); if (!v) handleTakeOver() }} />
-                      <span className="text-[11px] text-[#737373]">AI {aiAutoReply ? 'on' : 'off'}</span>
+                      <span className="text-xs text-[#737373]">AI {aiAutoReply ? 'on' : 'off'}</span>
                     </div>
                   </div>
                   <button
                     onClick={handleSendReply}
                     disabled={!replyText.trim() || sending}
-                    className="flex items-center gap-1 text-[12px] text-[#737373] hover:text-[#0a0a0a] disabled:opacity-40 disabled:cursor-not-allowed px-2 py-1"
+                    className="flex items-center gap-1 text-[13px] text-[#737373] hover:text-[#0a0a0a] disabled:opacity-40 disabled:cursor-not-allowed px-2 py-1"
                   >
                     {sending ? 'Sending...' : 'Send'}
                     <CaretDown size={10} />
@@ -723,7 +723,7 @@ function InboxInner() {
               <button
                 key={t}
                 onClick={() => setRightTab(t)}
-                className={`flex-1 px-4 text-[12px] font-medium transition-colors border-b-2 ${
+                className={`flex-1 px-4 text-[13px] font-medium transition-colors border-b-2 ${
                   rightTab === t ? 'border-[#0a0a0a] text-[#0a0a0a]' : 'border-transparent text-[#737373] hover:text-[#0a0a0a]'
                 }`}
               >
@@ -740,9 +740,9 @@ function InboxInner() {
                       {(() => { const c = avatarColor(userName); return (
                       <Avatar className="h-6 w-6"><AvatarFallback className={`text-[9px] font-semibold ${c.bg} ${c.text}`}>{getInitials(userName)}</AvatarFallback></Avatar>
                       ) })()}
-                      <span className="text-[12px] text-[#0a0a0a]">{userName}</span>
+                      <span className="text-[13px] text-[#0a0a0a]">{userName}</span>
                     </div>
-                    <button className="flex items-center gap-2 mt-2 text-[11px] text-[#737373] hover:text-[#0a0a0a]">
+                    <button className="flex items-center gap-2 mt-2 text-xs text-[#737373] hover:text-[#0a0a0a]">
                       <UserCircle size={14} />
                       <span>Team Inbox</span>
                     </button>
@@ -750,23 +750,23 @@ function InboxInner() {
                   <DetailSection title="Conversation">
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-[#a3a3a3]">ID</span>
-                        <span className="text-[11px] text-[#0a0a0a] font-mono">{detail.id.slice(0, 8)}</span>
+                        <span className="text-xs text-[#a3a3a3]">ID</span>
+                        <span className="text-xs text-[#0a0a0a] font-mono">{detail.id.slice(0, 8)}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-[#a3a3a3]">Channel</span>
+                        <span className="text-xs text-[#a3a3a3]">Channel</span>
                         <div className="flex items-center gap-1">
                           {channelIcon(detail.channel, 12)}
-                          <span className="text-[11px] text-[#0a0a0a]">{channelLabel(detail.channel)}</span>
+                          <span className="text-xs text-[#0a0a0a]">{channelLabel(detail.channel)}</span>
                         </div>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-[#a3a3a3]">Status</span>
-                        <span className="text-[11px] text-[#0a0a0a] capitalize">{detail.status}</span>
+                        <span className="text-xs text-[#a3a3a3]">Status</span>
+                        <span className="text-xs text-[#0a0a0a] capitalize">{detail.status}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-[#a3a3a3]">Started</span>
-                        <span className="text-[11px] text-[#0a0a0a]">{timeAgo(detail.started_at)} ago</span>
+                        <span className="text-xs text-[#a3a3a3]">Started</span>
+                        <span className="text-xs text-[#0a0a0a]">{timeAgo(detail.started_at)} ago</span>
                       </div>
                     </div>
                   </DetailSection>
@@ -774,24 +774,24 @@ function InboxInner() {
                     <div className="space-y-2">
                       {detail.contact.email && (
                         <div>
-                          <div className="text-[10px] text-[#a3a3a3] uppercase tracking-wider mb-0.5">Email</div>
-                          <div className="text-[12px] text-[#0a0a0a] break-all">{detail.contact.email}</div>
+                          <div className="text-[11px] text-[#a3a3a3] uppercase tracking-wider mb-0.5">Email</div>
+                          <div className="text-[13px] text-[#0a0a0a] break-all">{detail.contact.email}</div>
                         </div>
                       )}
                       {detail.contact.phone && (
                         <div>
-                          <div className="text-[10px] text-[#a3a3a3] uppercase tracking-wider mb-0.5">Phone</div>
-                          <div className="text-[12px] text-[#0a0a0a]">{detail.contact.phone}</div>
+                          <div className="text-[11px] text-[#a3a3a3] uppercase tracking-wider mb-0.5">Phone</div>
+                          <div className="text-[13px] text-[#0a0a0a]">{detail.contact.phone}</div>
                         </div>
                       )}
                       {detail.contact.language && (
                         <div>
-                          <div className="text-[10px] text-[#a3a3a3] uppercase tracking-wider mb-0.5">Language</div>
-                          <div className="text-[12px] text-[#0a0a0a] uppercase">{detail.contact.language}</div>
+                          <div className="text-[11px] text-[#a3a3a3] uppercase tracking-wider mb-0.5">Language</div>
+                          <div className="text-[13px] text-[#0a0a0a] uppercase">{detail.contact.language}</div>
                         </div>
                       )}
                       {!detail.contact.email && !detail.contact.phone && !detail.contact.language && (
-                        <span className="text-[11px] text-[#a3a3a3]">No contact info</span>
+                        <span className="text-xs text-[#a3a3a3]">No contact info</span>
                       )}
                     </div>
                   </DetailSection>
@@ -799,15 +799,15 @@ function InboxInner() {
                     {detail.contact.tags && detail.contact.tags.length > 0 ? (
                       <div className="flex flex-wrap gap-1">
                         {detail.contact.tags.map((tag) => (
-                          <Badge key={tag} variant="secondary" className="text-[10px]">{tag}</Badge>
+                          <Badge key={tag} variant="secondary" className="text-[11px]">{tag}</Badge>
                         ))}
                       </div>
                     ) : (
-                      <span className="text-[11px] text-[#a3a3a3]">No tags</span>
+                      <span className="text-xs text-[#a3a3a3]">No tags</span>
                     )}
                   </DetailSection>
                   <DetailSection title="Recent conversations" defaultOpen={false}>
-                    <div className="text-[11px] text-[#737373]">{detail.conversation_count} total with this contact</div>
+                    <div className="text-xs text-[#737373]">{detail.conversation_count} total with this contact</div>
                   </DetailSection>
                   <DetailSection title="Notes">
                     <Textarea
@@ -815,12 +815,12 @@ function InboxInner() {
                       value={contactNotes}
                       onChange={(e) => setContactNotes(e.target.value)}
                       rows={3}
-                      className="text-[12px] resize-none border-black/[0.06]"
+                      className="text-[13px] resize-none border-black/[0.06]"
                     />
                     <Button
                       variant="outline"
                       size="sm"
-                      className="mt-2 h-7 w-full text-[11px]"
+                      className="mt-2 h-7 w-full text-xs"
                       onClick={handleSaveNotes}
                       disabled={savingNotes}
                     >
@@ -832,8 +832,8 @@ function InboxInner() {
           ) : (
             <div className="flex-1 flex items-center justify-center p-6 text-center">
               <div>
-                <div className="text-[13px] font-medium text-[#0a0a0a] mb-1">AI Copilot</div>
-                <div className="text-[11px] text-[#a3a3a3]">Coming soon — AI suggestions, summaries, and actions</div>
+                <div className="text-sm font-medium text-[#0a0a0a] mb-1">AI Copilot</div>
+                <div className="text-xs text-[#a3a3a3]">Coming soon — AI suggestions, summaries, and actions</div>
               </div>
             </div>
           )}

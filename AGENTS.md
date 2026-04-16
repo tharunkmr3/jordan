@@ -31,3 +31,14 @@ Scrollbars are globally styled in `globals.css`:
 - Both Firefox (`scrollbar-width`/`scrollbar-color`) and Webkit (`::-webkit-scrollbar`) are handled
 
 Never add custom scrollbar overrides per component. If a section scrolls, it gets the hover-reveal behavior automatically. Do not use `overflow: overlay` (deprecated).
+
+### Font sizes: accessibility minimum
+
+Use these size tiers consistently:
+- **Body/labels:** `text-sm` (14px) — minimum for readable UI text
+- **Descriptions/helper text:** `text-xs` (12px)
+- **Tiny hints (timestamps, shortcuts):** `text-[11px]` — absolute minimum
+- **Page titles:** `text-base` (16px) or larger
+- **Section headers:** `text-sm font-semibold` (14px bold)
+
+Never go below 11px for any visible text. Prefer `text-sm` (14px) as the default body size. Use Tailwind preset classes (`text-xs`, `text-sm`, `text-base`) over arbitrary values when possible.

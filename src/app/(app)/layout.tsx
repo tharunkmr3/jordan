@@ -61,7 +61,7 @@ function NavItem({ item, isActive, collapsed }: { item: typeof nav[0]; isActive:
       href={item.href}
       title={collapsed ? item.label : undefined}
       className={cn(
-        "flex items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium transition-colors",
+        "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
         collapsed && "justify-center px-0",
         isActive
           ? "bg-white text-[#0a0a0a] shadow-[0_1px_3px_rgba(0,0,0,0.04)] ring-1 ring-black/[0.06]"
@@ -192,7 +192,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           ) : (
             <>
               <JordonLogo />
-              <span className="text-[15px] font-bold tracking-tight text-[#0a0a0a] flex-1">
+              <span className="text-base font-bold tracking-tight text-[#0a0a0a] flex-1">
                 Jordon
               </span>
               <button
@@ -218,13 +218,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               type="button"
               title={collapsed ? "Search" : undefined}
               className={cn(
-                "flex w-full items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium text-[#0a0a0a] hover:bg-[#ebebeb] transition-colors",
+                "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-[#ebebeb] transition-colors",
                 collapsed && "justify-center px-0"
               )}
             >
               <MagnifyingGlass size={18} weight="regular" className="text-[#737373]" />
               {!collapsed && <span className="flex-1 text-left">Search</span>}
-              {!collapsed && <span className="text-[10px] text-[#a3a3a3]">⌘K</span>}
+              {!collapsed && <span className="text-[11px] text-[#a3a3a3]">⌘K</span>}
             </button>
           </div>
 
@@ -247,14 +247,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {!collapsed && (
             <div>
               <div className="flex items-center justify-between px-3 mb-1">
-                <span className="text-[11px] font-medium text-[#a3a3a3] uppercase tracking-wider">Agents</span>
-                {agents.length > 0 && <span className="text-[11px] text-[#a3a3a3]">{agents.length}</span>}
+                <span className="text-xs font-medium text-[#a3a3a3] uppercase tracking-wider">Agents</span>
+                {agents.length > 0 && <span className="text-xs text-[#a3a3a3]">{agents.length}</span>}
               </div>
               <div className="space-y-0.5">
                 <Link
                   href="/agents/new"
                   className={cn(
-                    "flex items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium transition-colors",
+                    "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                     pathname === "/agents/new" ? "bg-white text-[#0a0a0a] shadow-[0_1px_3px_rgba(0,0,0,0.04)] ring-1 ring-black/[0.06]" : "text-[#737373] hover:bg-[#ebebeb] hover:text-[#0a0a0a]"
                   )}
                 >
@@ -271,7 +271,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                       <Link
                         href={href}
                         className={cn(
-                          "flex items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium transition-colors",
+                          "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                           isActive ? "bg-white text-[#0a0a0a] shadow-[0_1px_3px_rgba(0,0,0,0.04)] ring-1 ring-black/[0.06]" : "text-[#525252] hover:bg-[#ebebeb]"
                         )}
                       >
@@ -304,14 +304,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                           <Link
                             href={`/agents/${a.id}`}
                             onClick={() => setAgentMenuOpen(null)}
-                            className="flex items-center gap-2 px-3 py-1.5 text-[12px] text-[#0a0a0a] hover:bg-[#f5f5f5]"
+                            className="flex items-center gap-2 px-3 py-1.5 text-[13px] text-[#0a0a0a] hover:bg-[#f5f5f5]"
                           >
                             <GearSix size={14} className="text-[#737373]" />
                             Settings
                           </Link>
                           <button
                             onClick={() => deleteAgent(a.id)}
-                            className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] text-red-600 hover:bg-red-50"
+                            className="flex w-full items-center gap-2 px-3 py-1.5 text-[13px] text-red-600 hover:bg-red-50"
                           >
                             <SignOut size={14} className="rotate-180" />
                             Delete
@@ -344,19 +344,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <button
               onClick={() => setShowUserMenu(!showUserMenu)}
               className={cn(
-                "flex flex-1 items-center gap-2.5 rounded-md px-3 py-2 text-left text-[13px] hover:bg-[#ebebeb]",
+                "flex flex-1 items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm hover:bg-[#ebebeb]",
                 collapsed && "justify-center px-0 flex-none"
               )}
             >
               {(() => { const c = avatarColor(userName || userEmail); return (
-                <div className={cn("flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-semibold", c.bg, c.text)}>
+                <div className={cn("flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-xs font-semibold", c.bg, c.text)}>
                   {userName ? userName.charAt(0).toUpperCase() : "U"}
                 </div>
               ) })()}
               {!collapsed && (
                 <>
                   <div className="flex-1 min-w-0">
-                    <div className="truncate text-[13px] font-medium text-[#0a0a0a]">{userName || "Loading..."}</div>
+                    <div className="truncate text-sm font-medium text-[#0a0a0a]">{userName || "Loading..."}</div>
                   </div>
                   <CaretDown size={12} weight="bold" className="text-[#a3a3a3]" />
                 </>
@@ -373,12 +373,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               collapsed ? "left-1 w-48" : "left-2 right-2"
             )}>
               <div className="px-3 py-2 border-b border-black/[0.06]">
-                <div className="truncate text-[13px] font-medium text-[#0a0a0a]">{userName}</div>
-                <div className="truncate text-[12px] text-[#737373]">{userEmail}</div>
+                <div className="truncate text-sm font-medium text-[#0a0a0a]">{userName}</div>
+                <div className="truncate text-[13px] text-[#737373]">{userEmail}</div>
               </div>
               <button
                 onClick={handleSignOut}
-                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-[13px] text-red-600 hover:bg-red-50"
+                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm text-red-600 hover:bg-red-50"
               >
                 <SignOut size={16} weight="regular" />
                 Sign out
@@ -399,7 +399,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="flex h-full flex-col overflow-hidden rounded-xl bg-white ring-1 ring-black/[0.06]">
             {/* Header (inside card) */}
             <header className="flex h-12 items-center justify-between border-b border-black/[0.06] px-5 flex-shrink-0">
-              <span className="text-[15px] font-semibold text-[#0a0a0a]">{pageTitle}</span>
+              <span className="text-base font-semibold text-[#0a0a0a]">{pageTitle}</span>
               <div />
             </header>
 
