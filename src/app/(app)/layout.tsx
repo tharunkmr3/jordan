@@ -24,14 +24,17 @@ import {
 import { cn, avatarColor } from "@/lib/utils"
 import { createBrowserClient } from "@supabase/ssr"
 
-const nav = [
+const navGroup1 = [
   { label: "Home", href: "/dashboard", icon: House },
+]
+const navGroup2 = [
   { label: "All conversations", href: "/inbox", icon: ChatCircleDots },
   { label: "Contacts", href: "/contacts", icon: UsersThree },
   { label: "Knowledge", href: "/knowledge", icon: BookOpenText },
   { label: "Analytics", href: "/analytics", icon: ChartBar },
   { label: "Channels", href: "/channels", icon: Broadcast },
 ]
+const nav = [...navGroup1, ...navGroup2]
 
 interface SidebarAgent { id: string; name: string; status: string; avatar_url?: string | null; settings?: { is_customer_facing?: boolean } }
 
@@ -203,49 +206,54 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Main nav */}
-        <nav className="flex-1 overflow-y-auto space-y-0.5 px-2 pt-3">
-          {nav.map((item, idx) => {
-            // /inbox should NOT be active when filtered by agent — the agent row is active instead
-            const isInboxFiltered = item.href === "/inbox" && currentAgentId
-            const isActive = !isInboxFiltered && (pathname === item.href || pathname.startsWith(item.href + "/"))
-            return (
-            <div key={item.href}>
-              <NavItem
-                item={item}
-                isActive={isActive}
-                collapsed={collapsed}
-              />
-              {/* Search slot right below Home */}
-              {idx === 0 && (
-                <button
-                  type="button"
-                  title={collapsed ? "Search" : undefined}
-                  className={cn(
-                    "flex w-full items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium text-[#0a0a0a] hover:bg-[#ebebeb] transition-colors",
-                    collapsed && "justify-center px-0"
-                  )}
-                >
-                  <MagnifyingGlass size={18} weight="regular" className="text-[#737373]" />
-                  {!collapsed && <span className="flex-1 text-left">Search</span>}
-                  {!collapsed && <span className="text-[10px] text-[#a3a3a3]">⌘K</span>}
-                </button>
+        <nav className="flex-1 overflow-y-auto px-2 pt-3">
+          {/* Group 1: Home + Search */}
+          <div className="space-y-0.5">
+            {navGroup1.map((item) => {
+              const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
+              return <NavItem key={item.href} item={item} isActive={isActive} collapsed={collapsed} />
+            })}
+            <button
+              type="button"
+              title={collapsed ? "Search" : undefined}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium text-[#0a0a0a] hover:bg-[#ebebeb] transition-colors",
+                collapsed && "justify-center px-0"
               )}
-            </div>
-            )
-          })}
+            >
+              <MagnifyingGlass size={18} weight="regular" className="text-[#737373]" />
+              {!collapsed && <span className="flex-1 text-left">Search</span>}
+              {!collapsed && <span className="text-[10px] text-[#a3a3a3]">⌘K</span>}
+            </button>
+          </div>
 
-          {/* Agents section */}
+          {/* Divider */}
+          <div className={cn("my-3 border-t border-[#e5e5e5]", collapsed ? "mx-2" : "mx-1")} />
+
+          {/* Group 2: main entities */}
+          <div className="space-y-0.5">
+            {navGroup2.map((item) => {
+              const isInboxFiltered = item.href === "/inbox" && currentAgentId
+              const isActive = !isInboxFiltered && (pathname === item.href || pathname.startsWith(item.href + "/"))
+              return <NavItem key={item.href} item={item} isActive={isActive} collapsed={collapsed} />
+            })}
+          </div>
+
+          {/* Divider */}
+          {!collapsed && <div className="my-3 mx-1 border-t border-[#e5e5e5]" />}
+
+          {/* Group 3: Agents */}
           {!collapsed && (
-            <div className="pt-4">
+            <div>
               <div className="flex items-center justify-between px-3 mb-1">
-                <span className="text-[10px] font-medium text-[#a3a3a3] uppercase tracking-wider">Agents</span>
-                {agents.length > 0 && <span className="text-[10px] text-[#a3a3a3]">{agents.length}</span>}
+                <span className="text-[11px] font-medium text-[#a3a3a3] uppercase tracking-wider">Agents</span>
+                {agents.length > 0 && <span className="text-[11px] text-[#a3a3a3]">{agents.length}</span>}
               </div>
               <div className="space-y-0.5">
                 <Link
                   href="/agents/new"
                   className={cn(
-                    "flex items-center gap-2 rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors",
+                    "flex items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium transition-colors",
                     pathname === "/agents/new" ? "bg-white text-[#0a0a0a] shadow-sm ring-1 ring-[#ebebeb]" : "text-[#737373] hover:bg-[#ebebeb] hover:text-[#0a0a0a]"
                   )}
                 >
@@ -264,14 +272,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                       <Link
                         href={href}
                         className={cn(
-                          "flex items-center gap-2 rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors",
+                          "flex items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium transition-colors",
                           isActive ? "bg-white text-[#0a0a0a] shadow-sm ring-1 ring-[#ebebeb]" : "text-[#525252] hover:bg-[#ebebeb]"
                         )}
                       >
                         {a.avatar_url ? (
-                          <img src={a.avatar_url} alt={a.name} className="h-5 w-5 rounded-full object-cover flex-shrink-0" />
+                          <img src={a.avatar_url} alt={a.name} className="h-[18px] w-[18px] rounded-full object-cover flex-shrink-0" />
                         ) : (() => { const c = avatarColor(a.id); return (
-                          <div className={cn("h-5 w-5 rounded-full text-[9px] font-semibold flex items-center justify-center flex-shrink-0", c.bg, c.text)}>
+                          <div className={cn("h-[18px] w-[18px] rounded-full text-[9px] font-semibold flex items-center justify-center flex-shrink-0", c.bg, c.text)}>
                             {a.name[0]?.toUpperCase() || 'A'}
                           </div>
                         ) })()}
