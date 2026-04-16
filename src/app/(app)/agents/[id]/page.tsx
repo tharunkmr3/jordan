@@ -117,6 +117,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
   const [chatLoading, setChatLoading] = useState(false)
   const [conversationId, setConversationId] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Channels state
   const [channels, setChannels] = useState<AgentChannel[]>([])
@@ -285,16 +286,17 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
     }
   }
 
-  // The ref on <ScrollArea> points to its Root wrapper — the scrollable
-  // element is the nested Viewport. Grab the viewport child and scroll
-  // that; otherwise scrollTo silently no-ops and new messages never
-  // come into view.
+  // Scroll the test-chat viewport to the latest message. Uses a
+  // bottom-sentinel ref + scrollIntoView — base-ui's ScrollArea Root
+  // is not itself scrollable (the inner Viewport is), so scrollTo on
+  // the Root would no-op. scrollIntoView walks up to whichever
+  // ancestor actually scrolls. requestAnimationFrame waits for React
+  // to flush the new message into the DOM before we measure.
   useEffect(() => {
-    const root = scrollRef.current
-    if (!root) return
-    const viewport = root.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')
-    const target = viewport ?? root
-    target.scrollTo({ top: target.scrollHeight, behavior: 'smooth' })
+    const raf = requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    })
+    return () => cancelAnimationFrame(raf)
   }, [messages, chatLoading])
 
   async function toggleChannel(channelType: string, active: boolean) {
@@ -1185,6 +1187,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                 <div className="bg-white rounded-3xl px-4 py-3 ring-1 ring-black/[0.04]"><Loader variant="typing" size="sm" /></div>
               </Message>
             )}
+            <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
         <div className="p-3 border-t border-black/[0.04]">

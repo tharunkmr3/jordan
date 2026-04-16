@@ -53,16 +53,28 @@ export interface GenerateWithToolsResult {
   assistantMessage: ChatMessage
 }
 
-// Singleton clients — avoid re-creating on every call
+// Singleton clients — avoid re-creating on every call. The SDKs throw a
+// generic "Could not resolve authentication method" if apiKey ends up
+// undefined, which then gets swallowed by the pipeline's catch and
+// surfaces to the UI as the agent's fallback_message. Validate eagerly
+// so errors are obvious in the server log instead.
 let _openai: OpenAI | null = null
 function getOpenAI() {
-  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  if (!_openai) {
+    const apiKey = process.env.OPENAI_API_KEY
+    if (!apiKey) throw new Error('OPENAI_API_KEY is not set — add it to .env.local and restart the dev server')
+    _openai = new OpenAI({ apiKey })
+  }
   return _openai
 }
 
 let _anthropic: Anthropic | null = null
 function getAnthropic() {
-  if (!_anthropic) _anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  if (!_anthropic) {
+    const apiKey = process.env.ANTHROPIC_API_KEY
+    if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set — add it to .env.local and restart the dev server')
+    _anthropic = new Anthropic({ apiKey })
+  }
   return _anthropic
 }
 

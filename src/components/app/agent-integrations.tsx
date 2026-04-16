@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Loader } from "@/components/ui/loader"
+import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "sonner"
 import { Plug, Search, X, Check, AlertCircle, RefreshCw, Trash2 } from "lucide-react"
 
@@ -265,7 +265,7 @@ export function AgentIntegrationsTab({ agentId }: { agentId: string }) {
         </div>
 
         {loading && attachments.length === 0 ? (
-          <div className="flex items-center justify-center py-8"><Loader variant="circular" size="sm" /></div>
+          <AttachmentRowSkeleton count={2} />
         ) : attachments.length === 0 ? (
           <div className="rounded-xl border border-dashed border-black/[0.1] bg-white px-5 py-8 text-center">
             <Plug size={20} className="mx-auto text-[#a3a3a3]" />
@@ -367,7 +367,9 @@ export function AgentIntegrationsTab({ agentId }: { agentId: string }) {
           </div>
         </div>
 
-        {catalog.length === 0 && !loading ? (
+        {loading && catalog.length === 0 ? (
+          <CatalogSkeleton count={12} />
+        ) : catalog.length === 0 ? (
           <p className="text-xs text-[#737373] py-6 text-center">No integrations match.</p>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
@@ -632,7 +634,7 @@ function ToolConfigDialog({
 
         <ScrollArea className="h-80 pr-2">
           {loading ? (
-            <div className="flex items-center justify-center py-8"><Loader variant="circular" size="sm" /></div>
+            <ToolRowSkeleton count={6} />
           ) : filtered.length === 0 ? (
             <p className="text-xs text-[#737373] text-center py-6">No tools match.</p>
           ) : (
@@ -668,5 +670,67 @@ function ToolConfigDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+// ----------------------------------------------------------------------------
+// Skeletons — shape-matched to the content they precede so the layout
+// doesn't jump when real data lands.
+// ----------------------------------------------------------------------------
+
+function AttachmentRowSkeleton({ count = 2 }: { count?: number }) {
+  return (
+    <div className="space-y-2">
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-3 rounded-xl bg-white px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] ring-1 ring-black/[0.04]"
+        >
+          <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
+          <div className="flex-1 min-w-0 space-y-1.5">
+            <Skeleton className="h-3.5 w-32" />
+            <Skeleton className="h-3 w-48" />
+          </div>
+          <Skeleton className="h-8 w-24 rounded-md" />
+          <Skeleton className="h-8 w-8 rounded-md" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function CatalogSkeleton({ count = 12 }: { count?: number }) {
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-3 rounded-xl bg-white px-3 py-3 ring-1 ring-black/[0.04]"
+        >
+          <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
+          <div className="flex-1 min-w-0 space-y-1.5">
+            <Skeleton className="h-3.5 w-20" />
+            <Skeleton className="h-2.5 w-12" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function ToolRowSkeleton({ count = 6 }: { count?: number }) {
+  return (
+    <div className="space-y-1">
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="flex items-start gap-3 rounded-lg px-2 py-2">
+          <Skeleton className="h-4 w-4 rounded shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0 space-y-1.5">
+            <Skeleton className="h-3.5 w-40" />
+            <Skeleton className="h-3 w-full max-w-xs" />
+            <Skeleton className="h-2.5 w-28" />
+          </div>
+        </div>
+      ))}
+    </div>
   )
 }
