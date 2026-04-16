@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { avatarColor } from '@/lib/utils'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Panel } from '@/components/ui/panel'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -407,7 +408,7 @@ function InboxInner() {
       {/* ============================================================= */}
       {/* LEFT: Conversation List */}
       {/* ============================================================= */}
-      <div className="flex w-[320px] flex-shrink-0 flex-col bg-white rounded-xl ring-1 ring-black/[0.04] shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+      <Panel resizable defaultWidth={320} minWidth={260} maxWidth={480} storageKey="inbox:list">
         {/* Header */}
         <div className="flex h-12 items-center gap-2.5 px-4 border-b border-black/[0.04] flex-shrink-0">
           {filteredAgent ? (
@@ -525,12 +526,12 @@ function InboxInner() {
           )}
         </ScrollArea>
 
-      </div>
+      </Panel>
 
       {/* ============================================================= */}
       {/* CENTER: Conversation */}
       {/* ============================================================= */}
-      <div className="flex flex-1 flex-col bg-white min-w-0 min-h-0 rounded-xl ring-1 ring-black/[0.04] shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+      <Panel className="flex-1 min-w-0">
         {!selectedId ? (
           <div className="flex flex-1 items-center justify-center">
             <div className="text-center">
@@ -710,13 +711,13 @@ function InboxInner() {
             </div>
           </>
         ) : null}
-      </div>
+      </Panel>
 
       {/* ============================================================= */}
       {/* RIGHT: Details */}
       {/* ============================================================= */}
       {detail?.contact && (
-        <div className="flex w-[320px] flex-shrink-0 flex-col bg-white rounded-xl ring-1 ring-black/[0.04] shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+        <Panel resizable defaultWidth={320} minWidth={260} maxWidth={480} storageKey="inbox:details">
           {/* Tabs */}
           <div className="flex h-12 bg-white border-b border-black/[0.04] flex-shrink-0">
             {(['details', 'copilot'] as const).map((t) => (
@@ -837,7 +838,7 @@ function InboxInner() {
               </div>
             </div>
           )}
-        </div>
+        </Panel>
       )}
     </div>
   )

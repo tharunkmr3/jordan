@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Panel } from "@/components/ui/panel"
 import { Message, MessageAvatar, MessageContent } from "@/components/ui/message"
 import { PromptInput, PromptInputTextarea, PromptInputActions, PromptInputAction } from "@/components/ui/prompt-input"
 import { Loader } from "@/components/ui/loader"
@@ -447,7 +448,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
 
   if (loading) return (
     <div className="flex h-full gap-3 p-3 bg-[#f5f5f5] overflow-hidden">
-      <div className="flex-1 overflow-y-auto rounded-xl bg-white ring-1 ring-black/[0.04] shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-6">
+      <Panel className="flex-1 min-w-0" bodyClassName="overflow-y-auto p-6">
         <div className="max-w-xl mx-auto space-y-5">
           <div className="flex items-start gap-4">
             <Skeleton className="h-14 w-14 rounded-full" />
@@ -466,17 +467,21 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
             </Card>
           ))}
         </div>
-      </div>
-      <div className="w-[400px] flex flex-col rounded-xl bg-white ring-1 ring-black/[0.04] shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
-        <div className="h-12 border-b border-black/[0.04] px-4 flex items-center">
-          <Skeleton className="h-4 w-20" />
-        </div>
+      </Panel>
+      <Panel
+        resizable
+        defaultWidth={400}
+        minWidth={320}
+        maxWidth={640}
+        storageKey="agent:test-chat"
+        header={<Skeleton className="h-4 w-20" />}
+      >
         <div className="flex-1 p-4 space-y-3">
           {[1, 2, 3].map(i => (
             <Skeleton key={i} className="h-16 rounded-2xl" />
           ))}
         </div>
-      </div>
+      </Panel>
     </div>
   )
   if (!agent) return <div className="p-6 text-sm text-red-600">Agent not found</div>
@@ -484,7 +489,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
   return (
     <div className="flex h-full gap-3 p-3 bg-[#f5f5f5] overflow-hidden">
       {/* Left: Agent details */}
-      <div className="flex-1 flex flex-col rounded-xl bg-white ring-1 ring-black/[0.04] shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+      <Panel className="flex-1 min-w-0">
         {/* Header with avatar + name + save */}
         <div className="flex items-center gap-3 px-5 py-3 border-b border-black/[0.04] flex-shrink-0">
           <button onClick={() => router.push(`/inbox?agentId=${id}`)} className="rounded-md p-1 text-[#737373] hover:bg-[#f5f5f5] hover:text-[#2e2e2e]" title="Back to conversations">
@@ -948,14 +953,22 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
 
           </div>
         </div>
-      </div>
+      </Panel>
 
       {/* Right: Chat test panel */}
-      <div className="w-[400px] flex flex-col rounded-xl bg-white ring-1 ring-black/[0.04] shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
-        <div className="h-12 flex items-center justify-between px-4 border-b border-black/[0.04]">
-          <span className="text-sm font-medium">Test Chat</span>
-          <Button variant="ghost" size="sm" className="text-xs" onClick={() => { setMessages([]); setConversationId(null) }}>Clear</Button>
-        </div>
+      <Panel
+        resizable
+        defaultWidth={400}
+        minWidth={320}
+        maxWidth={640}
+        storageKey="agent:test-chat"
+        header={
+          <>
+            <span className="text-sm font-medium text-[#2e2e2e]">Test Chat</span>
+            <Button variant="ghost" size="sm" className="ml-auto text-xs" onClick={() => { setMessages([]); setConversationId(null) }}>Clear</Button>
+          </>
+        }
+      >
         <ScrollArea className="flex-1 p-4" ref={scrollRef}>
           <div className="space-y-4">
             {messages.map((msg, i) => (
@@ -990,7 +1003,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
             </PromptInputActions>
           </PromptInput>
         </div>
-      </div>
+      </Panel>
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent><DialogHeader><DialogTitle>Delete Agent</DialogTitle></DialogHeader><p className="text-sm text-muted-foreground">Are you sure you want to delete &quot;{agent.name}&quot;? This cannot be undone.</p><DialogFooter><Button variant="outline" onClick={() => setDeleteOpen(false)}>Cancel</Button><Button variant="destructive" onClick={handleDelete}>Delete</Button></DialogFooter></DialogContent>
