@@ -562,30 +562,23 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                 {editData.voice_provider === "elevenlabs" && (
                   <div>
                     <Label>Voice</Label>
-                    {(() => {
-                      const presets = ["21m00Tcm4TlvDq8ikWAM","EXAVITQu4vr4xnSDxMaL","FGY2WhTYpPnrIDTdsKH5","IKne3meq5aSn9XLyUdCD","JBFqnCBsd6RMkjVDRZzb","TX3LPaxmHKxFdv7VOQHJ","Xb7hH8MSUJpSbSDYk0k2","pFZP5JQG7iQjIQuC4Bku"]
-                      const isCustom = editData.voice_id && !presets.includes(editData.voice_id) && editData.voice_id !== "custom"
-                      const selectValue = isCustom ? "custom" : (editData.voice_id || "")
-                      return <>
-                        <Select value={selectValue} onValueChange={v => { if (v === "custom") setEditData({...editData, voice_id: ""}); else setEditData({...editData, voice_id: v}) }}>
-                          <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select a voice" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="21m00Tcm4TlvDq8ikWAM">Rachel — Calm, Narration</SelectItem>
-                            <SelectItem value="EXAVITQu4vr4xnSDxMaL">Sarah — Mature, Reassuring</SelectItem>
-                            <SelectItem value="FGY2WhTYpPnrIDTdsKH5">Laura — Enthusiast, Quirky</SelectItem>
-                            <SelectItem value="IKne3meq5aSn9XLyUdCD">Charlie — Deep, Confident</SelectItem>
-                            <SelectItem value="JBFqnCBsd6RMkjVDRZzb">George — Warm Storyteller</SelectItem>
-                            <SelectItem value="TX3LPaxmHKxFdv7VOQHJ">Liam — Energetic Creator</SelectItem>
-                            <SelectItem value="Xb7hH8MSUJpSbSDYk0k2">Alice — Clear Educator</SelectItem>
-                            <SelectItem value="pFZP5JQG7iQjIQuC4Bku">Lily — Warm, Calm</SelectItem>
-                            <SelectItem value="custom">Other (paste ID)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        {(selectValue === "custom" || isCustom) && (
-                          <Input className="mt-1.5" placeholder="Paste ElevenLabs voice ID" value={editData.voice_id || ""} onChange={e => setEditData({...editData, voice_id: e.target.value})} />
-                        )}
-                      </>
-                    })()}
+                    <Select value={editData.voice_id || ""} onValueChange={v => v && setEditData({...editData, voice_id: v === "custom" ? "" : v})}>
+                      <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select a voice" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="21m00Tcm4TlvDq8ikWAM">Rachel — Calm, Narration</SelectItem>
+                        <SelectItem value="EXAVITQu4vr4xnSDxMaL">Sarah — Mature, Reassuring</SelectItem>
+                        <SelectItem value="FGY2WhTYpPnrIDTdsKH5">Laura — Enthusiast, Quirky</SelectItem>
+                        <SelectItem value="IKne3meq5aSn9XLyUdCD">Charlie — Deep, Confident</SelectItem>
+                        <SelectItem value="JBFqnCBsd6RMkjVDRZzb">George — Warm Storyteller</SelectItem>
+                        <SelectItem value="TX3LPaxmHKxFdv7VOQHJ">Liam — Energetic Creator</SelectItem>
+                        <SelectItem value="Xb7hH8MSUJpSbSDYk0k2">Alice — Clear Educator</SelectItem>
+                        <SelectItem value="pFZP5JQG7iQjIQuC4Bku">Lily — Warm, Calm</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <div className="mt-2">
+                      <Label className="text-xs text-muted-foreground">Or paste a custom Voice ID</Label>
+                      <Input className="mt-1" placeholder="e.g. 4Mhjd1Q9JRWcKfDQvn26" value={editData.voice_id || ""} onChange={e => setEditData({...editData, voice_id: e.target.value})} />
+                    </div>
                     <p className="text-[11px] text-muted-foreground mt-1.5">Falls back to Twilio Polly if ElevenLabs fails.</p>
                   </div>
                 )}
