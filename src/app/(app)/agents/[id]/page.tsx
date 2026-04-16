@@ -65,10 +65,10 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
   const router = useRouter()
   const [agent, setAgent] = useState<Agent | null>(null)
   const [loading, setLoading] = useState(true)
-  const [editing, setEditing] = useState(false)
   const [editData, setEditData] = useState<Partial<Agent>>({})
   const [saving, setSaving] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState("agent")
   const [copied, setCopied] = useState(false)
   const [messages, setMessages] = useState<ChatMsg[]>([])
   const [chatInput, setChatInput] = useState("")
@@ -129,7 +129,6 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
     // Optimistic: update UI + sidebar immediately
     setAgent(prev => prev ? { ...prev, ...editData } as Agent : prev)
     window.dispatchEvent(new CustomEvent("agent-updated", { detail: { id, name: editData.name, status: editData.status, avatar_url: editData.avatar_url } }))
-    setEditing(false)
 
     setSaving(true)
     const res = await fetch(`/api/agents/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editData) })
@@ -472,167 +471,120 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
     <div className="flex h-full gap-3 p-3 bg-[#f5f5f5] overflow-hidden">
       {/* Left: Agent details */}
       <div className="flex-1 flex flex-col rounded-xl bg-white ring-1 ring-black/[0.06] shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
-        <div className="flex h-12 items-center gap-3 px-5 border-b border-black/[0.06] flex-shrink-0">
+        {/* Header with avatar + name + save */}
+        <div className="flex items-center gap-3 px-5 py-3 border-b border-black/[0.06] flex-shrink-0">
           <button onClick={() => router.push(`/inbox?agentId=${id}`)} className="rounded-md p-1 text-[#737373] hover:bg-[#f5f5f5] hover:text-[#0a0a0a]" title="Back to conversations">
             <ArrowLeft size={16} />
           </button>
-          <span className="text-[15px] font-semibold text-[#0a0a0a]">Agent settings</span>
-        </div>
-        <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-xl mx-auto space-y-5">
-          <div className="flex items-start justify-between">
-            <div className="flex items-start gap-4">
-              {/* Avatar with upload */}
-              <div className="relative group shrink-0">
-                <Avatar className="h-14 w-14">
-                  {agent.avatar_url && <AvatarImage src={agent.avatar_url} alt={agent.name} />}
-                  {(() => { const c = avatarColor(agent.id); return (
-                    <AvatarFallback className={`text-sm font-semibold ${c.bg} ${c.text}`}>
-                      {agent.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
-                    </AvatarFallback>
-                  ) })()}
-                </Avatar>
-                <input
-                  ref={avatarInputRef}
-                  type="file"
-                  className="hidden"
-                  accept="image/png,image/jpeg,image/webp,image/gif"
-                  onChange={e => { if (e.target.files?.[0]) uploadAvatar(e.target.files[0]); e.target.value = "" }}
-                />
-                <button
-                  onClick={() => avatarInputRef.current?.click()}
-                  disabled={uploadingAvatar}
-                  className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                  title="Upload avatar"
-                >
-                  {uploadingAvatar ? (
-                    <Loader variant="circular" size="sm" />
-                  ) : (
-                    <Camera size={18} className="text-white" />
-                  )}
-                </button>
-                {agent.avatar_url && !uploadingAvatar && (
-                  <button
-                    onClick={removeAvatar}
-                    className="absolute -top-1 -right-1 bg-white border border-[#e5e5e5] rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50"
-                    title="Remove avatar"
-                  >
-                    <X size={10} className="text-red-600" />
-                  </button>
-                )}
-              </div>
-              <div>
-                <div className="flex items-center gap-3">
-                  <h1 className="text-lg font-semibold">{agent.name}</h1>
-                  <Badge className={statusColors[agent.status] || ""}>{agent.status}</Badge>
-                </div>
-                {agent.description && <p className="text-sm text-muted-foreground mt-1">{agent.description}</p>}
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => setEditing(!editing)}>
-                <Pencil size={14} className="mr-1.5" />{editing ? "Cancel" : "Edit"}
-              </Button>
-              <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
-                <Trash2 size={14} />
-              </Button>
-            </div>
+          <div className="relative group shrink-0">
+            <Avatar className="h-9 w-9">
+              {agent.avatar_url && <AvatarImage src={agent.avatar_url} alt={agent.name} />}
+              {(() => { const c = avatarColor(agent.id); return (
+                <AvatarFallback className={`text-xs font-semibold ${c.bg} ${c.text}`}>
+                  {agent.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              ) })()}
+            </Avatar>
+            <input ref={avatarInputRef} type="file" className="hidden" accept="image/png,image/jpeg,image/webp,image/gif" onChange={e => { if (e.target.files?.[0]) uploadAvatar(e.target.files[0]); e.target.value = "" }} />
+            <button onClick={() => avatarInputRef.current?.click()} disabled={uploadingAvatar} className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" title="Upload avatar">
+              {uploadingAvatar ? <Loader variant="circular" size="sm" /> : <Camera size={14} className="text-white" />}
+            </button>
           </div>
+          <span className="text-[15px] font-semibold text-[#0a0a0a] flex-1">{agent.name}</span>
+          <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
+          <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}><Trash2 size={14} /></Button>
+        </div>
 
-          {editing ? (
-            <Card>
-              <CardContent className="p-5 space-y-5">
-                <Tabs defaultValue="general">
-                  <TabsList><TabsTrigger value="general">General</TabsTrigger><TabsTrigger value="model">AI Model</TabsTrigger><TabsTrigger value="voice">Voice</TabsTrigger><TabsTrigger value="escalation">Escalation</TabsTrigger></TabsList>
-                  <TabsContent value="general" className="space-y-4 pt-4">
-                    <div><Label>Name</Label><Input value={editData.name || ""} onChange={e => setEditData({...editData, name: e.target.value})} className="mt-1.5" /></div>
-                    <div><Label>Description</Label><Textarea value={editData.description || ""} onChange={e => setEditData({...editData, description: e.target.value})} className="mt-1.5" /></div>
-                    <div className="flex items-center justify-between rounded-lg border p-3">
-                      <div>
-                        <Label className="text-sm">Customer-facing agent</Label>
-                        <p className="text-[11px] text-muted-foreground mt-0.5">On means this agent talks to your customers. Off means internal use only (HR, dev, ops).</p>
-                      </div>
-                      <Switch
-                        checked={(editData.settings as Record<string, unknown> | undefined)?.is_customer_facing !== false}
-                        onCheckedChange={v => setEditData({...editData, settings: { ...(editData.settings as object || {}), is_customer_facing: v }})}
-                      />
-                    </div>
-                    <div><Label>Phone Greeting</Label><Textarea placeholder="Welcome to Jordon.ai, how may I help you today?" value={editData.greeting_message || ""} onChange={e => setEditData({...editData, greeting_message: e.target.value})} className="mt-1.5" /><p className="text-[11px] text-muted-foreground mt-1">Spoken when someone calls. Chat channels start empty.</p></div>
-                    <div><Label>Fallback Message</Label><Textarea value={editData.fallback_message || ""} onChange={e => setEditData({...editData, fallback_message: e.target.value})} className="mt-1.5" /></div>
-                    <div><Label>Status</Label><Select value={editData.status} onValueChange={v => v && setEditData({...editData, status: v})}><SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="draft">Draft</SelectItem><SelectItem value="active">Active</SelectItem><SelectItem value="paused">Paused</SelectItem></SelectContent></Select></div>
-                  </TabsContent>
-                  <TabsContent value="model" className="space-y-4 pt-4">
-                    <div><Label>Model Provider</Label><Select value={editData.model_provider} onValueChange={v => {
-                      if (!v) return
-                      const defaults: Record<string, string> = { openai: "gpt-4o-mini", anthropic: "claude-sonnet-4-20250514", sarvam: "sarvam-m", gemini: "gemini-pro" }
-                      setEditData({...editData, model_provider: v, model_name: defaults[v] || editData.model_name})
-                    }}><SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="sarvam">Sarvam 30B (Free)</SelectItem><SelectItem value="openai">OpenAI GPT-4o mini</SelectItem><SelectItem value="anthropic">Claude Sonnet 4</SelectItem><SelectItem value="gemini">Gemini Pro</SelectItem></SelectContent></Select></div>
-                    <div><Label>System Prompt</Label><Textarea value={editData.system_prompt || ""} onChange={e => setEditData({...editData, system_prompt: e.target.value})} className="mt-1.5 min-h-[120px]" /></div>
-                    <div><Label>Temperature ({editData.temperature ?? 0.7})</Label><Input type="range" min={0} max={1} step={0.1} value={editData.temperature ?? 0.7} onChange={e => setEditData({...editData, temperature: parseFloat(e.target.value)})} className="mt-1.5" /></div>
-                  </TabsContent>
-                  <TabsContent value="voice" className="space-y-4 pt-4">
-                    <div><Label>Voice Provider</Label><Select value={editData.voice_provider || "none"} onValueChange={v => v && setEditData({...editData, voice_provider: v})}><SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Twilio Polly (Default)</SelectItem><SelectItem value="elevenlabs">ElevenLabs (Requires Paid Plan)</SelectItem></SelectContent></Select></div>
-                    {editData.voice_provider === "elevenlabs" && (
-                      <div>
-                        <Label>Voice</Label>
-                        <Select value={editData.voice_id || ""} onValueChange={v => v && setEditData({...editData, voice_id: v})}>
-                          <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select a voice" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="21m00Tcm4TlvDq8ikWAM">Rachel — Calm, Narration</SelectItem>
-                            <SelectItem value="EXAVITQu4vr4xnSDxMaL">Sarah — Mature, Reassuring</SelectItem>
-                            <SelectItem value="FGY2WhTYpPnrIDTdsKH5">Laura — Enthusiast, Quirky</SelectItem>
-                            <SelectItem value="IKne3meq5aSn9XLyUdCD">Charlie — Deep, Confident</SelectItem>
-                            <SelectItem value="JBFqnCBsd6RMkjVDRZzb">George — Warm Storyteller</SelectItem>
-                            <SelectItem value="TX3LPaxmHKxFdv7VOQHJ">Liam — Energetic Creator</SelectItem>
-                            <SelectItem value="Xb7hH8MSUJpSbSDYk0k2">Alice — Clear Educator</SelectItem>
-                            <SelectItem value="pFZP5JQG7iQjIQuC4Bku">Lily — Warm, Calm</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <p className="text-[11px] text-muted-foreground mt-1.5">Falls back to Twilio Polly if ElevenLabs fails. <a href="https://elevenlabs.io/pricing" target="_blank" className="underline">Upgrade your plan</a> to use voices via API.</p>
-                      </div>
-                    )}
-                    <div><Label>Primary Language</Label><Select value={editData.language || "en"} onValueChange={v => v && setEditData({...editData, language: v})}><SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent>{["en","hi","ta","te","kn","bn","mr","gu","ml","pa"].map(l => <SelectItem key={l} value={l}>{({en:"English",hi:"Hindi",ta:"Tamil",te:"Telugu",kn:"Kannada",bn:"Bengali",mr:"Marathi",gu:"Gujarati",ml:"Malayalam",pa:"Punjabi"} as Record<string,string>)[l]}</SelectItem>)}</SelectContent></Select></div>
-                  </TabsContent>
-                  <TabsContent value="escalation" className="space-y-4 pt-4">
-                    <div className="flex items-center justify-between"><Label>Enable Escalation</Label><Switch checked={editData.escalation_enabled || false} onCheckedChange={v => setEditData({...editData, escalation_enabled: v})} /></div>
-                    {editData.escalation_enabled && <div><Label>Escalation Email</Label><Input type="email" value={editData.escalation_email || ""} onChange={e => setEditData({...editData, escalation_email: e.target.value})} className="mt-1.5" /></div>}
-                  </TabsContent>
-                </Tabs>
-                <div className="flex gap-2 pt-2">
-                  <Button onClick={handleSave} disabled={saving} size="sm">{saving ? "Saving..." : "Save Changes"}</Button>
-                  <Button variant="outline" size="sm" onClick={() => { setEditing(false); setEditData(agent) }}>Cancel</Button>
+        {/* Tabs */}
+        <div className="flex items-center gap-1 px-5 border-b border-black/[0.06] flex-shrink-0 overflow-x-auto">
+          {[
+            { key: "agent", label: "Agent" },
+            { key: "model", label: "AI Model" },
+            { key: "voice", label: "Voice" },
+            { key: "channels", label: "Channels" },
+            { key: "knowledge", label: "Knowledge Base" },
+            { key: "escalation", label: "Escalation" },
+          ].map(t => (
+            <button
+              key={t.key}
+              onClick={() => setActiveTab(t.key)}
+              className={`px-3 py-2.5 text-[13px] font-medium whitespace-nowrap transition-colors border-b-2 ${
+                activeTab === t.key ? "border-[#0a0a0a] text-[#0a0a0a]" : "border-transparent text-[#737373] hover:text-[#0a0a0a]"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab content */}
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="max-w-xl mx-auto space-y-5">
+
+            {/* Agent tab */}
+            {activeTab === "agent" && (
+              <div className="space-y-4">
+                <div><Label>Name</Label><Input value={editData.name || ""} onChange={e => setEditData({...editData, name: e.target.value})} className="mt-1.5" /></div>
+                <div><Label>Description</Label><Textarea value={editData.description || ""} onChange={e => setEditData({...editData, description: e.target.value})} className="mt-1.5" /></div>
+                <div><Label>Status</Label><Select value={editData.status} onValueChange={v => v && setEditData({...editData, status: v})}><SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="draft">Draft</SelectItem><SelectItem value="active">Active</SelectItem><SelectItem value="paused">Paused</SelectItem></SelectContent></Select></div>
+                <div className="flex items-center justify-between rounded-lg border p-3">
+                  <div>
+                    <Label className="text-sm">Customer-facing agent</Label>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Talks to your customers. Off = internal use only.</p>
+                  </div>
+                  <Switch
+                    checked={(editData.settings as Record<string, unknown> | undefined)?.is_customer_facing !== false}
+                    onCheckedChange={v => setEditData({...editData, settings: { ...(editData.settings as object || {}), is_customer_facing: v }})}
+                  />
                 </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <>
-              <Card className="group cursor-pointer hover:border-[#ccc] transition-colors" onClick={() => setEditing(true)}>
-                <CardHeader className="pb-2"><div className="flex items-center justify-between"><CardTitle className="text-sm">AI Model</CardTitle><Pencil size={14} className="text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" /></div></CardHeader>
-                <CardContent className="space-y-2.5">
-                  <div className="flex items-center justify-between"><span className="text-xs text-muted-foreground">Provider</span><Badge variant="secondary">{modelLabels[agent.model_provider] || agent.model_provider}</Badge></div>
-                  <div className="flex items-center justify-between"><span className="text-xs text-muted-foreground">Temperature</span><span className="text-sm font-medium">{agent.temperature}</span></div>
-                  <div className="flex items-center justify-between"><span className="text-xs text-muted-foreground">Language</span><span className="text-sm font-medium">{agent.language}</span></div>
-                </CardContent>
-              </Card>
-              <Card className="group cursor-pointer hover:border-[#ccc] transition-colors" onClick={() => setEditing(true)}>
-                <CardHeader className="pb-2"><div className="flex items-center justify-between"><CardTitle className="text-sm">System Prompt</CardTitle><Pencil size={14} className="text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" /></div></CardHeader>
-                <CardContent><p className="text-sm whitespace-pre-wrap text-muted-foreground">{agent.system_prompt || "No system prompt set"}</p></CardContent>
-              </Card>
-              <Card className="group cursor-pointer hover:border-[#ccc] transition-colors" onClick={() => setEditing(true)}>
-                <CardHeader className="pb-2"><div className="flex items-center justify-between"><CardTitle className="text-sm">Escalation</CardTitle><Pencil size={14} className="text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" /></div></CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-between"><span className="text-xs text-muted-foreground">Enabled</span><span className="text-sm font-medium">{agent.escalation_enabled ? "Yes" : "No"}</span></div>
-                  {agent.escalation_enabled && agent.escalation_email && <div className="flex items-center justify-between mt-2"><span className="text-xs text-muted-foreground">Email</span><span className="text-sm">{agent.escalation_email}</span></div>}
-                </CardContent>
-              </Card>
+                <div><Label>Phone Greeting</Label><Textarea placeholder="Welcome to Jordon.ai, how may I help you today?" value={editData.greeting_message || ""} onChange={e => setEditData({...editData, greeting_message: e.target.value})} className="mt-1.5" /><p className="text-[11px] text-muted-foreground mt-1">Spoken when someone calls. Chat channels start empty.</p></div>
+                <div><Label>Fallback Message</Label><Textarea value={editData.fallback_message || ""} onChange={e => setEditData({...editData, fallback_message: e.target.value})} className="mt-1.5" /></div>
+              </div>
+            )}
 
-              {/* Channels */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Channels</CardTitle>
-                  <p className="text-xs text-muted-foreground">How customers reach this agent</p>
-                </CardHeader>
-                <CardContent className="space-y-1">
+            {/* AI Model tab */}
+            {activeTab === "model" && (
+              <div className="space-y-4">
+                <div><Label>Model Provider</Label><Select value={editData.model_provider} onValueChange={v => {
+                  if (!v) return
+                  const defaults: Record<string, string> = { openai: "gpt-4o-mini", anthropic: "claude-sonnet-4-20250514", sarvam: "sarvam-m", gemini: "gemini-pro" }
+                  setEditData({...editData, model_provider: v, model_name: defaults[v] || editData.model_name})
+                }}><SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="sarvam">Sarvam 30B (Free)</SelectItem><SelectItem value="openai">OpenAI GPT-4o mini</SelectItem><SelectItem value="anthropic">Claude Sonnet 4</SelectItem><SelectItem value="gemini">Gemini Pro</SelectItem></SelectContent></Select></div>
+                <div><Label>System Prompt</Label><Textarea value={editData.system_prompt || ""} onChange={e => setEditData({...editData, system_prompt: e.target.value})} className="mt-1.5 min-h-[200px]" /></div>
+                <div><Label>Temperature ({editData.temperature ?? 0.7})</Label><Input type="range" min={0} max={1} step={0.1} value={editData.temperature ?? 0.7} onChange={e => setEditData({...editData, temperature: parseFloat(e.target.value)})} className="mt-1.5" /></div>
+              </div>
+            )}
+
+            {/* Voice tab */}
+            {activeTab === "voice" && (
+              <div className="space-y-4">
+                <div><Label>Voice Provider</Label><Select value={editData.voice_provider || "none"} onValueChange={v => v && setEditData({...editData, voice_provider: v})}><SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Twilio Polly (Default)</SelectItem><SelectItem value="elevenlabs">ElevenLabs (Requires Paid Plan)</SelectItem></SelectContent></Select></div>
+                {editData.voice_provider === "elevenlabs" && (
+                  <div>
+                    <Label>Voice</Label>
+                    <Select value={editData.voice_id || ""} onValueChange={v => v && setEditData({...editData, voice_id: v})}>
+                      <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select a voice" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="21m00Tcm4TlvDq8ikWAM">Rachel — Calm, Narration</SelectItem>
+                        <SelectItem value="EXAVITQu4vr4xnSDxMaL">Sarah — Mature, Reassuring</SelectItem>
+                        <SelectItem value="FGY2WhTYpPnrIDTdsKH5">Laura — Enthusiast, Quirky</SelectItem>
+                        <SelectItem value="IKne3meq5aSn9XLyUdCD">Charlie — Deep, Confident</SelectItem>
+                        <SelectItem value="JBFqnCBsd6RMkjVDRZzb">George — Warm Storyteller</SelectItem>
+                        <SelectItem value="TX3LPaxmHKxFdv7VOQHJ">Liam — Energetic Creator</SelectItem>
+                        <SelectItem value="Xb7hH8MSUJpSbSDYk0k2">Alice — Clear Educator</SelectItem>
+                        <SelectItem value="pFZP5JQG7iQjIQuC4Bku">Lily — Warm, Calm</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-muted-foreground mt-1.5">Falls back to Twilio Polly if ElevenLabs fails.</p>
+                  </div>
+                )}
+                <div><Label>Primary Language</Label><Select value={editData.language || "en"} onValueChange={v => v && setEditData({...editData, language: v})}><SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent>{["en","hi","ta","te","kn","bn","mr","gu","ml","pa"].map(l => <SelectItem key={l} value={l}>{({en:"English",hi:"Hindi",ta:"Tamil",te:"Telugu",kn:"Kannada",bn:"Bengali",mr:"Marathi",gu:"Gujarati",ml:"Malayalam",pa:"Punjabi"} as Record<string,string>)[l]}</SelectItem>)}</SelectContent></Select></div>
+              </div>
+            )}
+
+            {/* Channels tab */}
+            {activeTab === "channels" && (
+              <div className="space-y-1">
                   {Object.entries(channelMeta).map(([type, meta]) => {
                     const ch = channels.find(c => c.channel_type === type)
                     const isActive = ch?.is_active ?? false
@@ -683,9 +635,6 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                       </div>
                     )
                   })}
-                </CardContent>
-              </Card>
-
               {/* Channel setup wizard */}
               <Dialog open={!!setupChannel} onOpenChange={(open) => { if (!open) { setSetupChannel(null); setSetupStep(0); setFbPages([]); setWaNumbers([]) } }}>
                 <DialogContent className="max-w-md">
@@ -850,13 +799,12 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                 </DialogContent>
               </Dialog>
 
-              {/* Knowledge Base */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Knowledge Base</CardTitle>
-                  <p className="text-xs text-muted-foreground">Documents the agent uses to answer questions</p>
-                </CardHeader>
-                <CardContent>
+              </div>
+            )}
+
+            {/* Knowledge Base tab */}
+            {activeTab === "knowledge" && (
+              <div>
                   {kbLoading ? (
                     <div className="flex items-center justify-center py-6"><Loader variant="circular" size="sm" /></div>
                   ) : linkedKb ? (
@@ -909,9 +857,6 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                       </div>
                     </div>
                   )}
-                </CardContent>
-              </Card>
-
               {/* KB picker dialog */}
               <Dialog open={showKbPicker} onOpenChange={setShowKbPicker}>
                 <DialogContent>
@@ -936,9 +881,18 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
-            </>
-          )}
-        </div>
+              </div>
+            )}
+
+            {/* Escalation tab */}
+            {activeTab === "escalation" && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between"><Label>Enable Escalation</Label><Switch checked={editData.escalation_enabled || false} onCheckedChange={v => setEditData({...editData, escalation_enabled: v})} /></div>
+                {editData.escalation_enabled && <div><Label>Escalation Email</Label><Input type="email" value={editData.escalation_email || ""} onChange={e => setEditData({...editData, escalation_email: e.target.value})} className="mt-1.5" /></div>}
+              </div>
+            )}
+
+          </div>
         </div>
       </div>
 
