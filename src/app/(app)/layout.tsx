@@ -195,21 +195,21 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen bg-[#f5f5f5]">
       {/* Sidebar */}
       <aside className={cn(
-        "flex flex-col bg-[#f5f5f5] pt-3 transition-all duration-200",
+        "group/sidebar flex flex-col bg-[#f5f5f5] pt-3 transition-all duration-200",
         collapsed ? "w-[60px]" : "w-[220px]"
       )}>
         {/* Logo */}
-        <div className={cn("group/logo flex h-12 items-center px-5", collapsed ? "justify-center px-0" : "gap-3")}>
+        <div className={cn("flex h-12 items-center px-5", collapsed ? "justify-center px-0" : "gap-3")}>
           {collapsed ? (
             <button
               onClick={() => setCollapsed(false)}
               className="relative flex h-8 w-8 items-center justify-center rounded-md hover:bg-[#ebebeb] transition-colors"
               title="Expand sidebar"
             >
-              <span className="transition-opacity group-hover/logo:opacity-0">
+              <span className="transition-opacity group-hover/sidebar:opacity-0">
                 <JordonLogo />
               </span>
-              <SidebarSimple size={16} weight="duotone" className="absolute text-[#737373] opacity-0 group-hover/logo:opacity-100 transition-opacity" />
+              <SidebarSimple size={16} weight="duotone" className="absolute text-[#737373] opacity-0 group-hover/sidebar:opacity-100 transition-opacity" />
             </button>
           ) : (
             <>
