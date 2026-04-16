@@ -1256,7 +1256,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
           <AiComposer
             value={chatInput}
             onChange={setChatInput}
-            onSubmit={() => sendChat()}
+            onSubmit={(ctx) => { void sendChat({ message: ctx.text }) }}
             sending={chatLoading}
             variant="inline"
             placeholder="Ask anything"

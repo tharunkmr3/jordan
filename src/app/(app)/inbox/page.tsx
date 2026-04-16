@@ -13,6 +13,7 @@ import { Loader } from '@/components/ui/loader'
 import { ContactAvatar } from '@/components/ui/contact-avatar'
 import { ChannelIcon } from '@/components/ui/channel-icon'
 import { MODEL_CATALOG } from '@/lib/ai/catalog'
+import type { UploadedAttachment } from '@/lib/chat-attachments/constants'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -163,7 +164,7 @@ function InternalNewChatHero({
   agentName: string
   replyText: string
   onChangeValue: (next: string) => void
-  onSend: () => void
+  onSend: (ctx: { text: string; attachments: UploadedAttachment[] }) => void
   sending: boolean
   model: { value: string; options: { value: string; label: string }[]; onChange: (v: string) => void }
 }) {
@@ -366,16 +367,18 @@ function InboxInner() {
     return () => { supabase.removeChannel(channel) }
   }, [orgId, fetchConversations, scrollToBottom]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function handleSendReply() {
+  async function handleSendReply(override?: { message: string }) {
     // Internal agent mode: ChatGPT-style. Send via /api/chat which
     // handles auth-based visitor scoping, may create the conversation
     // if selectedId is null, and generates an AI response.
+    const fromOverride = override?.message?.trim() ?? ''
+    const typed = replyText.trim()
+    const content = fromOverride || typed
     if (isInternalAgent && filteredAgent) {
-      if (!replyText.trim() || sending) return
-      return handleInternalChatSend()
+      if (!content || sending) return
+      return handleInternalChatSend({ message: content })
     }
-    if (!replyText.trim() || !selectedId || sending) return
-    const content = replyText.trim()
+    if (!content || !selectedId || sending) return
     const convId = selectedId
     const tempId = `temp-${Date.now()}`
     const nowIso = new Date().toISOString()
@@ -447,7 +450,7 @@ function InboxInner() {
     }
   }
 
-  async function handleInternalChatSend(override?: { message: string }) {
+  async function handleInternalChatSend(override?: { message: string; attachments?: UploadedAttachment[] }) {
     if (!filteredAgent) return
     const content = (override?.message ?? replyText).trim()
     if (!content) return
@@ -514,6 +517,9 @@ function InboxInner() {
           stream: false,
           isTest: true,
           modelName: chatModel || undefined,
+          attachments: override?.attachments && override.attachments.length > 0
+            ? override.attachments
+            : undefined,
         }),
       })
       if (!res.ok) throw new Error(await res.text().catch(() => 'Failed to send'))
@@ -850,7 +856,7 @@ function InboxInner() {
             agentName={filteredAgent?.name ?? 'agent'}
             replyText={replyText}
             onChangeValue={setReplyText}
-            onSend={() => { void handleInternalChatSend() }}
+            onSend={(ctx) => { void handleInternalChatSend({ message: ctx.text, attachments: ctx.attachments }) }}
             sending={sending}
             model={composerModel!}
           />
@@ -1003,7 +1009,16 @@ function InboxInner() {
               <AiComposer
                 value={replyText}
                 onChange={setReplyText}
-                onSubmit={() => { void (isInternalAgent ? handleInternalChatSend() : handleSendReply()) }}
+                onSubmit={(ctx) => {
+                  if (isInternalAgent) {
+                    void handleInternalChatSend({ message: ctx.text, attachments: ctx.attachments })
+                  } else {
+                    // Customer-facing reply: attachments aren't wired to the
+                    // reply API yet (separate step). The UI still lets ops
+                    // drop files for future messages; ignored for now.
+                    void handleSendReply({ message: ctx.text })
+                  }
+                }}
                 sending={sending}
                 model={composerModel}
                 variant="inline"

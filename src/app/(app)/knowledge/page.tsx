@@ -39,6 +39,15 @@ const statusStyles: Record<string, string> = {
   error: 'bg-red-50 text-red-700',
 }
 
+/** Best-effort: pull an `{ error }` message out of a JSON error body. */
+function safeXhrMessage(xhr: XMLHttpRequest): string | null {
+  try {
+    const parsed = JSON.parse(xhr.responseText) as { error?: string }
+    if (parsed && typeof parsed.error === 'string') return parsed.error
+  } catch { /* not JSON */ }
+  return null
+}
+
 export default function KnowledgePage() {
   const [kbs, setKbs] = useState<KnowledgeBaseWithDocs[]>([])
   const [agents, setAgents] = useState<Agent[]>([])
@@ -63,8 +72,17 @@ export default function KnowledgePage() {
   const [editColor, setEditColor] = useState<string>('Blue')
   const [savingEdit, setSavingEdit] = useState(false)
 
-  // Upload
-  const [uploading, setUploading] = useState(false)
+  // Upload — parallel, per-file progress with optimistic UI.
+  // Each entry is keyed by a client-side uuid so retries don't collide.
+  interface UploadTask {
+    clientId: string
+    file: File
+    status: 'uploading' | 'processing' | 'done' | 'error'
+    progress: number    // 0-100 (real for <= 4MB via XHR, fake tween for larger)
+    error?: string
+    docId?: string      // once the server returns a KbDocument id
+  }
+  const [uploadQueue, setUploadQueue] = useState<UploadTask[]>([])
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const fetchKbs = useCallback(async () => {
@@ -165,19 +183,88 @@ export default function KnowledgePage() {
     }
   }
 
-  async function handleUpload(file: File) {
-    if (!selectedKb) return
-    setUploading(true)
-    try {
+  /**
+   * Upload one file with real progress via XHR (fetch can't report upload
+   * progress cross-browser yet). Updates the per-task state in uploadQueue.
+   * Parallel with other uploads — each call is independent.
+   */
+  function uploadOne(kbId: string, task: UploadTask): Promise<void> {
+    return new Promise((resolve) => {
       const formData = new FormData()
-      formData.append('file', file)
-      await fetch(`/api/knowledge-base/${selectedKb}/upload`, { method: 'POST', body: formData })
-      await fetchKbs()
-    } catch {
-      setError('Upload failed')
-    } finally {
-      setUploading(false)
-    }
+      formData.append('file', task.file)
+
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', `/api/knowledge-base/${kbId}/upload`)
+
+      xhr.upload.onprogress = (e) => {
+        if (!e.lengthComputable) return
+        // Leave 5% at the top for server-side processing (chunk + embed).
+        const pct = Math.min(95, Math.round((e.loaded / e.total) * 95))
+        setUploadQueue(prev => prev.map(t => t.clientId === task.clientId
+          ? { ...t, progress: pct }
+          : t))
+      }
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          let docId: string | undefined
+          try { docId = JSON.parse(xhr.responseText)?.id } catch { /* ignore */ }
+          setUploadQueue(prev => prev.map(t => t.clientId === task.clientId
+            ? { ...t, status: 'done', progress: 100, docId }
+            : t))
+        } else {
+          const msg = safeXhrMessage(xhr) || `Upload failed (${xhr.status})`
+          setUploadQueue(prev => prev.map(t => t.clientId === task.clientId
+            ? { ...t, status: 'error', error: msg }
+            : t))
+        }
+        resolve()
+      }
+
+      xhr.onerror = () => {
+        setUploadQueue(prev => prev.map(t => t.clientId === task.clientId
+          ? { ...t, status: 'error', error: 'Network error' }
+          : t))
+        resolve()
+      }
+
+      xhr.send(formData)
+    })
+  }
+
+  async function handleUploadFiles(files: File[]) {
+    if (!selectedKb || files.length === 0) return
+
+    const kbId = selectedKb
+    const tasks: UploadTask[] = files.map(f => ({
+      clientId: typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random()}`,
+      file: f,
+      status: 'uploading',
+      progress: 0,
+    }))
+
+    // Optimistic: show every file in the queue immediately.
+    setUploadQueue(prev => [...tasks, ...prev])
+
+    // Upload all in parallel. Each promise resolves regardless of outcome
+    // so one failure doesn't block the others.
+    await Promise.all(tasks.map(t => uploadOne(kbId, t)))
+
+    // Refresh server state so the docs appear in the real list with their
+    // server-generated ids, status, char_count etc.
+    await fetchKbs()
+
+    // Auto-clear completed tasks after a short delay so the UI doesn't
+    // accumulate forever. Errors stick until the user dismisses them.
+    setTimeout(() => {
+      setUploadQueue(prev => prev.filter(t => t.status !== 'done'))
+    }, 2000)
+  }
+
+  function dismissUploadTask(clientId: string) {
+    setUploadQueue(prev => prev.filter(t => t.clientId !== clientId))
   }
 
   async function handleDeleteDoc(docId: string) {
@@ -209,17 +296,82 @@ export default function KnowledgePage() {
           <input
             ref={fileInputRef}
             type="file"
+            multiple
             accept=".txt,.md,.markdown,.csv,.pdf,.docx"
             className="hidden"
-            onChange={e => { if (e.target.files?.[0]) handleUpload(e.target.files[0]); e.target.value = '' }}
+            onChange={e => {
+              const files = e.target.files ? Array.from(e.target.files) : []
+              if (files.length > 0) handleUploadFiles(files)
+              e.target.value = ''
+            }}
           />
-          <Button variant="secondary" size="sm" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
-            <Upload size={14} className="mr-1.5" />{uploading ? 'Uploading...' : 'Upload'}
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={uploadQueue.some(t => t.status === 'uploading')}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload size={14} className="mr-1.5" />
+            {uploadQueue.some(t => t.status === 'uploading') ? 'Uploading...' : 'Upload'}
           </Button>
           <Button variant="destructive" size="icon-sm" onClick={() => handleDeleteKb(activeKb.id)} aria-label="Delete knowledge base">
             <Trash size={14} />
           </Button>
         </HeaderActions>
+
+        {/* Optimistic upload queue — appears above the real docs list so
+            in-flight uploads are visible without a refresh. */}
+        {uploadQueue.length > 0 && (
+          <div className="space-y-1 mb-3">
+            {uploadQueue.map(task => (
+              <div
+                key={task.clientId}
+                className="flex items-center gap-3 px-4 py-3 rounded-lg bg-[#fafafa] ring-1 ring-black/[0.04]"
+              >
+                <FileText size={18} className="text-[#737373] shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <div className="text-sm font-medium text-[#2e2e2e] truncate">{task.file.name}</div>
+                    <div className="text-xs text-[#a3a3a3] shrink-0">
+                      {(task.file.size / 1024).toFixed(1)} KB
+                    </div>
+                  </div>
+                  {task.status === 'error' ? (
+                    <div className="text-xs text-red-600">{task.error}</div>
+                  ) : (
+                    <div className="h-1 rounded-full bg-black/[0.06] overflow-hidden">
+                      <div
+                        className={`h-full transition-[width] duration-200 ${
+                          task.status === 'done' ? 'bg-emerald-500' : 'bg-[#2e2e2e]'
+                        }`}
+                        style={{ width: `${task.progress}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+                <Badge
+                  variant="secondary"
+                  className={`text-xs shrink-0 ${
+                    task.status === 'error' ? 'bg-red-50 text-red-700' :
+                    task.status === 'done' ? 'bg-emerald-50 text-emerald-700' :
+                    'bg-blue-50 text-blue-700'
+                  }`}
+                >
+                  {task.status === 'uploading' ? `${task.progress}%` : task.status}
+                </Badge>
+                {(task.status === 'error' || task.status === 'done') && (
+                  <button
+                    onClick={() => dismissUploadTask(task.clientId)}
+                    className="p-1 rounded text-[#a3a3a3] hover:text-[#2e2e2e] hover:bg-black/[0.04]"
+                    aria-label="Dismiss"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Documents grid */}
         {docs.length === 0 ? (
@@ -229,8 +381,12 @@ export default function KnowledgePage() {
             </div>
             <div className="text-sm font-medium text-[#525252]">No documents yet</div>
             <div className="text-xs text-[#a3a3a3] mt-1 mb-4">Upload a file to get started</div>
-            <Button size="sm" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
-              <Upload size={14} className="mr-1.5" />Upload File
+            <Button
+              size="sm"
+              disabled={uploadQueue.some(t => t.status === 'uploading')}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload size={14} className="mr-1.5" />Upload Files
             </Button>
           </div>
         ) : (
@@ -258,7 +414,7 @@ export default function KnowledgePage() {
           </div>
         )}
 
-        <p className="text-xs text-[#a3a3a3] mt-4 text-center">Supports .txt, .md, .csv, .pdf, .docx</p>
+        <p className="text-xs text-[#a3a3a3] mt-4 text-center">Supports .txt, .md, .csv, .pdf, .docx · select multiple to upload in parallel</p>
       </div>
     )
   }
@@ -404,7 +560,7 @@ export default function KnowledgePage() {
                 { label: "Open", icon: <ArrowLeft size={14} className="rotate-180" />, onClick: () => setSelectedKb(kb.id) },
                 { label: "Edit", icon: <PencilSimple size={14} />, onClick: () => openEditDialog(kb) },
                 { label: "Rename", icon: <FileText size={14} />, onClick: () => {} },
-                { label: "Upload file", icon: <Upload size={14} />, onClick: () => { setSelectedKb(kb.id); setTimeout(() => fileInputRef.current?.click(), 100) } },
+                { label: "Upload files", icon: <Upload size={14} />, onClick: () => { setSelectedKb(kb.id); setTimeout(() => fileInputRef.current?.click(), 100) } },
                 { label: "Delete", icon: <Trash size={14} />, onClick: () => handleDeleteKb(kb.id), destructive: true, divider: true },
               ] as FolderAction[]}
             />
