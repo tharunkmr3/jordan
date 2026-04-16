@@ -151,12 +151,30 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         collapsed ? "w-[60px]" : "w-[220px]"
       )}>
         {/* Logo */}
-        <div className={cn("flex h-12 items-center gap-3 px-5", collapsed && "justify-center px-0")}>
-          <JordonLogo />
-          {!collapsed && (
-            <span className="text-[15px] font-medium tracking-tight text-[#0a0a0a]">
-              Jordon
-            </span>
+        <div className={cn("group/logo flex h-12 items-center px-5", collapsed ? "justify-center px-0" : "gap-3")}>
+          {collapsed ? (
+            <button
+              onClick={() => setCollapsed(false)}
+              className="relative flex h-8 w-8 items-center justify-center rounded-md hover:bg-[#ebebeb] transition-colors"
+              title="Expand sidebar"
+            >
+              <JordonLogo />
+              <SidebarSimple size={18} weight="duotone" className="absolute text-[#737373] opacity-0 group-hover/logo:opacity-100 transition-opacity bg-[#f5f5f5] rounded" />
+            </button>
+          ) : (
+            <>
+              <JordonLogo />
+              <span className="text-[15px] font-bold tracking-tight text-[#0a0a0a] flex-1">
+                Jordon
+              </span>
+              <button
+                onClick={() => setCollapsed(true)}
+                className="rounded-md p-1 text-[#737373] hover:bg-[#ebebeb] hover:text-[#0a0a0a]"
+                title="Collapse sidebar"
+              >
+                <SidebarSimple size={16} weight="duotone" />
+              </button>
+            </>
           )}
         </div>
 
@@ -304,17 +322,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="flex h-full flex-col overflow-hidden rounded-xl bg-white ring-1 ring-[#ebebeb]">
             {/* Header (inside card) */}
             <header className="flex h-12 items-center justify-between border-b border-[#ebebeb] px-5 flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setCollapsed(!collapsed)}
-                  className="rounded-md p-1 text-[#737373] hover:bg-[#f5f5f5] hover:text-[#0a0a0a]"
-                >
-                  <SidebarSimple size={18} weight="duotone" />
-                </button>
-                <span className="text-[15px] font-semibold text-[#0a0a0a]">{pageTitle}</span>
-              </div>
+              <span className="text-[15px] font-semibold text-[#0a0a0a]">{pageTitle}</span>
               <div />
-
             </header>
 
             {/* Page content */}
