@@ -144,6 +144,10 @@
   *:hover::-webkit-scrollbar-thumb:hover {
     background: rgba(0,0,0,0.2);
   }
+  /* Clickable elements always show pointer cursor */
+  button, a, [role="button"], [type="button"], [type="submit"], label[for], summary, select {
+    cursor: pointer;
+  }
   body {
     @apply bg-background text-foreground;
   }

@@ -60,6 +60,7 @@ export async function POST(request: Request) {
       agent_id: body.agent_id || null,
       name: body.name,
       description: body.description || null,
+      color: body.color || 'Blue',
     })
     .select()
     .single()

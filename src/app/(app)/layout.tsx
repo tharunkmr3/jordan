@@ -400,7 +400,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             {/* Header (inside card) */}
             <header className="flex h-12 items-center justify-between border-b border-black/[0.06] px-5 flex-shrink-0">
               <span className="text-base font-semibold text-[#0a0a0a]">{pageTitle}</span>
-              <div />
+              <div>
+                {pathname === "/knowledge" && (
+                  <button
+                    onClick={() => window.dispatchEvent(new Event("create-kb"))}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-primary text-primary-foreground px-3 py-1.5 text-sm font-medium hover:bg-primary/90 transition-colors"
+                  >
+                    <PlusCircle size={14} weight="regular" />
+                    New Knowledge Base
+                  </button>
+                )}
+              </div>
             </header>
 
             {/* Page content */}

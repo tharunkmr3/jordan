@@ -84,6 +84,13 @@ export default function KnowledgePage() {
 
   useEffect(() => { fetchKbs(); fetchAgents() }, [fetchKbs, fetchAgents])
 
+  // Listen for header button click
+  useEffect(() => {
+    const handler = () => setCreateOpen(true)
+    window.addEventListener("create-kb", handler)
+    return () => window.removeEventListener("create-kb", handler)
+  }, [])
+
   const activeKb = kbs.find(kb => kb.id === selectedKb)
 
   async function handleCreateKb() {
@@ -93,7 +100,7 @@ export default function KnowledgePage() {
       await fetch('/api/knowledge-base', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: createName, description: createDesc || null, agent_id: createAgent || null }),
+        body: JSON.stringify({ name: createName, description: createDesc || null, agent_id: createAgent || null, color: createColor }),
       })
       setCreateOpen(false)
       setCreateName('')
@@ -269,18 +276,8 @@ export default function KnowledgePage() {
   // ---- Folder grid view ----
   return (
     <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-base font-semibold text-[#0a0a0a]">Knowledge Base</h1>
-          <p className="text-xs text-[#737373] mt-0.5">Upload documents and FAQs to train your agents</p>
-        </div>
+      <div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-          <DialogTrigger render={
-            <Button size="sm">
-              <Plus size={14} weight="bold" className="mr-1.5" />
-              New Knowledge Base
-            </Button>
-          } />
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Create Knowledge Base</DialogTitle>
@@ -361,6 +358,7 @@ export default function KnowledgePage() {
               id={kb.id}
               name={kb.name}
               docCount={kb.kb_documents?.length || 0}
+              color={(kb as unknown as { color?: string }).color}
               lastUpdated={kb.updated_at}
               onClick={() => setSelectedKb(kb.id)}
             />

@@ -42,3 +42,7 @@ Use these size tiers consistently:
 - **Section headers:** `text-sm font-semibold` (14px bold)
 
 Never go below 11px for any visible text. Prefer `text-sm` (14px) as the default body size. Use Tailwind preset classes (`text-xs`, `text-sm`, `text-base`) over arbitrary values when possible.
+
+### Cursor: pointer on all clickable elements
+
+Global CSS in `globals.css` sets `cursor: pointer` on `button`, `a`, `[role="button"]`, `select`, `summary`, `label[for]`, and input submit/button types. Never add `cursor-pointer` manually in Tailwind — it's handled globally. If a custom div or span is clickable, give it `role="button"` or use a `<button>` element.
