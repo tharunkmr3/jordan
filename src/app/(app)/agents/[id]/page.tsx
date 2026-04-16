@@ -974,7 +974,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
             {messages.map((msg, i) => (
               <Message key={i} className={msg.role === "user" ? "flex-row-reverse" : ""}>
                 <MessageAvatar src={msg.role === "assistant" ? (agent.avatar_url || "") : ""} alt={msg.role === "assistant" ? agent.name : "You"} fallback={msg.role === "assistant" ? (agent.name[0]?.toUpperCase() || "J") : "Y"} className={msg.role === "assistant" ? "bg-[#2e2e2e] text-white" : "bg-[#ebebeb]"} />
-                <MessageContent className={msg.role === "user" ? "bg-[#f3f3f3] text-[#2e2e2e] rounded-3xl px-4 py-2.5" : "bg-white text-[#2e2e2e] rounded-3xl px-4 py-2.5 ring-1 ring-black/[0.04]"}>{msg.content}</MessageContent>
+                <MessageContent className={msg.role === "user" ? "bg-[#f7f7f7] text-[#2e2e2e] rounded-3xl px-4 py-2.5" : "bg-white text-[#2e2e2e] rounded-3xl px-4 py-2.5 ring-1 ring-black/[0.04]"}>{msg.content}</MessageContent>
               </Message>
             ))}
             {chatLoading && (
