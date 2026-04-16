@@ -60,7 +60,7 @@ function NavItem({ item, isActive, collapsed }: { item: typeof nav[0]; isActive:
         "flex items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium transition-colors",
         collapsed && "justify-center px-0",
         isActive
-          ? "bg-[#ebebeb] text-[#0a0a0a]"
+          ? "bg-white text-[#0a0a0a] shadow-sm ring-1 ring-[#ebebeb]"
           : "text-[#0a0a0a] hover:bg-[#ebebeb]"
       )}
     >
@@ -147,7 +147,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen bg-[#f5f5f5]">
       {/* Sidebar */}
       <aside className={cn(
-        "flex flex-col bg-[#f5f5f5] transition-all duration-200",
+        "flex flex-col bg-[#f5f5f5] pt-3 transition-all duration-200",
         collapsed ? "w-[60px]" : "w-[220px]"
       )}>
         {/* Logo */}
@@ -158,8 +158,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               className="relative flex h-8 w-8 items-center justify-center rounded-md hover:bg-[#ebebeb] transition-colors"
               title="Expand sidebar"
             >
-              <JordonLogo />
-              <SidebarSimple size={18} weight="duotone" className="absolute text-[#737373] opacity-0 group-hover/logo:opacity-100 transition-opacity bg-[#f5f5f5] rounded" />
+              <span className="transition-opacity group-hover/logo:opacity-0">
+                <JordonLogo />
+              </span>
+              <SidebarSimple size={18} weight="duotone" className="absolute text-[#737373] opacity-0 group-hover/logo:opacity-100 transition-opacity" />
             </button>
           ) : (
             <>
@@ -217,7 +219,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   href="/agents/new"
                   className={cn(
                     "flex items-center gap-2 rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors",
-                    pathname === "/agents/new" ? "bg-[#ebebeb] text-[#0a0a0a]" : "text-[#737373] hover:bg-[#ebebeb] hover:text-[#0a0a0a]"
+                    pathname === "/agents/new" ? "bg-white text-[#0a0a0a] shadow-sm ring-1 ring-[#ebebeb]" : "text-[#737373] hover:bg-[#ebebeb] hover:text-[#0a0a0a]"
                   )}
                 >
                   <PlusCircle size={18} weight="regular" className="flex-shrink-0 text-[#737373]" />
@@ -231,7 +233,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                       href={`/agents/${a.id}`}
                       className={cn(
                         "flex items-center gap-2 rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors",
-                        isActive ? "bg-[#ebebeb] text-[#0a0a0a]" : "text-[#525252] hover:bg-[#ebebeb]"
+                        isActive ? "bg-white text-[#0a0a0a] shadow-sm ring-1 ring-[#ebebeb]" : "text-[#525252] hover:bg-[#ebebeb]"
                       )}
                     >
                       {a.avatar_url ? (
