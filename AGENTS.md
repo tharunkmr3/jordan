@@ -118,6 +118,17 @@ Phosphor icons in the `(app)` tree default to `weight="bold"` via `<IconContext.
 
 Lucide icons (for shadcn primitives and forms) stay at stroke-width `2` — this is set globally in `globals.css` via `svg.lucide { stroke-width: 2 }`. Don't set `strokeWidth` per-icon.
 
+### Buttons: secondary by default, outline only on grey backgrounds
+
+Two non-primary Button variants:
+
+- **`variant="secondary"`** (`bg-[#ebebeb]` / `hover:bg-[#e0e0e0]`, no border) — use this for every secondary action on a **white** surface: inside Cards, Panels, Dialogs, the main page shell. This is the default choice for non-primary buttons (Cancel, Edit, Upload, Copy, Link Existing, OAuth buttons on white auth pages, etc.).
+- **`variant="outline"`** (`bg-background` + `border-black/[0.06]`) — use this only when the button sits directly on a **grey** surface (sidebar, `bg-[#f5f5f5]` page backgrounds, hover states over grey). The subtle border is what gives it presence on grey; a secondary chip would blend into the background.
+
+Primary CTA stays `variant="default"` (black / `bg-primary`). Destructive stays `variant="destructive"`. Ghost stays `variant="ghost"` for icon-only or in-table actions.
+
+When in doubt: if the button is inside a white `<Card>` / `<Panel>` / `<Dialog>`, use `secondary`. Don't reach for `outline` unless you've actually placed the button on a grey surface.
+
 ### Sidebar row alignment
 
 Every sidebar row (nav item, search, New Agent, agent list, user menu) uses:

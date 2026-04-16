@@ -144,7 +144,7 @@ export default function SignupPage() {
       {/* OAuth buttons */}
       <div className="flex flex-col gap-3">
         <Button
-          variant="outline"
+          variant="secondary"
           size="lg"
           className="h-11 w-full gap-3 rounded-xl text-sm font-medium"
           onClick={handleGoogleSignUp}
@@ -153,7 +153,7 @@ export default function SignupPage() {
           Continue with Google
         </Button>
         <Button
-          variant="outline"
+          variant="secondary"
           size="lg"
           className="h-11 w-full gap-3 rounded-xl text-sm font-medium"
           onClick={handleMicrosoftSignUp}

@@ -207,7 +207,7 @@ export default function DashboardPage() {
           <h2 className="text-sm font-semibold">Top queries</h2>
           <div className="flex items-center gap-2">
             <Input placeholder="Search queries..." className="h-8 w-48 text-xs" />
-            <Button variant="outline" size="sm" className="h-8 text-xs">Export</Button>
+            <Button variant="secondary" size="sm" className="h-8 text-xs">Export</Button>
           </div>
         </div>
         <Card>

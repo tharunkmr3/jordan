@@ -101,7 +101,7 @@ export default function LoginPage() {
       {/* OAuth buttons */}
       <div className="flex flex-col gap-3">
         <Button
-          variant="outline"
+          variant="secondary"
           size="lg"
           className="h-11 w-full gap-3 rounded-xl text-sm font-medium"
           onClick={handleGoogleSignIn}
@@ -110,7 +110,7 @@ export default function LoginPage() {
           Continue with Google
         </Button>
         <Button
-          variant="outline"
+          variant="secondary"
           size="lg"
           className="h-11 w-full gap-3 rounded-xl text-sm font-medium"
           onClick={handleMicrosoftSignIn}

@@ -399,7 +399,7 @@ export default function NewAgentPage() {
           </Button>
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             className="text-[13px]"
             onClick={() => router.push('/agents')}
           >

@@ -241,7 +241,7 @@ export default function BillingPage() {
               </CardContent>
               <CardFooter>
                 {isCurrent ? (
-                  <Button className="w-full" variant="outline" disabled>
+                  <Button className="w-full" variant="secondary" disabled>
                     Current Plan
                   </Button>
                 ) : (

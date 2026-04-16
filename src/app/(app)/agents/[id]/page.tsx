@@ -691,7 +691,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                               <code className="flex-1 rounded-md bg-muted px-3 py-2 text-xs font-mono break-all">
                                 {`<script src="${typeof window !== "undefined" ? window.location.origin : ""}/widget.js" data-agent-id="${id}"></script>`}
                               </code>
-                              <Button variant="outline" size="icon-sm" onClick={copyWidget}>
+                              <Button variant="secondary" size="icon-sm" onClick={copyWidget}>
                                 {copied ? <Check size={14} /> : <Copy size={14} />}
                               </Button>
                             </div>
@@ -814,7 +814,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                             </Select>
                           </div>
                           <DialogFooter>
-                            <Button variant="outline" onClick={() => setSetupChannel(null)}>Cancel</Button>
+                            <Button variant="secondary" onClick={() => setSetupChannel(null)}>Cancel</Button>
                             <Button disabled={channelSaving !== null} onClick={async () => {
                               setChannelSaving("phone")
                               setSetupStep(1)
@@ -905,7 +905,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
 
                       {/* Upload button */}
                       <input ref={fileInputRef} type="file" className="hidden" accept=".txt,.csv,.pdf,.docx" onChange={e => { if (e.target.files?.[0]) uploadDocument(e.target.files[0]); e.target.value = "" }} />
-                      <Button variant="outline" size="sm" className="w-full" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
+                      <Button variant="secondary" size="sm" className="w-full" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
                         <Upload size={14} className="mr-1.5" />{uploading ? "Uploading..." : "Upload Document"}
                       </Button>
                       <p className="text-[11px] text-muted-foreground text-center">Supports .txt, .csv, .pdf, .docx</p>
@@ -914,10 +914,10 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                     <div className="space-y-3 py-2">
                       <p className="text-xs text-muted-foreground text-center">No knowledge base linked to this agent</p>
                       <div className="flex gap-2">
-                        <Button variant="outline" size="sm" className="flex-1" onClick={createAndLinkKb}>
+                        <Button variant="secondary" size="sm" className="flex-1" onClick={createAndLinkKb}>
                           <Plus size={14} className="mr-1.5" />Create New
                         </Button>
-                        <Button variant="outline" size="sm" className="flex-1" onClick={() => setShowKbPicker(true)}>
+                        <Button variant="secondary" size="sm" className="flex-1" onClick={() => setShowKbPicker(true)}>
                           Link Existing
                         </Button>
                       </div>
@@ -943,7 +943,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                     )}
                   </div>
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => setShowKbPicker(false)}>Cancel</Button>
+                    <Button variant="secondary" onClick={() => setShowKbPicker(false)}>Cancel</Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
@@ -1006,7 +1006,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
       </Panel>
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent><DialogHeader><DialogTitle>Delete Agent</DialogTitle></DialogHeader><p className="text-sm text-muted-foreground">Are you sure you want to delete &quot;{agent.name}&quot;? This cannot be undone.</p><DialogFooter><Button variant="outline" onClick={() => setDeleteOpen(false)}>Cancel</Button><Button variant="destructive" onClick={handleDelete}>Delete</Button></DialogFooter></DialogContent>
+        <DialogContent><DialogHeader><DialogTitle>Delete Agent</DialogTitle></DialogHeader><p className="text-sm text-muted-foreground">Are you sure you want to delete &quot;{agent.name}&quot;? This cannot be undone.</p><DialogFooter><Button variant="secondary" onClick={() => setDeleteOpen(false)}>Cancel</Button><Button variant="destructive" onClick={handleDelete}>Delete</Button></DialogFooter></DialogContent>
       </Dialog>
     </div>
   )

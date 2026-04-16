@@ -166,7 +166,7 @@ export default function OnboardingPage() {
                 Create an agent
               </Button>
               <Button
-                variant="outline"
+                variant="secondary"
                 onClick={() => setStep(3)}
                 className="h-11 w-full rounded-xl"
               >

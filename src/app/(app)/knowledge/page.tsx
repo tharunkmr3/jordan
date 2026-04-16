@@ -239,10 +239,10 @@ export default function KnowledgePage() {
               className="hidden"
               onChange={e => { if (e.target.files?.[0]) handleUpload(e.target.files[0]); e.target.value = '' }}
             />
-            <Button variant="outline" size="sm" onClick={() => { setFaqOpen(true) }}>
+            <Button variant="secondary" size="sm" onClick={() => { setFaqOpen(true) }}>
               <ChatDots size={14} className="mr-1.5" />Add FAQ
             </Button>
-            <Button variant="outline" size="sm" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
+            <Button variant="secondary" size="sm" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
               <Upload size={14} className="mr-1.5" />{uploading ? 'Uploading...' : 'Upload'}
             </Button>
             <Button variant="destructive" size="sm" onClick={() => handleDeleteKb(activeKb.id)}>
@@ -260,7 +260,7 @@ export default function KnowledgePage() {
             <div className="text-sm font-medium text-[#525252]">No documents yet</div>
             <div className="text-xs text-[#a3a3a3] mt-1 mb-4">Upload a file or add an FAQ to get started</div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setFaqOpen(true)}>
+              <Button variant="secondary" size="sm" onClick={() => setFaqOpen(true)}>
                 <ChatDots size={14} className="mr-1.5" />Add FAQ
               </Button>
               <Button size="sm" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
@@ -406,7 +406,7 @@ export default function KnowledgePage() {
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" size="sm" onClick={() => setEditOpen(false)}>Cancel</Button>
+              <Button variant="secondary" size="sm" onClick={() => setEditOpen(false)}>Cancel</Button>
               <Button size="sm" onClick={handleSaveEdit} disabled={savingEdit || !editName.trim()}>
                 {savingEdit ? 'Saving...' : 'Save changes'}
               </Button>

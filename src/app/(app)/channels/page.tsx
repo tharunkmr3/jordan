@@ -368,7 +368,7 @@ export default function ChannelsPage() {
                   <div className="flex gap-2">
                     {config.fields.length > 0 && (
                       <Button
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
                         className="text-[12px]"
                         onClick={() => openConfigDialog(config)}
@@ -427,7 +427,7 @@ export default function ChannelsPage() {
           </div>
           <DialogFooter>
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               onClick={() => setConfigDialog(null)}
               className="text-[12px]"

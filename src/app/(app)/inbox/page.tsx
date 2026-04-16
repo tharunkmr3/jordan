@@ -819,7 +819,7 @@ function InboxInner() {
                       className="text-[13px] resize-none border-black/[0.04]"
                     />
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       className="mt-2 h-7 w-full text-xs"
                       onClick={handleSaveNotes}
