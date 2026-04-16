@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
-  SquaresFour,
+  House,
   Robot,
   ChatCircleDots,
   UsersThree,
@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils"
 import { createBrowserClient } from "@supabase/ssr"
 
 const nav = [
-  { label: "Dashboard", href: "/dashboard", icon: SquaresFour },
+  { label: "Home", href: "/dashboard", icon: House },
   { label: "Inbox", href: "/inbox", icon: ChatCircleDots },
   { label: "Contacts", href: "/contacts", icon: UsersThree },
   { label: "Knowledge", href: "/knowledge", icon: BookOpenText },
@@ -160,36 +160,31 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           )}
         </div>
 
-        {/* Search */}
-        {!collapsed && (
-          <div className="px-3 pt-3">
-            <div className="flex items-center gap-2 rounded-md border border-[#e0e0e0] bg-white px-2.5 py-1.5">
-              <MagnifyingGlass size={15} weight="regular" className="text-[#a3a3a3] flex-shrink-0" />
-              <input
-                type="text"
-                placeholder="Search..."
-                className="w-full bg-transparent text-[13px] text-[#0a0a0a] placeholder-[#a3a3a3] outline-none"
-              />
-            </div>
-          </div>
-        )}
-        {collapsed && (
-          <div className="flex justify-center pt-3">
-            <button className="rounded-md p-1.5 text-[#737373] hover:bg-[#ebebeb]">
-              <MagnifyingGlass size={18} weight="regular" />
-            </button>
-          </div>
-        )}
-
         {/* Main nav */}
         <nav className="flex-1 overflow-y-auto space-y-0.5 px-2 pt-3">
-          {nav.map((item) => (
-            <NavItem
-              key={item.href}
-              item={item}
-              isActive={pathname === item.href || pathname.startsWith(item.href + "/")}
-              collapsed={collapsed}
-            />
+          {nav.map((item, idx) => (
+            <div key={item.href}>
+              <NavItem
+                item={item}
+                isActive={pathname === item.href || pathname.startsWith(item.href + "/")}
+                collapsed={collapsed}
+              />
+              {/* Search slot right below Home */}
+              {idx === 0 && (
+                <button
+                  type="button"
+                  title={collapsed ? "Search" : undefined}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-md px-3 py-2 text-[13px] font-[500] text-[#0a0a0a] hover:bg-[#ebebeb] transition-colors",
+                    collapsed && "justify-center px-0"
+                  )}
+                >
+                  <MagnifyingGlass size={18} weight="regular" className="text-[#737373]" />
+                  {!collapsed && <span className="flex-1 text-left text-[#737373]">Search</span>}
+                  {!collapsed && <span className="text-[10px] text-[#a3a3a3]">⌘K</span>}
+                </button>
+              )}
+            </div>
           ))}
 
           {/* Agents section */}
