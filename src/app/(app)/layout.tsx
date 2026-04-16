@@ -391,7 +391,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main area */}
-      {pathname === "/inbox" ? (
+      {pathname === "/inbox" || pathname.startsWith("/agents/") ? (
         /* Inbox owns its own layout — no outer header/card */
         <div className="flex flex-1 flex-col overflow-hidden bg-[#f5f5f5]">
           <main className="flex-1 overflow-hidden">{children}</main>

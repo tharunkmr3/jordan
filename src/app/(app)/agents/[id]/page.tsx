@@ -433,17 +433,17 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
   }
 
   if (loading) return (
-    <div className="flex h-full">
-      <div className="flex-1 overflow-y-auto border-r border-[#ebebeb] p-6">
+    <div className="flex h-full gap-3 p-3 bg-[#f5f5f5] overflow-hidden">
+      <div className="flex-1 overflow-y-auto rounded-xl bg-white ring-1 ring-[#ebebeb] p-6">
         <div className="max-w-xl mx-auto space-y-5">
-          <div className="flex items-start justify-between">
-            <div className="space-y-2">
+          <div className="flex items-start gap-4">
+            <Skeleton className="h-14 w-14 rounded-full" />
+            <div className="space-y-2 flex-1">
               <Skeleton className="h-5 w-32" />
               <Skeleton className="h-3 w-48" />
             </div>
-            <Skeleton className="h-8 w-20" />
           </div>
-          {[1, 2, 3, 4, 5].map(i => (
+          {[1, 2, 3, 4].map(i => (
             <Card key={i}>
               <CardHeader className="pb-2"><Skeleton className="h-4 w-32" /></CardHeader>
               <CardContent className="space-y-2">
@@ -454,19 +454,24 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
           ))}
         </div>
       </div>
-      <div className="w-[400px] border-l border-[#ebebeb] p-4 space-y-3">
-        {[1, 2, 3].map(i => (
-          <Skeleton key={i} className="h-16 rounded-2xl" />
-        ))}
+      <div className="w-[400px] flex flex-col rounded-xl bg-white ring-1 ring-[#ebebeb] overflow-hidden">
+        <div className="h-12 border-b border-[#ebebeb] px-4 flex items-center">
+          <Skeleton className="h-4 w-20" />
+        </div>
+        <div className="flex-1 p-4 space-y-3">
+          {[1, 2, 3].map(i => (
+            <Skeleton key={i} className="h-16 rounded-2xl" />
+          ))}
+        </div>
       </div>
     </div>
   )
   if (!agent) return <div className="p-6 text-sm text-red-600">Agent not found</div>
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full gap-3 p-3 bg-[#f5f5f5] overflow-hidden">
       {/* Left: Agent details */}
-      <div className="flex-1 overflow-y-auto border-r border-[#ebebeb] p-6">
+      <div className="flex-1 overflow-y-auto rounded-xl bg-white ring-1 ring-[#ebebeb] p-6">
         <div className="max-w-xl mx-auto space-y-5">
           <div className="flex items-start justify-between">
             <div className="flex items-start gap-4">
@@ -930,7 +935,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
       </div>
 
       {/* Right: Chat test panel */}
-      <div className="w-[400px] flex flex-col bg-white">
+      <div className="w-[400px] flex flex-col rounded-xl bg-white ring-1 ring-[#ebebeb] overflow-hidden">
         <div className="h-12 flex items-center justify-between px-4 border-b border-[#ebebeb]">
           <span className="text-sm font-medium">Test Chat</span>
           <Button variant="ghost" size="sm" className="text-xs" onClick={() => { setMessages([]); setConversationId(null) }}>Clear</Button>
