@@ -90,7 +90,7 @@ export default function DashboardPage() {
     <div className="p-6 space-y-6">
       <HeaderActions>
         <Select value={dateRange} onValueChange={(v) => v && setDateRange(String(v))}>
-          <SelectTrigger className="h-8 w-[130px] rounded-full border-0 bg-[#f5f5f5] hover:bg-[#ebebeb] text-[13px] focus-visible:ring-0 focus-visible:border-transparent">
+          <SelectTrigger className="h-8 w-[130px] rounded-lg border-black/[0.06] text-[13px]">
             <SelectValue>{(v) => (v === "30" ? "Last 30 days" : v === "90" ? "Last 90 days" : "Last 7 days")}</SelectValue>
           </SelectTrigger>
           <SelectContent>
@@ -100,7 +100,7 @@ export default function DashboardPage() {
           </SelectContent>
         </Select>
         <Select>
-          <SelectTrigger className="h-8 w-[130px] rounded-full border-0 bg-[#f5f5f5] hover:bg-[#ebebeb] text-[13px] focus-visible:ring-0 focus-visible:border-transparent">
+          <SelectTrigger className="h-8 w-[130px] rounded-lg border-black/[0.06] text-[13px]">
             <SelectValue placeholder="All channels" />
           </SelectTrigger>
           <SelectContent>
@@ -112,7 +112,7 @@ export default function DashboardPage() {
           </SelectContent>
         </Select>
         <Select>
-          <SelectTrigger className="h-8 w-[120px] rounded-full border-0 bg-[#f5f5f5] hover:bg-[#ebebeb] text-[13px] focus-visible:ring-0 focus-visible:border-transparent">
+          <SelectTrigger className="h-8 w-[120px] rounded-lg border-black/[0.06] text-[13px]">
             <SelectValue placeholder="All agents" />
           </SelectTrigger>
           <SelectContent>
