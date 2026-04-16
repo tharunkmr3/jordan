@@ -49,9 +49,9 @@ export function ContactAvatar({
   const usePhoneIcon = !initial && (!name || isPhoneNumber(name))
 
   // Scale the glyph roughly linearly with avatar size. 36px → ~14px
-  // letter / 16px icon; 24px → ~10px / 12px.
+  // letter / ~15px icon; 24px → ~10px / ~10px.
   const letterFontSize = Math.max(10, Math.round(size * 0.4))
-  const iconSize = Math.max(12, Math.round(size * 0.5))
+  const iconSize = Math.max(10, Math.round(size * 0.42))
 
   return (
     <Avatar
@@ -61,7 +61,9 @@ export function ContactAvatar({
       {src && <AvatarImage src={src} alt={name || ""} />}
       <AvatarFallback className={cn("font-semibold", c.bg, c.text)}>
         {usePhoneIcon ? (
-          <Phone size={iconSize} weight="fill" />
+          // Outline + softened opacity so the phone reads as a quiet
+          // hint, not a primary focal element.
+          <Phone size={iconSize} weight="regular" className="opacity-70" />
         ) : (
           <span style={{ fontSize: letterFontSize, lineHeight: 1 }}>{initial}</span>
         )}
