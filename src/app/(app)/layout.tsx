@@ -10,7 +10,6 @@ import {
   UsersThree,
   BookOpenText,
   ChartBar,
-  Broadcast,
   CreditCard,
   GearSix,
   MagnifyingGlass,
@@ -35,7 +34,6 @@ const navGroup2 = [
   { label: "Contacts", href: "/contacts", icon: UsersThree },
   { label: "Knowledge", href: "/knowledge", icon: BookOpenText },
   { label: "Analytics", href: "/analytics", icon: ChartBar },
-  { label: "Channels", href: "/channels", icon: Broadcast },
 ]
 const nav = [...navGroup1, ...navGroup2]
 
