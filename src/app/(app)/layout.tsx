@@ -265,87 +265,112 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
           {/* Divider */}
           {!collapsed && <div className="my-3 mx-1 border-t border-black/[0.04]" />}
 
-          {/* Group 3: Agents */}
-          {!collapsed && (
-            <div>
-              <div className="flex items-center justify-between px-3 mb-1">
-                <span className="text-xs font-medium text-[#a3a3a3]">Agents</span>
-                {agents.length > 0 && <span className="text-xs text-[#a3a3a3]">{agents.length}</span>}
-              </div>
-              <div className="space-y-0.5">
-                <Link
-                  href="/agents/new"
-                  className={cn(
-                    "flex items-center gap-3 rounded-md px-3 py-2 text-[13px] leading-none font-medium transition-colors",
-                    pathname === "/agents/new" ? "bg-white text-[#2e2e2e] shadow-[0_2px_4px_-1px_rgba(0,0,0,0.08),0_1px_2px_-1px_rgba(0,0,0,0.04)]" : "text-[#737373] hover:bg-[#ebebeb] hover:text-[#2e2e2e]"
-                  )}
-                >
-                  <PlusCircle size={16} weight="bold" className="flex-shrink-0 text-[#737373]" />
-                  <span className="truncate flex-1">New Agent</span>
-                </Link>
-                {agents.map((a) => {
-                  const isCustomerFacing = a.settings?.is_customer_facing !== false
-                  const href = isCustomerFacing ? `/inbox?agentId=${a.id}` : `/agents/${a.id}`
-                  const isActive = currentAgentId === a.id || pathname === `/agents/${a.id}`
-                  const menuOpen = agentMenuOpen === a.id
-                  return (
-                    <div key={a.id} className="group/agent relative">
+          {/* Group 3: Agents — split by customer-facing vs internal */}
+          {!collapsed && (() => {
+            const customerAgents = agents.filter(a => a.settings?.is_customer_facing !== false)
+            const internalAgents = agents.filter(a => a.settings?.is_customer_facing === false)
+
+            const renderAgent = (a: SidebarAgent) => {
+              const isCustomerFacing = a.settings?.is_customer_facing !== false
+              const href = isCustomerFacing ? `/inbox?agentId=${a.id}` : `/agents/${a.id}`
+              const isActive = currentAgentId === a.id || pathname === `/agents/${a.id}`
+              const menuOpen = agentMenuOpen === a.id
+              return (
+                <div key={a.id} className="group/agent relative">
+                  <Link
+                    href={href}
+                    className={cn(
+                      "flex items-center gap-3 rounded-md px-3 py-2 text-[13px] leading-none font-medium transition-colors",
+                      isActive ? "bg-white text-[#2e2e2e] shadow-[0_2px_4px_-1px_rgba(0,0,0,0.08),0_1px_2px_-1px_rgba(0,0,0,0.04)]" : "text-[#525252] hover:bg-[#ebebeb] hover:text-[#2e2e2e]"
+                    )}
+                  >
+                    <ContactAvatar
+                      src={a.avatar_url}
+                      name={a.name}
+                      seed={a.id}
+                      size={16}
+                      className="flex-shrink-0"
+                    />
+                    <span className="truncate flex-1">{a.name}</span>
+                    {a.status === "active" && !menuOpen && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 flex-shrink-0 group-hover/agent:hidden" />}
+                  </Link>
+                  {/* 3-dot menu */}
+                  <button
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setAgentMenuOpen(menuOpen ? null : a.id) }}
+                    className={cn(
+                      "absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 hover:bg-[#ebebeb] transition-opacity",
+                      menuOpen ? "opacity-100" : "opacity-0 group-hover/agent:opacity-100"
+                    )}
+                    title="More"
+                  >
+                    <DotsThreeVertical size={14} weight="bold" className="text-[#737373]" />
+                  </button>
+                  {menuOpen && (
+                    <div
+                      className="absolute right-1 top-full mt-1 z-20 w-40 rounded-md border border-black/[0.04] bg-white shadow-lg py-1"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <Link
-                        href={href}
-                        className={cn(
-                          "flex items-center gap-3 rounded-md px-3 py-2 text-[13px] leading-none font-medium transition-colors",
-                          isActive ? "bg-white text-[#2e2e2e] shadow-[0_2px_4px_-1px_rgba(0,0,0,0.08),0_1px_2px_-1px_rgba(0,0,0,0.04)]" : "text-[#525252] hover:bg-[#ebebeb] hover:text-[#2e2e2e]"
-                        )}
+                        href={`/agents/${a.id}`}
+                        onClick={() => setAgentMenuOpen(null)}
+                        className="flex items-center gap-2 px-3 py-1.5 text-[13px] text-[#2e2e2e] hover:bg-[#f5f5f5]"
                       >
-                        <ContactAvatar
-                          src={a.avatar_url}
-                          name={a.name}
-                          seed={a.id}
-                          size={16}
-                          className="flex-shrink-0"
-                        />
-                        <span className="truncate flex-1">{a.name}</span>
-                        {a.status === "active" && !menuOpen && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 flex-shrink-0 group-hover/agent:hidden" />}
+                        <GearSix size={14} className="text-[#737373]" />
+                        Settings
                       </Link>
-                      {/* 3-dot menu */}
                       <button
-                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setAgentMenuOpen(menuOpen ? null : a.id) }}
-                        className={cn(
-                          "absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 hover:bg-[#ebebeb] transition-opacity",
-                          menuOpen ? "opacity-100" : "opacity-0 group-hover/agent:opacity-100"
-                        )}
-                        title="More"
+                        onClick={() => deleteAgent(a.id)}
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-[13px] text-red-600 hover:bg-red-50"
                       >
-                        <DotsThreeVertical size={14} weight="bold" className="text-[#737373]" />
+                        <SignOut size={14} className="rotate-180" />
+                        Delete
                       </button>
-                      {menuOpen && (
-                        <div
-                          className="absolute right-1 top-full mt-1 z-20 w-40 rounded-md border border-black/[0.04] bg-white shadow-lg py-1"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <Link
-                            href={`/agents/${a.id}`}
-                            onClick={() => setAgentMenuOpen(null)}
-                            className="flex items-center gap-2 px-3 py-1.5 text-[13px] text-[#2e2e2e] hover:bg-[#f5f5f5]"
-                          >
-                            <GearSix size={14} className="text-[#737373]" />
-                            Settings
-                          </Link>
-                          <button
-                            onClick={() => deleteAgent(a.id)}
-                            className="flex w-full items-center gap-2 px-3 py-1.5 text-[13px] text-red-600 hover:bg-red-50"
-                          >
-                            <SignOut size={14} className="rotate-180" />
-                            Delete
-                          </button>
-                        </div>
-                      )}
                     </div>
-                  )
-                })}
+                  )}
+                </div>
+              )
+            }
+
+            const GroupHeader = ({ label, count }: { label: string; count: number }) => (
+              <div className="flex items-center justify-between px-3 mb-1">
+                <span className="text-xs font-medium text-[#a3a3a3]">{label}</span>
+                {count > 0 && <span className="text-xs text-[#a3a3a3]">{count}</span>}
               </div>
-            </div>
-          )}
+            )
+
+            return (
+              <div className="space-y-3">
+                {/* New agent always visible at the top */}
+                <div>
+                  <GroupHeader label="Agents" count={agents.length} />
+                  <Link
+                    href="/agents/new"
+                    className={cn(
+                      "flex items-center gap-3 rounded-md px-3 py-2 text-[13px] leading-none font-medium transition-colors",
+                      pathname === "/agents/new" ? "bg-white text-[#2e2e2e] shadow-[0_2px_4px_-1px_rgba(0,0,0,0.08),0_1px_2px_-1px_rgba(0,0,0,0.04)]" : "text-[#737373] hover:bg-[#ebebeb] hover:text-[#2e2e2e]"
+                    )}
+                  >
+                    <PlusCircle size={16} weight="bold" className="flex-shrink-0 text-[#737373]" />
+                    <span className="truncate flex-1">New Agent</span>
+                  </Link>
+                </div>
+
+                {customerAgents.length > 0 && (
+                  <div>
+                    <GroupHeader label="Customer-facing" count={customerAgents.length} />
+                    <div className="space-y-0.5">{customerAgents.map(renderAgent)}</div>
+                  </div>
+                )}
+
+                {internalAgents.length > 0 && (
+                  <div>
+                    <GroupHeader label="Internal" count={internalAgents.length} />
+                    <div className="space-y-0.5">{internalAgents.map(renderAgent)}</div>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
         </nav>
 
         {/* Bottom nav */}
