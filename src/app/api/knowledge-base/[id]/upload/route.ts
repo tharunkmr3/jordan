@@ -41,11 +41,13 @@ export async function POST(
     return NextResponse.json({ error: 'No file provided' }, { status: 400 })
   }
 
-  const allowedTypes = ['text/plain', 'text/csv', 'application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+  const allowedTypes = ['text/plain', 'text/csv', 'text/markdown', 'application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
   const fileType = file.type || 'text/plain'
+  const allowedExt = ['.txt', '.csv', '.md', '.markdown']
+  const nameLower = file.name.toLowerCase()
 
-  if (!allowedTypes.includes(fileType) && !file.name.endsWith('.txt') && !file.name.endsWith('.csv')) {
-    return NextResponse.json({ error: 'Unsupported file type. Supported: .txt, .csv, .pdf, .docx' }, { status: 400 })
+  if (!allowedTypes.includes(fileType) && !allowedExt.some(ext => nameLower.endsWith(ext))) {
+    return NextResponse.json({ error: 'Unsupported file type. Supported: .txt, .md, .csv, .pdf, .docx' }, { status: 400 })
   }
 
   const admin = createAdminClient()

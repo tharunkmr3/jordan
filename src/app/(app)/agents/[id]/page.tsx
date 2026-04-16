@@ -904,11 +904,11 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                       )}
 
                       {/* Upload button */}
-                      <input ref={fileInputRef} type="file" className="hidden" accept=".txt,.csv,.pdf,.docx" onChange={e => { if (e.target.files?.[0]) uploadDocument(e.target.files[0]); e.target.value = "" }} />
+                      <input ref={fileInputRef} type="file" className="hidden" accept=".txt,.md,.markdown,.csv,.pdf,.docx" onChange={e => { if (e.target.files?.[0]) uploadDocument(e.target.files[0]); e.target.value = "" }} />
                       <Button variant="secondary" size="sm" className="w-full" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
                         <Upload size={14} className="mr-1.5" />{uploading ? "Uploading..." : "Upload Document"}
                       </Button>
-                      <p className="text-[11px] text-muted-foreground text-center">Supports .txt, .csv, .pdf, .docx</p>
+                      <p className="text-[11px] text-muted-foreground text-center">Supports .txt, .md, .csv, .pdf, .docx</p>
                     </div>
                   ) : (
                     <div className="space-y-3 py-2">

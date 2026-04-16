@@ -209,7 +209,7 @@ export default function KnowledgePage() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".txt,.csv,.pdf,.docx"
+            accept=".txt,.md,.markdown,.csv,.pdf,.docx"
             className="hidden"
             onChange={e => { if (e.target.files?.[0]) handleUpload(e.target.files[0]); e.target.value = '' }}
           />
@@ -258,7 +258,7 @@ export default function KnowledgePage() {
           </div>
         )}
 
-        <p className="text-xs text-[#a3a3a3] mt-4 text-center">Supports .txt, .csv, .pdf, .docx</p>
+        <p className="text-xs text-[#a3a3a3] mt-4 text-center">Supports .txt, .md, .csv, .pdf, .docx</p>
       </div>
     )
   }
