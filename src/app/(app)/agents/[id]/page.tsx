@@ -1291,13 +1291,10 @@ function AssistantBubble({ msg }: { msg: ChatMsg }) {
 
   const hasContent = msg.content.trim().length > 0
 
-  // Once the final answer is here, drop the placeholder "thinking"
-  // steps — they were loading-state labels, not meaningful history.
-  // Keep tool_call / tool_done steps because they show which tools
-  // the agent actually ran, which is worth keeping as a receipt.
-  const visibleThoughts = (msg.thoughts ?? []).filter(t =>
-    hasContent ? t.kind !== "thinking" : true,
-  )
+  // The CoT rail is a live progress indicator, not a permanent log.
+  // Once the final answer is here, drop every step — thinking,
+  // tool_call, tool_done — so the chat history is just messages.
+  const visibleThoughts = hasContent ? [] : (msg.thoughts ?? [])
   const hasVisibleThoughts = visibleThoughts.length > 0
 
   return (
