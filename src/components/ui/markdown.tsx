@@ -5,6 +5,7 @@ import ReactMarkdown, { Components } from "react-markdown"
 import remarkBreaks from "remark-breaks"
 import remarkGfm from "remark-gfm"
 import { CodeBlock, CodeBlockCode } from "./code-block"
+import { AiWidget } from "./ai-widget"
 
 export type MarkdownProps = {
   children: string
@@ -45,6 +46,14 @@ const INITIAL_COMPONENTS: Partial<Components> = {
     }
 
     const language = extractLanguage(className)
+
+    // Generative UI: ```ui fenced blocks hand off to <AiWidget>.
+    // Anything that doesn't validate against our schemas falls back
+    // to a raw <pre> inside AiWidget, so the chat never crashes on a
+    // bad payload.
+    if (language === "ui") {
+      return <AiWidget source={String(children ?? "")} />
+    }
 
     return (
       <CodeBlock className={className}>

@@ -17,6 +17,7 @@ import { Panel } from "@/components/ui/panel"
 import { Message, MessageAvatar, MessageContent } from "@/components/ui/message"
 import { Markdown } from "@/components/ui/markdown"
 import { ChainOfThought, ChainOfThoughtStep, ChainOfThoughtTrigger, ChainOfThoughtContent, ChainOfThoughtItem } from "@/components/ui/chain-of-thought"
+import { AiWidgetProvider } from "@/components/ui/ai-widget"
 import { PromptInput, PromptInputTextarea, PromptInputActions, PromptInputAction } from "@/components/ui/prompt-input"
 import { Loader } from "@/components/ui/loader"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -251,9 +252,11 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
     router.push("/dashboard")
   }
 
-  async function sendChat() {
-    if (!chatInput.trim() || chatLoading) return
-    const msg = chatInput.trim(); setChatInput("")
+  async function sendChat(override?: { message: string }) {
+    const incoming = override?.message ?? chatInput.trim()
+    if (!incoming || chatLoading) return
+    const msg = incoming
+    if (!override) setChatInput("")
     setMessages(prev => [...prev, { role: "user", content: msg }])
     setChatLoading(true)
     try {
@@ -1228,12 +1231,25 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
       >
         <ScrollArea className="flex-1 min-h-0 p-4" ref={scrollRef}>
           <div className="space-y-4">
-            {messages.map((msg, i) => (
-              <Message key={i} className={msg.role === "user" ? "flex-row-reverse" : ""}>
-                <MessageAvatar src={msg.role === "assistant" ? (agent?.avatar_url || "") : ""} alt={msg.role === "assistant" ? (agent?.name || "Assistant") : "You"} fallback={msg.role === "assistant" ? (agent?.name?.[0]?.toUpperCase() || "J") : "Y"} className={msg.role === "assistant" ? "bg-[#2e2e2e] text-white" : "bg-[#ebebeb]"} />
-                <AssistantBubble msg={msg} />
-              </Message>
-            ))}
+            {messages.map((msg, i) => {
+              // Only widgets in the latest assistant message are interactive;
+              // older submits would fire stale payloads into a fresh context.
+              const isLatestAssistant =
+                msg.role === "assistant" &&
+                i === messages.length - 1 &&
+                !chatLoading
+              return (
+                <Message key={i} className={msg.role === "user" ? "flex-row-reverse" : ""}>
+                  <MessageAvatar src={msg.role === "assistant" ? (agent?.avatar_url || "") : ""} alt={msg.role === "assistant" ? (agent?.name || "Assistant") : "You"} fallback={msg.role === "assistant" ? (agent?.name?.[0]?.toUpperCase() || "J") : "Y"} className={msg.role === "assistant" ? "bg-[#2e2e2e] text-white" : "bg-[#ebebeb]"} />
+                  <AiWidgetProvider
+                    submit={(message) => { void sendChat({ message }) }}
+                    disabled={!isLatestAssistant}
+                  >
+                    <AssistantBubble msg={msg} />
+                  </AiWidgetProvider>
+                </Message>
+              )
+            })}
             {chatLoading && (
               <Message>
                 <MessageAvatar src={agent?.avatar_url || ""} alt={agent?.name || "Assistant"} fallback={agent?.name?.[0]?.toUpperCase() || "J"} className="bg-[#2e2e2e] text-white" />
@@ -1254,7 +1270,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
             <PromptInputActions>
               <div />
               <PromptInputAction tooltip="Send">
-                <Button size="icon" className="rounded-full" onClick={sendChat} disabled={chatLoading || !chatInput.trim()}>
+                <Button size="icon" className="rounded-full" onClick={() => sendChat()} disabled={chatLoading || !chatInput.trim()}>
                   <ArrowUp size={16} />
                 </Button>
               </PromptInputAction>

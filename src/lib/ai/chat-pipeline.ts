@@ -434,6 +434,18 @@ function buildPrompt(agent: Agent, history: ChatMessage[], currentMessage: strin
   // For voice calls, instruct the AI to avoid markdown and keep responses short
   if (channel === 'phone') {
     systemPrompt += `\n\n--- Voice Call Mode ---\nYou are on a phone call. Respond conversationally in 1-3 short sentences. Do NOT use markdown, bullet points, asterisks, or headings — these will be read aloud literally. Speak naturally as if you were talking.`
+  } else {
+    // Chat channels can render generative UI widgets. Keep the
+    // instruction short and concrete — the model over-uses widgets
+    // if we give it long schemas to study.
+    systemPrompt += `\n\n--- Generative UI ---\nWhen you need structured input from the user, or a structured response would read better than prose (e.g. a disambiguation list, a confirmation before a destructive action, or tabular data), you MAY embed a single fenced code block tagged "ui" containing JSON of one of these shapes:
+- form: {"type":"form","title":"...","fields":[{"name":"","label":"","type":"text|email|url|number|textarea|select|boolean","required":true,"options":[{"value":"","label":""}]}],"submit":{"label":"Submit","action":"optional_hint"}}
+- confirm: {"type":"confirm","message":"...","confirm":{"label":"Yes","variant":"default|destructive"},"cancel":{"label":"Cancel"}}
+- choice: {"type":"choice","title":"...","options":[{"value":"","label":"","description":""}]}
+- card: {"type":"card","title":"...","subtitle":"","fields":[{"label":"","value":""}],"action":{"label":"","value":"","variant":"default|secondary|destructive"}}
+- table: {"type":"table","title":"...","columns":[{"key":"","label":""}],"rows":[{"col_key":"cell"}]}
+
+Prose is still the default. Only emit a widget when structured input or structured output is clearly better than text. Never wrap multiple widgets in one block.`
   }
 
   messages.push({ role: 'system', content: systemPrompt })
