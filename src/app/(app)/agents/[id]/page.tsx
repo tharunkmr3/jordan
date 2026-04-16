@@ -285,7 +285,17 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
     }
   }
 
-  useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }) }, [messages, chatLoading])
+  // The ref on <ScrollArea> points to its Root wrapper — the scrollable
+  // element is the nested Viewport. Grab the viewport child and scroll
+  // that; otherwise scrollTo silently no-ops and new messages never
+  // come into view.
+  useEffect(() => {
+    const root = scrollRef.current
+    if (!root) return
+    const viewport = root.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')
+    const target = viewport ?? root
+    target.scrollTo({ top: target.scrollHeight, behavior: 'smooth' })
+  }, [messages, chatLoading])
 
   async function toggleChannel(channelType: string, active: boolean) {
     if (active && channelType !== "website") {
@@ -1166,7 +1176,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
             {messages.map((msg, i) => (
               <Message key={i} className={msg.role === "user" ? "flex-row-reverse" : ""}>
                 <MessageAvatar src={msg.role === "assistant" ? (agent?.avatar_url || "") : ""} alt={msg.role === "assistant" ? (agent?.name || "Assistant") : "You"} fallback={msg.role === "assistant" ? (agent?.name?.[0]?.toUpperCase() || "J") : "Y"} className={msg.role === "assistant" ? "bg-[#2e2e2e] text-white" : "bg-[#ebebeb]"} />
-                <MessageContent className={msg.role === "user" ? "bg-[#f7f7f7] text-[#2e2e2e] rounded-3xl px-4 py-2.5" : "bg-white text-[#2e2e2e] rounded-3xl px-4 py-2.5 ring-1 ring-black/[0.04]"}>{msg.content}</MessageContent>
+                <MessageContent className={msg.role === "user" ? "bg-[#f7f7f7] text-[#2e2e2e] rounded-3xl px-3.5 py-2 text-[13px] leading-relaxed" : "bg-white text-[#2e2e2e] rounded-3xl px-3.5 py-2 text-[13px] leading-relaxed ring-1 ring-black/[0.04]"}>{msg.content}</MessageContent>
               </Message>
             ))}
             {chatLoading && (

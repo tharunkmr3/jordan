@@ -569,6 +569,23 @@ function ToolConfigDialog({
     })
   }
 
+  // "Select all" state is scoped to the filtered set — selecting all while
+  // a search term is active enables only what's visible, which matches
+  // what the user expects to see happen.
+  const allVisibleChecked = filtered.length > 0 && filtered.every(t => enabled.has(t.slug))
+  const someVisibleChecked = !allVisibleChecked && filtered.some(t => enabled.has(t.slug))
+  const toggleAllVisible = () => {
+    setEnabled(prev => {
+      const next = new Set(prev)
+      if (allVisibleChecked) {
+        for (const t of filtered) next.delete(t.slug)
+      } else {
+        for (const t of filtered) next.add(t.slug)
+      }
+      return next
+    })
+  }
+
   const save = async () => {
     setSaving(true)
     const res = await fetch(`/api/agents/${agentId}/integrations/${attachment.id}`, {
@@ -597,6 +614,21 @@ function ToolConfigDialog({
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#a3a3a3]" />
           <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Filter tools…" className="pl-9 h-9" />
         </div>
+
+        {!loading && filtered.length > 0 && (
+          <label className="flex items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer hover:bg-[#fafafa] border-b border-black/[0.04]">
+            <Checkbox
+              checked={allVisibleChecked}
+              indeterminate={someVisibleChecked}
+              onCheckedChange={toggleAllVisible}
+            />
+            <span className="text-sm text-[#2e2e2e]">
+              {allVisibleChecked ? 'Deselect all' : 'Select all'}
+              {search.trim() && <span className="text-[#a3a3a3]"> · matching &ldquo;{search.trim()}&rdquo;</span>}
+            </span>
+            <span className="ml-auto text-xs text-[#a3a3a3]">{filtered.length}</span>
+          </label>
+        )}
 
         <ScrollArea className="h-80 pr-2">
           {loading ? (

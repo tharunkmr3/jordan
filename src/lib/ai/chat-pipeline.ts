@@ -217,8 +217,56 @@ export async function* streamChatMessage(
   // Yield conversation ID first so frontend can track it
   yield { type: 'meta', data: JSON.stringify({ conversationId: conversation.id, contactId: contact.id }) }
 
-  // Stream LLM tokens
+  // Tool-calling path: the agentic loop can't be streamed natively (we need
+  // to see the full tool_calls array before executing). If the agent has
+  // tools enabled, run the non-streaming agentic loop then yield the final
+  // text as a single chunk. UX: slightly slower first token, but tools work.
+  const toolsBundle = supportsTools(agent.model_provider)
+    ? await buildAgentTools(supabase, agent.id)
+    : null
+
   let fullResponse = ''
+  if (toolsBundle && toolsBundle.tools.length > 0) {
+    try {
+      fullResponse = await runAgenticLoop(
+        supabase,
+        messages,
+        toolsBundle.tools,
+        toolsBundle.ctx,
+        modelConfig,
+        { conversationId: conversation.id }
+      )
+    } catch (error) {
+      console.error('[chat-pipeline] Tool loop error:', error)
+      fullResponse = agent.fallback_message || "I'm sorry, I'm having trouble right now."
+    }
+    yield { type: 'token', data: fullResponse }
+
+    // Save + usage, then return (skip the streaming block below)
+    saveMessage(supabase, {
+      conversation_id: conversation.id,
+      org_id: agent.org_id,
+      role: 'assistant',
+      content: fullResponse,
+      channel: input.channel,
+      metadata: {
+        model_used: `${agent.model_provider}/${agent.model_name}`,
+        tools_available: toolsBundle.tools.length,
+      },
+    }).catch(err => console.error('[chat-pipeline] Save response failed:', err))
+
+    logUsage(supabase, {
+      org_id: agent.org_id,
+      agent_id: agent.id,
+      event_type: 'message',
+      quantity: 1,
+      metadata: { conversation_id: conversation.id, channel: input.channel, model: `${agent.model_provider}/${agent.model_name}` },
+    }).catch(err => console.error('[chat-pipeline] Usage log failed:', err))
+
+    return
+  }
+
+  // Stream LLM tokens (no tools)
   try {
     for await (const chunk of streamResponse(messages, modelConfig)) {
       fullResponse += chunk
