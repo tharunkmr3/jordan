@@ -559,7 +559,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                     }}
                   />
                 </Field>
-                <Field label="Show test chats in inbox" description="Include conversations from this agent's Test Chat panel in the inbox list. Off by default — keeps the inbox focused on real customer conversations.">
+                <Field label="Show test chats in conversations" description="Include conversations from this agent's Test Chat panel in the main conversations list. Off by default — keeps the list focused on real customer conversations.">
                   <Switch
                     checked={(editData.settings as Record<string, unknown> | undefined)?.show_test_in_inbox === true}
                     onCheckedChange={v => {
