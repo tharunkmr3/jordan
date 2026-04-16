@@ -22,6 +22,7 @@ export async function GET(
 
   const { slug } = await ctx.params
   const apiKey = process.env.COMPOSIO_API_KEY
+  console.log(`[integrations/tools] called with slug="${slug}", apiKey prefix=${apiKey?.slice(0, 6)}`)
   if (!apiKey) {
     return NextResponse.json({ error: 'COMPOSIO_API_KEY not set' }, { status: 500 })
   }
@@ -41,6 +42,7 @@ export async function GET(
 
   if (!res.ok) {
     const body = await res.text().catch(() => '')
+    console.error(`[integrations/tools] Composio HTTP ${res.status} for ${slug}:`, body.slice(0, 300))
     return NextResponse.json(
       { error: `Composio returned ${res.status}`, detail: body.slice(0, 500) },
       { status: 502 }
@@ -49,19 +51,49 @@ export async function GET(
 
   const payload = (await res.json()) as { items?: unknown[]; next_cursor?: string | null }
   const items = Array.isArray(payload.items) ? payload.items : []
+  console.log(`[integrations/tools] ${slug}: Composio returned ${items.length} raw items; upstream url:`, url.toString())
 
-  // Normalize minimal shape for the UI
-  type ToolRow = Record<string, unknown>
+  // Normalize minimal shape for the UI.
+  // Note on shape: Composio's /v3/tools response has `deprecated` as an
+  // OBJECT of version metadata (displayName, version, is_deprecated, …)
+  // — NOT a boolean. The actual deprecation flag lives at top-level
+  // `is_deprecated`. Treating `deprecated` as a boolean would filter
+  // out every tool.
+  type ToolRow = Record<string, unknown> & {
+    deprecated?: { displayName?: string; is_deprecated?: boolean } | null
+  }
   const tools = items.map((raw) => {
     const t = raw as ToolRow
+    const depMeta = (t.deprecated && typeof t.deprecated === 'object') ? t.deprecated : null
     return {
       slug: String(t.slug ?? t.name ?? ''),
-      name: String(t.displayName ?? t.display_name ?? t.name ?? t.slug ?? ''),
+      name: String(
+        depMeta?.displayName ??
+        t.displayName ??
+        t.display_name ??
+        t.name ??
+        t.slug ??
+        ''
+      ),
       description: typeof t.description === 'string' ? t.description : null,
-      deprecated: Boolean(t.deprecated ?? false),
+      deprecated: Boolean(
+        (typeof t.is_deprecated === 'boolean' ? t.is_deprecated : false) ||
+        depMeta?.is_deprecated === true
+      ),
       tags: Array.isArray(t.tags) ? (t.tags as unknown[]).map(String) : [],
     }
   }).filter((t) => t.slug && !t.deprecated)
+
+  if (process.env.NODE_ENV !== 'production' && tools.length === 0 && items.length === 0) {
+    return NextResponse.json({
+      items: [],
+      _debug: {
+        upstreamUrl: url.toString(),
+        upstreamStatus: res.status,
+        upstreamPayloadKeys: Object.keys(payload ?? {}),
+      },
+    })
+  }
 
   return NextResponse.json({ items: tools })
 }
