@@ -313,17 +313,74 @@ function InboxInner() {
 
   async function handleSendReply() {
     if (!replyText.trim() || !selectedId || sending) return
+    const content = replyText.trim()
+    const convId = selectedId
+    const tempId = `temp-${Date.now()}`
+    const nowIso = new Date().toISOString()
+
+    // Build optimistic message matching the Message shape. id is a temp
+    // placeholder; we'll swap for the server-authoritative row on success.
+    const optimistic: Message = {
+      id: tempId,
+      conversation_id: convId,
+      org_id: detail?.org_id ?? '',
+      role: 'human_agent' as MessageRole,
+      content,
+      channel: detail?.channel ?? null,
+      metadata: { optimistic: true, sent_by: userId ?? null },
+      created_at: nowIso,
+    } as Message
+
+    // 1) Append to the open conversation view so the bubble appears now.
+    setDetail(prev => prev && prev.id === convId
+      ? { ...prev, messages: [...prev.messages, optimistic] }
+      : prev)
+
+    // 2) Update the list: bump this conversation to the top with the
+    //    new last-message preview.
+    setConversations(prev => {
+      const idx = prev.findIndex(c => c.id === convId)
+      if (idx === -1) return prev
+      const updated = [...prev]
+      const conv = {
+        ...updated[idx],
+        last_message: { content, role: 'human_agent' as MessageRole, created_at: nowIso },
+        message_count: (updated[idx].message_count || 0) + 1,
+        updated_at: nowIso,
+      }
+      updated.splice(idx, 1)
+      return [conv, ...updated]
+    })
+
+    // 3) Clear input + snap scroll to the new bubble.
+    setReplyText('')
+    if (textareaRef.current) textareaRef.current.style.height = 'auto'
+    setTimeout(scrollToBottom, 50)
+
     setSending(true)
     try {
-      const res = await fetch(`/api/inbox/${selectedId}/reply`, {
+      const res = await fetch(`/api/inbox/${convId}/reply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: replyText.trim() }),
+        body: JSON.stringify({ content }),
       })
-      if (res.ok) {
-        setReplyText('')
-        if (textareaRef.current) textareaRef.current.style.height = 'auto'
-      }
+      if (!res.ok) throw new Error(await res.text().catch(() => 'Failed to send'))
+      const saved = (await res.json()) as Message
+
+      // Replace the optimistic row with the server-authoritative one so
+      // the realtime event (when it arrives) dedupes by real id and is
+      // a no-op.
+      setDetail(prev => prev && prev.id === convId
+        ? { ...prev, messages: prev.messages.map(m => m.id === tempId ? saved : m) }
+        : prev)
+    } catch (err) {
+      // Roll back the optimistic additions.
+      setDetail(prev => prev && prev.id === convId
+        ? { ...prev, messages: prev.messages.filter(m => m.id !== tempId) }
+        : prev)
+      // Put the draft back so the user can retry.
+      setReplyText(content)
+      console.error('Failed to send reply:', err)
     } finally {
       setSending(false)
     }
