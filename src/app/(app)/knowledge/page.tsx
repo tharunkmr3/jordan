@@ -323,7 +323,7 @@ export default function KnowledgePage() {
       )}
 
       {loading && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+        <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
           {[1, 2, 3, 4].map(i => (
             <div key={i}>
               <Skeleton className="rounded-2xl" style={{ aspectRatio: "4/3" }} />
@@ -349,15 +349,14 @@ export default function KnowledgePage() {
       )}
 
       {!loading && kbs.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+        <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
           {kbs.map(kb => (
             <FolderCard
               key={kb.id}
               id={kb.id}
               name={kb.name}
               docCount={kb.kb_documents?.length || 0}
-              description={kb.description}
-              agentName={agents.find(a => a.id === kb.agent_id)?.name}
+              lastUpdated={kb.updated_at}
               onClick={() => setSelectedKb(kb.id)}
             />
           ))}

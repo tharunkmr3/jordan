@@ -8,21 +8,26 @@ interface FolderCardProps {
   docCount: number
   description?: string | null
   agentName?: string
+  lastUpdated?: string
   onClick?: () => void
   className?: string
 }
 
-export function FolderCard({ name, docCount, description, agentName, onClick, className }: FolderCardProps) {
+export function FolderCard({ name, docCount, lastUpdated, onClick, className }: FolderCardProps) {
+  const dateStr = lastUpdated
+    ? new Date(lastUpdated).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : null
+
   return (
     <button
       onClick={onClick}
       className={cn(
-        "group relative w-full text-left rounded-2xl transition-all duration-300 hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "group relative w-full text-left rounded-2xl p-3 transition-all duration-200 hover:bg-[#f5f5f5] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         className
       )}
     >
       {/* Inline SVG with animated layers */}
-      <svg viewBox="0 0 307 321" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-auto">
+      <svg viewBox="0 0 307 321" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full max-w-[160px] mx-auto h-auto">
         {/* Folder back */}
         <path
           d="M30 1H87.4727C97.1539 1.00012 106.196 5.83144 111.578 13.8789L117.539 22.792C125.148 34.1696 137.933 40.9999 151.62 41H277C293.016 41 306 53.9837 306 70V257C306 273.016 293.016 286 277 286H30C13.9837 286 1 273.016 1 257V30C1 13.9837 13.9837 1 30 1Z"
@@ -31,7 +36,7 @@ export function FolderCard({ name, docCount, description, agentName, onClick, cl
           strokeWidth="2"
         />
 
-        {/* Orange file — animates on hover with delay */}
+        {/* Orange file */}
         <rect
           x="37" y="63" width="241" height="210" rx="12"
           fill="#FEBC59"
@@ -39,7 +44,7 @@ export function FolderCard({ name, docCount, description, agentName, onClick, cl
           style={{ filter: "drop-shadow(0 12px 12px rgba(0,0,0,0.15))" }}
         />
 
-        {/* White file — animates on hover with slight delay */}
+        {/* White file */}
         <rect
           x="37" y="83" width="241" height="190" rx="12"
           fill="white"
@@ -47,7 +52,7 @@ export function FolderCard({ name, docCount, description, agentName, onClick, cl
           style={{ filter: "drop-shadow(0 12px 12px rgba(0,0,0,0.12))" }}
         />
 
-        {/* Folder front (glass overlay) */}
+        {/* Folder front */}
         <rect
           x="1" y="103" width="305" height="183" rx="29"
           fill="url(#paint1_linear_folder)"
@@ -72,23 +77,15 @@ export function FolderCard({ name, docCount, description, agentName, onClick, cl
         </defs>
       </svg>
 
-      {/* Name + count overlaid on folder front */}
-      <div className="absolute bottom-[32%] left-0 right-0 px-5 pointer-events-none">
-        <h3 className="text-sm font-semibold text-white truncate drop-shadow-sm">{name}</h3>
-        <p className="text-xs text-white/70 mt-0.5 drop-shadow-sm">
-          {docCount} {docCount === 1 ? "document" : "documents"}
+      {/* Text below folder */}
+      <div className="text-center mt-2">
+        <h3 className="text-sm font-semibold text-[#0a0a0a] truncate">{name}</h3>
+        <p className="text-xs text-[#737373] mt-0.5">
+          {docCount} {docCount === 1 ? "Document" : "Documents"}
         </p>
-      </div>
-
-      {/* Info below */}
-      <div className="px-1 pt-2 pb-1">
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-[#0a0a0a] truncate flex-1">{name}</h3>
-          {agentName && (
-            <span className="text-[11px] text-[#a3a3a3] shrink-0">{agentName}</span>
-          )}
-        </div>
-        {description && <p className="text-xs text-[#737373] mt-0.5 truncate">{description}</p>}
+        {dateStr && (
+          <p className="text-[11px] text-[#a3a3a3] mt-1">Last added {dateStr}</p>
+        )}
       </div>
     </button>
   )
