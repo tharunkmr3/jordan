@@ -198,6 +198,7 @@ function InboxInner() {
 
   // State
   const [orgId, setOrgId] = useState<string | null>(null)
+  const [filteredAgent, setFilteredAgent] = useState<{ id: string; name: string; avatar_url: string | null } | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
   const [userName, setUserName] = useState<string>('')
   const [conversations, setConversations] = useState<ConversationItem[]>([])
@@ -238,6 +239,15 @@ function InboxInner() {
     }
     init()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load filtered agent details for header
+  useEffect(() => {
+    if (!agentFilter) { setFilteredAgent(null); return }
+    fetch(`/api/agents/${agentFilter}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.id) setFilteredAgent({ id: data.id, name: data.name, avatar_url: data.avatar_url }) })
+      .catch(() => {})
+  }, [agentFilter])
 
   const fetchConversations = useCallback(async () => {
     if (!orgId) return
@@ -396,8 +406,21 @@ function InboxInner() {
       {/* ============================================================= */}
       <div className="flex w-[320px] flex-shrink-0 flex-col bg-white rounded-xl ring-1 ring-[#ebebeb] overflow-hidden">
         {/* Header */}
-        <div className="flex h-12 items-center gap-3 px-4 border-b border-[#ebebeb] flex-shrink-0">
-          <span className="text-[15px] font-semibold text-[#0a0a0a]">Conversations</span>
+        <div className="flex h-12 items-center gap-2.5 px-4 border-b border-[#ebebeb] flex-shrink-0">
+          {filteredAgent ? (
+            <>
+              {filteredAgent.avatar_url ? (
+                <img src={filteredAgent.avatar_url} alt={filteredAgent.name} className="h-7 w-7 rounded-full object-cover" />
+              ) : (
+                <div className="h-7 w-7 rounded-full bg-[#0a0a0a] text-white text-[11px] font-semibold flex items-center justify-center">
+                  {filteredAgent.name[0]?.toUpperCase() || 'A'}
+                </div>
+              )}
+              <span className="text-[15px] font-semibold text-[#0a0a0a] truncate">{filteredAgent.name}</span>
+            </>
+          ) : (
+            <span className="text-[15px] font-semibold text-[#0a0a0a]">All conversations</span>
+          )}
         </div>
 
         {/* Filter tabs */}

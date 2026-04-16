@@ -26,7 +26,7 @@ import { createBrowserClient } from "@supabase/ssr"
 
 const nav = [
   { label: "Home", href: "/dashboard", icon: House },
-  { label: "Conversations", href: "/inbox", icon: ChatCircleDots },
+  { label: "All conversations", href: "/inbox", icon: ChatCircleDots },
   { label: "Contacts", href: "/contacts", icon: UsersThree },
   { label: "Knowledge", href: "/knowledge", icon: BookOpenText },
   { label: "Analytics", href: "/analytics", icon: ChartBar },
