@@ -127,10 +127,10 @@ export default function DashboardPage() {
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4">
         {stats.map((stat) => (
-          <Card key={stat.label}>
-            <CardContent className="p-5">
+          <Card key={stat.label} size="sm">
+            <CardContent>
               <p className="text-xs font-medium text-muted-foreground">{stat.label}</p>
-              <div className="mt-2 flex items-baseline gap-2">
+              <div className="mt-1.5 flex items-baseline gap-2">
                 <span className="text-2xl font-semibold tracking-tight">{stat.value}</span>
                 {stat.change && (
                   <Badge variant="secondary" className="text-green-600 bg-green-50 text-[11px] font-medium px-1.5 py-0">
