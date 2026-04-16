@@ -328,7 +328,7 @@ export default function KnowledgePage() {
     <div className="p-6">
       <HeaderActions>
         <Button size="sm" className="rounded-full" onClick={() => setCreateOpen(true)}>
-          <Plus size={14} weight="regular" />
+          <Plus size={14} />
           New Knowledge Base
         </Button>
       </HeaderActions>

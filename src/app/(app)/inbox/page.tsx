@@ -422,7 +422,7 @@ function InboxInner() {
               ) })()}
               <span className="text-base font-semibold text-[#2e2e2e] truncate flex-1">{filteredAgent.name}</span>
               <Link href={`/agents/${filteredAgent.id}`} className="rounded-md p-1 text-[#737373] hover:bg-[#f5f5f5] hover:text-[#2e2e2e]" title="Agent settings">
-                <GearSix size={16} weight="regular" />
+                <GearSix size={16} />
               </Link>
             </>
           ) : (
@@ -576,7 +576,7 @@ function InboxInner() {
               </div>
               <div className="flex items-center gap-1">
                 <button onClick={() => toggleStar(detail.id)} className="p-1.5 rounded hover:bg-[#f5f5f5]">
-                  <Star size={16} weight={starred.has(detail.id) ? 'fill' : 'regular'} className={starred.has(detail.id) ? 'text-yellow-500' : 'text-[#737373]'} />
+                  <Star size={16} weight={starred.has(detail.id) ? 'fill' : 'bold'} className={starred.has(detail.id) ? 'text-yellow-500' : 'text-[#737373]'} />
                 </button>
                 <Select value={detail.status} onValueChange={(v) => v && handleStatusChange(v as ConversationStatus)}>
                   <SelectTrigger className="h-8 w-[110px] text-[13px]"><SelectValue /></SelectTrigger>

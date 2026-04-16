@@ -20,6 +20,7 @@ import {
   SignOut,
   PlusCircle,
   DotsThreeVertical,
+  IconContext,
 } from "@phosphor-icons/react"
 import { cn, avatarColor } from "@/lib/utils"
 import { createBrowserClient } from "@supabase/ssr"
@@ -170,6 +171,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     || "Dashboard"
 
   return (
+    <IconContext.Provider value={{ weight: "bold" }}>
     <div className="flex h-screen bg-[#f5f5f5]">
       {/* Sidebar */}
       <aside className={cn(
@@ -412,5 +414,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       )}
     </div>
+    </IconContext.Provider>
   )
 }
