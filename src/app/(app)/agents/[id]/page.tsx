@@ -18,7 +18,7 @@ import { Message, MessageAvatar, MessageContent } from "@/components/ui/message"
 import { Markdown } from "@/components/ui/markdown"
 import { ChainOfThought, ChainOfThoughtStep, ChainOfThoughtTrigger, ChainOfThoughtContent, ChainOfThoughtItem } from "@/components/ui/chain-of-thought"
 import { AiWidgetProvider } from "@/components/ui/ai-widget"
-import { PromptInput, PromptInputTextarea, PromptInputActions, PromptInputAction } from "@/components/ui/prompt-input"
+import { AiComposer } from "@/components/ui/ai-composer"
 import { Loader } from "@/components/ui/loader"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
@@ -1260,22 +1260,14 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
           </div>
         </ScrollArea>
         <div className="p-3 border-t border-black/[0.04]">
-          <PromptInput>
-            <PromptInputTextarea
-              placeholder="Type a message..."
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat() } }}
-            />
-            <PromptInputActions>
-              <div />
-              <PromptInputAction tooltip="Send">
-                <Button size="icon" className="rounded-full" onClick={() => sendChat()} disabled={chatLoading || !chatInput.trim()}>
-                  <ArrowUp size={16} />
-                </Button>
-              </PromptInputAction>
-            </PromptInputActions>
-          </PromptInput>
+          <AiComposer
+            value={chatInput}
+            onChange={setChatInput}
+            onSubmit={() => sendChat()}
+            sending={chatLoading}
+            variant="inline"
+            placeholder="Ask anything"
+          />
         </div>
       </Panel>
       )}

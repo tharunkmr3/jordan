@@ -8,22 +8,15 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Panel } from '@/components/ui/panel'
 import { Markdown } from '@/components/ui/markdown'
 import { AiWidgetProvider } from '@/components/ui/ai-widget'
+import { AiComposer } from '@/components/ui/ai-composer'
 import { Loader } from '@/components/ui/loader'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { ContactAvatar } from '@/components/ui/contact-avatar'
+import { ChannelIcon } from '@/components/ui/channel-icon'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import {
   MagnifyingGlass,
   PaperPlaneTilt,
@@ -35,13 +28,8 @@ import {
   CircleDashed,
   CaretDown,
   CaretUp,
-  Lightning,
-  Paperclip,
-  Smiley,
-  At,
   Check,
 } from '@phosphor-icons/react'
-import { ChannelIcon } from '@/components/ui/channel-icon'
 import type {
   ConversationStatus,
   ChannelType,
@@ -159,24 +147,22 @@ function truncate(str: string | undefined | null, len: number): string {
  * shown when the user clicks "+ New chat" in the sidebar, or when
  * they first open an internal agent they've never spoken to.
  *
- * Centered hero prompt + a single composer on a pale background,
- * ChatGPT-landing-style. Once the first message is sent the normal
- * message-list layout takes over.
+ * Centered hero prompt + the shared <AiComposer> in hero variant.
+ * Once the first message is sent the normal message-list layout
+ * takes over.
  */
 function InternalNewChatHero({
   agentName,
   replyText,
-  onChange,
+  onChangeValue,
   onSend,
   sending,
-  textareaRef,
 }: {
   agentName: string
   replyText: string
-  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
+  onChangeValue: (next: string) => void
   onSend: () => void
   sending: boolean
-  textareaRef: React.RefObject<HTMLTextAreaElement | null>
 }) {
   return (
     <div className="flex flex-1 flex-col bg-[#fafafa]">
@@ -189,41 +175,14 @@ function InternalNewChatHero({
         </p>
 
         <div className="mt-8 w-full max-w-2xl">
-          <div className="rounded-2xl border border-black/[0.06] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04),0_2px_8px_-2px_rgba(0,0,0,0.04)] focus-within:border-black/[0.12] transition-colors">
-            <Textarea
-              ref={textareaRef}
-              placeholder="Ask anything"
-              value={replyText}
-              onChange={onChange}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault()
-                  if (replyText.trim() && !sending) onSend()
-                }
-              }}
-              rows={3}
-              className="min-h-[88px] resize-none border-0 bg-transparent px-4 pt-3.5 pb-2 text-[14px] leading-relaxed focus-visible:ring-0 focus-visible:border-0 shadow-none"
-            />
-            <div className="flex items-center justify-between px-3 pb-3 pt-1">
-              <button
-                type="button"
-                className="flex h-7 w-7 items-center justify-center rounded-full text-[#737373] hover:bg-[#f5f5f5]"
-                title="Attach"
-              >
-                <Plus size={14} weight="bold" />
-              </button>
-              <button
-                type="button"
-                onClick={onSend}
-                disabled={!replyText.trim() || sending}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-[#2e2e2e] text-white disabled:bg-[#ebebeb] disabled:text-[#a3a3a3] transition-colors"
-                title="Send"
-                aria-label="Send message"
-              >
-                <PaperPlaneTilt size={13} weight="fill" />
-              </button>
-            </div>
-          </div>
+          <AiComposer
+            value={replyText}
+            onChange={onChangeValue}
+            onSubmit={onSend}
+            sending={sending}
+            variant="hero"
+            placeholder="Ask anything"
+          />
         </div>
       </div>
     </div>
@@ -281,14 +240,12 @@ function InboxInner() {
   const [search, setSearch] = useState('')
   const [replyText, setReplyText] = useState('')
   const [sending, setSending] = useState(false)
-  const [aiAutoReply, setAiAutoReply] = useState(true)
   const [contactNotes, setContactNotes] = useState('')
   const [savingNotes, setSavingNotes] = useState(false)
   const [rightTab, setRightTab] = useState<'details' | 'copilot'>('details')
   const [starred, setStarred] = useState<Set<string>>(new Set())
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -350,7 +307,6 @@ function InboxInner() {
       if (res.ok) {
         const data: ConversationDetail = await res.json()
         setDetail(data)
-        setAiAutoReply(!data.assigned_to)
         setContactNotes((data.contact?.metadata as Record<string, unknown>)?.notes as string || '')
       }
       setDetailLoading(false)
@@ -438,7 +394,6 @@ function InboxInner() {
 
     // 3) Clear input + snap scroll to the new bubble.
     setReplyText('')
-    if (textareaRef.current) textareaRef.current.style.height = 'auto'
     setTimeout(scrollToBottom, 50)
 
     setSending(true)
@@ -522,7 +477,6 @@ function InboxInner() {
 
     if (!override) {
       setReplyText('')
-      if (textareaRef.current) textareaRef.current.style.height = 'auto'
     }
     setTimeout(scrollToBottom, 50)
 
@@ -609,19 +563,6 @@ function InboxInner() {
     }
   }
 
-  async function handleTakeOver() {
-    if (!selectedId || !userId) return
-    const res = await fetch(`/api/inbox/${selectedId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ assigned_to: userId }),
-    })
-    if (res.ok) {
-      setAiAutoReply(false)
-      setDetail((prev) => (prev ? { ...prev, assigned_to: userId } : prev))
-    }
-  }
-
   async function handleSaveNotes() {
     if (!detail?.contact) return
     setSavingNotes(true)
@@ -644,21 +585,6 @@ function InboxInner() {
       return next
     })
   }
-
-  function handleTextareaInput(e: React.ChangeEvent<HTMLTextAreaElement>) {
-    setReplyText(e.target.value)
-    const el = e.target
-    el.style.height = 'auto'
-    el.style.height = Math.min(el.scrollHeight, 160) + 'px'
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSendReply()
-    }
-  }
-
 
   const isInternalAgent = filteredAgent?.settings
     ? (filteredAgent.settings as { is_customer_facing?: boolean }).is_customer_facing === false
@@ -883,10 +809,9 @@ function InboxInner() {
           <InternalNewChatHero
             agentName={filteredAgent?.name ?? 'agent'}
             replyText={replyText}
-            onChange={handleTextareaInput}
+            onChangeValue={setReplyText}
             onSend={() => { void handleInternalChatSend() }}
             sending={sending}
-            textareaRef={textareaRef}
           />
         ) : detail ? (
           <>
@@ -1029,50 +954,19 @@ function InboxInner() {
               </div>
             </ScrollArea>
 
-            {/* Input — single bordered box with no top divider */}
+            {/* Composer — shared <AiComposer> used by every chat
+                surface. Internal chats get a model picker; customer
+                chats don't (operators shouldn't swap the customer's
+                agent mid-reply). */}
             <div className="bg-white px-4 pb-4 pt-2 flex-shrink-0">
-              <div className="rounded-xl border border-black/[0.08] bg-white overflow-hidden focus-within:ring-1 focus-within:ring-[#2e2e2e]/10">
-                {/* Channel selector */}
-                <div className="flex items-center gap-2 px-3 pt-2">
-                  <button className="flex items-center gap-1.5 px-1.5 py-1 rounded-md hover:bg-[#f5f5f5] text-sm text-[#2e2e2e]">
-                    {channelIcon(detail.channel, 14)}
-                    <span className="font-semibold">{channelLabel(detail.channel)}</span>
-                    <CaretDown size={10} />
-                  </button>
-                </div>
-                {/* Textarea */}
-                <Textarea
-                  ref={textareaRef}
-                  placeholder="Use ⌘K for shortcuts"
-                  value={replyText}
-                  onChange={handleTextareaInput}
-                  onKeyDown={handleKeyDown}
-                  rows={1}
-                  className="min-h-[52px] max-h-[160px] resize-none text-sm border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-4 py-2"
-                />
-                {/* Bottom toolbar */}
-                <div className="flex items-center justify-between px-3 pb-2">
-                  <div className="flex items-center gap-0.5">
-                    <button className="p-1.5 rounded hover:bg-[#f5f5f5] text-[#2e2e2e]" title="Shortcuts"><Lightning size={16} weight="fill" /></button>
-                    <button className="p-1.5 rounded hover:bg-[#f5f5f5] text-[#737373]" title="Attach"><Paperclip size={15} /></button>
-                    <button className="p-1.5 rounded hover:bg-[#f5f5f5] text-[#737373]" title="Emoji"><Smiley size={15} /></button>
-                    <button className="p-1.5 rounded hover:bg-[#f5f5f5] text-[#737373]" title="Mention"><At size={15} /></button>
-                    <div className="h-4 w-px bg-[#ebebeb] mx-1" />
-                    <div className="flex items-center gap-1.5 ml-1">
-                      <Switch checked={aiAutoReply} onCheckedChange={(v) => { setAiAutoReply(v); if (!v) handleTakeOver() }} />
-                      <span className="text-xs text-[#737373]">AI {aiAutoReply ? 'on' : 'off'}</span>
-                    </div>
-                  </div>
-                  <button
-                    onClick={handleSendReply}
-                    disabled={!replyText.trim() || sending}
-                    className="flex items-center gap-1 text-[13px] text-[#737373] hover:text-[#2e2e2e] disabled:opacity-40 disabled:cursor-not-allowed px-2 py-1"
-                  >
-                    {sending ? 'Sending...' : 'Send'}
-                    <CaretDown size={10} />
-                  </button>
-                </div>
-              </div>
+              <AiComposer
+                value={replyText}
+                onChange={setReplyText}
+                onSubmit={() => { void (isInternalAgent ? handleInternalChatSend() : handleSendReply()) }}
+                sending={sending}
+                variant="inline"
+                placeholder={isInternalAgent ? 'Ask anything' : `Reply on ${channelLabel(detail.channel)}`}
+              />
             </div>
           </>
         ) : null}
