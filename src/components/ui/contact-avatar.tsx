@@ -61,9 +61,9 @@ export function ContactAvatar({
       {src && <AvatarImage src={src} alt={name || ""} />}
       <AvatarFallback className={cn("font-semibold", c.bg, c.text)}>
         {usePhoneIcon ? (
-          // Outline + softened opacity so the phone reads as a quiet
-          // hint, not a primary focal element.
-          <Phone size={iconSize} weight="regular" className="opacity-70" />
+          // Filled glyph softened with opacity so the phone reads as a
+          // quiet hint, not a primary focal element.
+          <Phone size={iconSize} weight="fill" className="opacity-60" />
         ) : (
           <span style={{ fontSize: letterFontSize, lineHeight: 1 }}>{initial}</span>
         )}
