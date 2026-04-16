@@ -22,9 +22,10 @@ import {
   DotsThreeVertical,
   IconContext,
 } from "@phosphor-icons/react"
-import { cn, avatarColor } from "@/lib/utils"
+import { cn } from "@/lib/utils"
 import { createBrowserClient } from "@supabase/ssr"
 import { PageHeaderTitleProvider, usePageHeaderTitle } from "@/components/ui/header-actions"
+import { ContactAvatar } from "@/components/ui/contact-avatar"
 
 const navGroup1 = [
   { label: "Home", href: "/dashboard", icon: House },
@@ -285,13 +286,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                           isActive ? "bg-white text-[#2e2e2e] shadow-[0_2px_4px_-1px_rgba(0,0,0,0.08),0_1px_2px_-1px_rgba(0,0,0,0.04)]" : "text-[#525252] hover:bg-[#ebebeb] hover:text-[#2e2e2e]"
                         )}
                       >
-                        {a.avatar_url ? (
-                          <img src={a.avatar_url} alt={a.name} className="h-4 w-4 rounded-full object-cover flex-shrink-0" />
-                        ) : (() => { const c = avatarColor(a.id); return (
-                          <div className={cn("h-4 w-4 rounded-full text-[9px] font-semibold flex items-center justify-center flex-shrink-0", c.bg, c.text)}>
-                            {a.name[0]?.toUpperCase() || 'A'}
-                          </div>
-                        ) })()}
+                        <ContactAvatar
+                          src={a.avatar_url}
+                          name={a.name}
+                          seed={a.id}
+                          size={16}
+                          className="flex-shrink-0"
+                        />
                         <span className="truncate flex-1">{a.name}</span>
                         {a.status === "active" && !menuOpen && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 flex-shrink-0 group-hover/agent:hidden" />}
                       </Link>
@@ -358,11 +359,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 collapsed && "justify-center px-0 flex-none"
               )}
             >
-              {(() => { const c = avatarColor(userName || userEmail); return (
-                <div className={cn("flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-xs font-semibold", c.bg, c.text)}>
-                  {userName ? userName.charAt(0).toUpperCase() : "U"}
-                </div>
-              ) })()}
+              <ContactAvatar
+                name={userName || userEmail}
+                seed={userEmail || userName}
+                size={28}
+                className="flex-shrink-0"
+              />
               {!collapsed && (
                 <>
                   <div className="flex-1 min-w-0">

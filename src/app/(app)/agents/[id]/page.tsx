@@ -19,7 +19,7 @@ import { PromptInput, PromptInputTextarea, PromptInputActions, PromptInputAction
 import { Loader } from "@/components/ui/loader"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
-import { avatarColor } from "@/lib/utils"
+import { avatarColor, avatarInitial } from "@/lib/utils"
 import { Slider } from "@/components/ui/slider"
 import { useSliderWithInput } from "@/hooks/use-slider-with-input"
 import { ArrowUp, ArrowLeft, Copy, Check, Trash2, Pencil, Phone, Mail, Globe, Upload, FileText, X, Plus, Camera } from "lucide-react"
@@ -499,8 +499,8 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
             <Avatar className="h-9 w-9">
               {agent.avatar_url && <AvatarImage src={agent.avatar_url} alt={agent.name} />}
               {(() => { const c = avatarColor(agent.id); return (
-                <AvatarFallback className={`text-xs font-semibold ${c.bg} ${c.text}`}>
-                  {agent.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                <AvatarFallback className={`text-sm font-semibold ${c.bg} ${c.text}`}>
+                  {avatarInitial(agent.name) || 'A'}
                 </AvatarFallback>
               ) })()}
             </Avatar>

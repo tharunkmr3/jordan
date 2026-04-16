@@ -4,10 +4,10 @@ import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { avatarColor } from '@/lib/utils'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Panel } from '@/components/ui/panel'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { ContactAvatar } from '@/components/ui/contact-avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -100,16 +100,6 @@ function formatTimestamp(dateStr: string): string {
     hour: '2-digit',
     minute: '2-digit',
   })
-}
-
-function getInitials(name: string | null | undefined): string {
-  if (!name) return '?'
-  return name
-    .split(' ')
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2)
 }
 
 function channelIcon(channel: ChannelType, size = 14) {
@@ -413,13 +403,12 @@ function InboxInner() {
         <div className="flex h-12 items-center gap-2.5 px-4 border-b border-black/[0.04] flex-shrink-0">
           {filteredAgent ? (
             <>
-              {filteredAgent.avatar_url ? (
-                <img src={filteredAgent.avatar_url} alt={filteredAgent.name} className="h-7 w-7 rounded-full object-cover" />
-              ) : (() => { const c = avatarColor(filteredAgent.id); return (
-                <div className={`h-7 w-7 rounded-full text-xs font-semibold flex items-center justify-center ${c.bg} ${c.text}`}>
-                  {filteredAgent.name[0]?.toUpperCase() || 'A'}
-                </div>
-              ) })()}
+              <ContactAvatar
+                src={filteredAgent.avatar_url}
+                name={filteredAgent.name}
+                seed={filteredAgent.id}
+                size={28}
+              />
               <span className="text-base font-semibold text-[#2e2e2e] truncate flex-1">{filteredAgent.name}</span>
               <Link href={`/agents/${filteredAgent.id}`} className="rounded-md p-1 text-[#737373] hover:bg-[#f5f5f5] hover:text-[#2e2e2e]" title="Agent settings">
                 <GearSix size={16} />
@@ -500,10 +489,13 @@ function InboxInner() {
                         : 'hover:bg-white/70'
                     }`}
                   >
-                    {/* Channel icon avatar */}
-                    <div className={`flex-shrink-0 flex items-center justify-center h-9 w-9 rounded-full ${channelBg(conv.channel)}`}>
-                      {channelIcon(conv.channel, 18)}
-                    </div>
+                    {/* Contact avatar */}
+                    <ContactAvatar
+                      name={contactName}
+                      seed={conv.contact?.id || conv.id}
+                      size={36}
+                      className="flex-shrink-0"
+                    />
                     {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
@@ -566,12 +558,13 @@ function InboxInner() {
             <div className="flex h-12 items-center justify-between border-b border-black/[0.04] px-5 flex-shrink-0">
               <div className="flex items-center gap-3">
                 {(() => {
-                  const seed = detail.contact?.id || detail.contact?.name || ''
-                  const c = avatarColor(seed)
+                  const name = detail.contact?.name || detail.contact?.phone || detail.contact?.email || ''
                   return (
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback className={`text-[11px] font-semibold ${c.bg} ${c.text}`}>{getInitials(detail.contact?.name)}</AvatarFallback>
-                    </Avatar>
+                    <ContactAvatar
+                      name={name}
+                      seed={detail.contact?.id || name}
+                      size={32}
+                    />
                   )
                 })()}
                 <span className="text-[15px] font-semibold text-[#2e2e2e]">{detail.contact?.name || detail.contact?.phone || detail.contact?.email || 'Unknown'}</span>
@@ -626,16 +619,14 @@ function InboxInner() {
 
                     return (
                       <div key={msg.id} className={`flex items-end gap-2 ${isOutgoing ? 'justify-end' : 'justify-start'}`}>
-                        {!isOutgoing && (() => {
-                          const c = avatarColor(detail.contact?.id || detail.contact?.name || '')
-                          return (
-                            <Avatar className={`h-6 w-6 flex-shrink-0 ${showAvatar ? '' : 'invisible'}`}>
-                              <AvatarFallback className={`text-[8px] font-semibold ${c.bg} ${c.text}`}>
-                                {getInitials(detail.contact?.name)}
-                              </AvatarFallback>
-                            </Avatar>
-                          )
-                        })()}
+                        {!isOutgoing && (
+                          <ContactAvatar
+                            name={detail.contact?.name || detail.contact?.phone || detail.contact?.email || ''}
+                            seed={detail.contact?.id || detail.contact?.name || ''}
+                            size={24}
+                            className={`flex-shrink-0 ${showAvatar ? '' : 'invisible'}`}
+                          />
+                        )}
                         <div className={`max-w-[75%] flex flex-col ${isOutgoing ? 'items-end' : 'items-start'}`}>
                           <div
                             className={`rounded-3xl px-4 py-2 text-sm leading-relaxed ${
@@ -733,9 +724,7 @@ function InboxInner() {
               <div className="divide-y divide-[#f0f0f0]">
                   <DetailSection title="Assignee">
                     <div className="flex items-center gap-2 py-1">
-                      {(() => { const c = avatarColor(userName); return (
-                      <Avatar className="h-6 w-6"><AvatarFallback className={`text-[9px] font-semibold ${c.bg} ${c.text}`}>{getInitials(userName)}</AvatarFallback></Avatar>
-                      ) })()}
+                      <ContactAvatar name={userName} size={24} />
                       <span className="text-[13px] text-[#2e2e2e]">{userName}</span>
                     </div>
                     <button className="flex items-center gap-2 mt-2 text-xs text-[#737373] hover:text-[#2e2e2e]">
