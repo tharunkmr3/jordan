@@ -120,6 +120,29 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    scrollbar-width: none;
+  }
+  *:hover {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0,0,0,0.12) transparent;
+  }
+  /* Webkit (Chrome, Safari, Edge) */
+  *::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 999px;
+  }
+  *:hover::-webkit-scrollbar-thumb {
+    background: rgba(0,0,0,0.12);
+  }
+  *:hover::-webkit-scrollbar-thumb:hover {
+    background: rgba(0,0,0,0.2);
   }
   body {
     @apply bg-background text-foreground;

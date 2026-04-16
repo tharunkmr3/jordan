@@ -22,3 +22,12 @@ Any user action that mutates data (create / update / delete / upload) MUST updat
 - `toggle-sidebar` — no payload — collapses/expands sidebar from anywhere
 
 When you add a new mutation, check every other screen that displays the same entity and make sure it updates. No user should ever need to refresh the page or navigate away and back to see their own action reflected.
+
+### Scrollbars: hover-only, subtle
+
+Scrollbars are globally styled in `globals.css`:
+- **Hidden by default** (`scrollbar-width: none`)
+- **Visible on hover** — thin (5px), barely-there (`rgba(0,0,0,0.12)`), fully rounded
+- Both Firefox (`scrollbar-width`/`scrollbar-color`) and Webkit (`::-webkit-scrollbar`) are handled
+
+Never add custom scrollbar overrides per component. If a section scrolls, it gets the hover-reveal behavior automatically. Do not use `overflow: overlay` (deprecated).
