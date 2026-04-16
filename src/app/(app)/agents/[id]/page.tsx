@@ -81,7 +81,7 @@ function Field({ label, description, children }: { label: string; description?: 
 const NEW_AGENT_DEFAULTS: Partial<Agent> = {
   name: "",
   description: "",
-  status: "draft",
+  status: "active",
   system_prompt: "",
   model_provider: "sarvam",
   model_name: "sarvam-m",
@@ -704,11 +704,32 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                   <div className="text-sm font-semibold text-[#2e2e2e]">Models</div>
                 </div>
                 <Field label="AI model" description="The model that powers this agent's responses.">
-                  <Select value={editData.model_provider} onValueChange={v => {
-                    if (!v) return
-                    const defaults: Record<string, string> = { openai: "gpt-4o-mini", anthropic: "claude-sonnet-4-20250514", sarvam: "sarvam-m", gemini: "gemini-pro" }
-                    setEditData({...editData, model_provider: v, model_name: defaults[v] || editData.model_name})
-                  }}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="sarvam">Sarvam 30B (Free)</SelectItem><SelectItem value="openai">OpenAI GPT-4o mini</SelectItem><SelectItem value="anthropic">Claude Sonnet 4</SelectItem><SelectItem value="gemini">Gemini Pro</SelectItem></SelectContent></Select>
+                  {/* Select value is the model_name so we can offer multiple
+                      models per provider (Sonnet vs Opus) under one dropdown.
+                      onValueChange derives the provider. */}
+                  <Select
+                    value={editData.model_name || 'sarvam-m'}
+                    onValueChange={v => {
+                      if (!v) return
+                      const providerFor: Record<string, string> = {
+                        'sarvam-m': 'sarvam',
+                        'gpt-5.4': 'openai',
+                        'claude-sonnet-4-6': 'anthropic',
+                        'claude-opus-4-7': 'anthropic',
+                        'gemini-pro': 'gemini',
+                      }
+                      setEditData({ ...editData, model_name: v, model_provider: providerFor[v] || editData.model_provider })
+                    }}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sarvam-m">Sarvam 30B (Free)</SelectItem>
+                      <SelectItem value="gpt-5.4">OpenAI GPT-5.4</SelectItem>
+                      <SelectItem value="claude-sonnet-4-6">Claude Sonnet 4.6</SelectItem>
+                      <SelectItem value="claude-opus-4-7">Claude Opus 4.7</SelectItem>
+                      <SelectItem value="gemini-pro">Gemini Pro</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </Field>
                 <Field label="Voice provider" description="How the agent speaks on phone calls.">
                   <Select value={editData.voice_provider || "none"} onValueChange={v => v && setEditData({...editData, voice_provider: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Twilio Polly (Default)</SelectItem><SelectItem value="elevenlabs">ElevenLabs</SelectItem></SelectContent></Select>
@@ -1173,12 +1194,12 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
           </>
         }
       >
-        <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+        <ScrollArea className="flex-1 min-h-0 p-4" ref={scrollRef}>
           <div className="space-y-4">
             {messages.map((msg, i) => (
               <Message key={i} className={msg.role === "user" ? "flex-row-reverse" : ""}>
                 <MessageAvatar src={msg.role === "assistant" ? (agent?.avatar_url || "") : ""} alt={msg.role === "assistant" ? (agent?.name || "Assistant") : "You"} fallback={msg.role === "assistant" ? (agent?.name?.[0]?.toUpperCase() || "J") : "Y"} className={msg.role === "assistant" ? "bg-[#2e2e2e] text-white" : "bg-[#ebebeb]"} />
-                <MessageContent className={msg.role === "user" ? "bg-[#f7f7f7] text-[#2e2e2e] rounded-3xl px-3.5 py-2 text-[13px] leading-relaxed" : "bg-white text-[#2e2e2e] rounded-3xl px-3.5 py-2 text-[13px] leading-relaxed ring-1 ring-black/[0.04]"}>{msg.content}</MessageContent>
+                <MessageContent className={msg.role === "user" ? "bg-[#f7f7f7] text-[#2e2e2e] rounded-3xl px-3.5 py-2 text-sm leading-relaxed" : "bg-white text-[#2e2e2e] rounded-3xl px-3.5 py-2 text-sm leading-relaxed ring-1 ring-black/[0.04]"}>{msg.content}</MessageContent>
               </Message>
             ))}
             {chatLoading && (

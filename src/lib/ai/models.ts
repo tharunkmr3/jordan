@@ -131,7 +131,7 @@ async function callOpenAI(
   config: ModelConfig
 ): Promise<string> {
   const response = await getOpenAI().chat.completions.create({
-    model: config.model || 'gpt-4o-mini',
+    model: config.model || 'gpt-5.4',
     messages: messages.map(toOpenAiMessage),
     temperature: config.temperature ?? 0.7,
     max_tokens: config.maxTokens ?? 1024,
@@ -168,7 +168,7 @@ async function generateWithToolsOpenAI(
   config: ModelConfig
 ): Promise<GenerateWithToolsResult> {
   const response = await getOpenAI().chat.completions.create({
-    model: config.model || 'gpt-4o-mini',
+    model: config.model || 'gpt-5.4',
     messages: messages.map(toOpenAiMessage),
     tools: tools.length > 0 ? tools : undefined,
     tool_choice: tools.length > 0 ? 'auto' : undefined,
@@ -221,7 +221,7 @@ async function generateWithToolsAnthropic(
     .map((m) => toAnthropicMessage(m))
 
   const res = await anthropic.messages.create({
-    model: config.model || 'claude-sonnet-4-20250514',
+    model: config.model || 'claude-sonnet-4-6',
     max_tokens: config.maxTokens ?? 1024,
     system: systemMsg,
     messages: chatMessages as Parameters<typeof anthropic.messages.create>[0]['messages'],
@@ -325,7 +325,7 @@ async function* streamOpenAI(
   config: ModelConfig
 ): AsyncGenerator<string> {
   const stream = await getOpenAI().chat.completions.create({
-    model: config.model || 'gpt-4o-mini',
+    model: config.model || 'gpt-5.4',
     messages: messages.map(toOpenAiMessage),
     temperature: config.temperature ?? 0.7,
     max_tokens: config.maxTokens ?? 1024,
@@ -352,7 +352,7 @@ async function callAnthropic(
     .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
 
   const response = await anthropic.messages.create({
-    model: config.model || 'claude-sonnet-4-20250514',
+    model: config.model || 'claude-sonnet-4-6',
     max_tokens: config.maxTokens ?? 1024,
     system: systemMsg,
     messages: chatMessages,
@@ -372,7 +372,7 @@ async function* streamAnthropic(
     .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
 
   const stream = anthropic.messages.stream({
-    model: config.model || 'claude-sonnet-4-20250514',
+    model: config.model || 'claude-sonnet-4-6',
     max_tokens: config.maxTokens ?? 1024,
     system: systemMsg,
     messages: chatMessages,

@@ -647,8 +647,11 @@ function InboxInner() {
           )}
         </div>
 
-        {/* Filter tabs / New chat CTA */}
-        {isInternalAgent ? (
+        {/* New chat CTA (internal agents only). Conversation-level
+            status filters (All / Active / Escalated) are intentionally
+            hidden for now — the whole status model is pending a
+            redesign; every conversation stays "active" in the mean time. */}
+        {isInternalAgent && (
           <div className="px-3 py-2 border-b border-black/[0.04]">
             <button
               onClick={startNewChat}
@@ -657,20 +660,6 @@ function InboxInner() {
               <Plus size={14} weight="bold" />
               New chat
             </button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-1 px-3 py-2.5 border-b border-black/[0.04]">
-            {(['all', 'active', 'escalated'] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                  tab === t ? 'bg-[#ebebeb] text-[#2e2e2e]' : 'text-[#737373] hover:bg-[#f5f5f5]'
-                }`}
-              >
-                {t === 'all' ? 'All' : t === 'active' ? 'Active' : 'Escalated'}
-              </button>
-            ))}
           </div>
         )}
 
@@ -755,9 +744,6 @@ function InboxInner() {
                           <span className="truncate text-[13px] text-[#737373]">
                             {conv.last_message ? truncate(conv.last_message.content, 45) : 'No messages yet'}
                           </span>
-                          {conv.status === 'escalated' && (
-                            <Badge className="h-4 flex-shrink-0 px-1 text-[9px] bg-red-50 text-red-600 hover:bg-red-50">Escalated</Badge>
-                          )}
                         </div>
                       )}
                     </div>
@@ -821,15 +807,9 @@ function InboxInner() {
                 <button onClick={() => toggleStar(detail.id)} className="p-1.5 rounded hover:bg-[#f5f5f5]">
                   <Star size={16} weight={starred.has(detail.id) ? 'fill' : 'bold'} className={starred.has(detail.id) ? 'text-yellow-500' : 'text-[#737373]'} />
                 </button>
-                <Select value={detail.status} onValueChange={(v) => v && handleStatusChange(v as ConversationStatus)}>
-                  <SelectTrigger className="h-8 w-[110px] text-[13px]"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active" className="text-[13px]">Active</SelectItem>
-                    <SelectItem value="waiting" className="text-[13px]">Waiting</SelectItem>
-                    <SelectItem value="resolved" className="text-[13px]">Resolved</SelectItem>
-                    <SelectItem value="escalated" className="text-[13px]">Escalated</SelectItem>
-                  </SelectContent>
-                </Select>
+                {/* Status dropdown (Active/Waiting/Resolved/Escalated)
+                    intentionally hidden — pending a rethink of the
+                    conversation lifecycle. */}
                 <button className="p-1.5 rounded hover:bg-[#f5f5f5]">
                   <DotsThreeVertical size={16} className="text-[#737373]" />
                 </button>
@@ -1006,10 +986,6 @@ function InboxInner() {
                           {channelIcon(detail.channel, 12)}
                           <span className="text-xs text-[#2e2e2e]">{channelLabel(detail.channel)}</span>
                         </div>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-[#a3a3a3]">Status</span>
-                        <span className="text-xs text-[#2e2e2e] capitalize">{detail.status}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-[#a3a3a3]">Started</span>
