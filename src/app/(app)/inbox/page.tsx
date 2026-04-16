@@ -559,7 +559,7 @@ function InboxInner() {
 
             {/* Messages */}
             <ScrollArea
-              className="flex-1 min-h-0 px-5 py-6 bg-white"
+              className="flex-1 min-h-0 px-5 bg-white"
               style={{
                 WebkitMaskImage: 'linear-gradient(to bottom, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%)',
                 maskImage: 'linear-gradient(to bottom, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%)',
