@@ -138,9 +138,13 @@ export async function processChatMessage(
     }
   } catch (error) {
     console.error('[chat-pipeline] Model API error:', error)
-    response =
-      agent.fallback_message ||
-      "I'm sorry, I'm having trouble right now. Please try again in a moment."
+    response = formatPipelineError(error, agent.fallback_message)
+  }
+  // Guard against models that return empty strings — empty content
+  // would render as a blank bubble with no explanation. Surface a
+  // visible notice instead.
+  if (!response || !response.trim()) {
+    response = '⚠️ Model returned an empty response. Check server logs.'
   }
 
   // 6. Save assistant message
@@ -238,7 +242,10 @@ export async function* streamChatMessage(
       )
     } catch (error) {
       console.error('[chat-pipeline] Tool loop error:', error)
-      fullResponse = agent.fallback_message || "I'm sorry, I'm having trouble right now."
+      fullResponse = formatPipelineError(error, agent.fallback_message)
+    }
+    if (!fullResponse || !fullResponse.trim()) {
+      fullResponse = '⚠️ Model returned an empty response. Check server logs.'
     }
     yield { type: 'token', data: fullResponse }
 
@@ -430,6 +437,42 @@ function buildPrompt(agent: Agent, history: ChatMessage[], currentMessage: strin
   // Always append the current user message to guarantee it's present
   messages.push({ role: 'user', content: currentMessage })
   return messages
+}
+
+/**
+ * Turn a thrown pipeline error into a user-visible chat message.
+ *
+ * Philosophy: never silently swallow. A silent failure looks like a
+ * bug-free chat that happens to say "I'm not sure about that" on
+ * every turn — way harder to debug than a visible "⚠️ Error: ..."
+ * bubble. Team members testing an agent need to see what broke.
+ *
+ * Known-error-shape branches show a friendlier message (context
+ * limit, auth failure, rate limit) and the full details still go
+ * to the server log. Anything else falls through to the raw
+ * message with a ⚠️ prefix.
+ */
+function formatPipelineError(error: unknown, fallbackMessage: string | null): string {
+  const rawMessage = error instanceof Error ? error.message : String(error)
+
+  // Context window overflow — thrown by OpenAI/Anthropic when
+  // history + tools + prompt exceed the model's max tokens.
+  if (/maximum context length|context_length_exceeded|prompt is too long/i.test(rawMessage)) {
+    return `⚠️ Conversation is too long for this model's context window. Clear the chat or shorten the system prompt.\n\n${rawMessage}`
+  }
+  // Auth / key issues.
+  if (/api[_\- ]?key|authentication|could not resolve auth|unauthorized|401/i.test(rawMessage)) {
+    return `⚠️ AI provider auth failed. Check the API key env var on the server.\n\n${rawMessage}`
+  }
+  // Rate limiting.
+  if (/rate limit|429|quota|insufficient_quota/i.test(rawMessage)) {
+    return `⚠️ AI provider rate limit / quota hit. Try again in a moment or swap model provider.\n\n${rawMessage}`
+  }
+  // Anything else — show the raw text. Include the agent's
+  // configured fallback as a trailing context hint when it's set
+  // and different from the generic default.
+  const hint = fallbackMessage ? `\n\n(Agent fallback: "${fallbackMessage}")` : ''
+  return `⚠️ Error: ${rawMessage}${hint}`
 }
 
 async function logUsage(supabase: SupabaseAdmin, log: UsageLogInsert): Promise<void> {
