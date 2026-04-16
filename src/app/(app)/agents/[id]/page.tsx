@@ -24,6 +24,7 @@ import { Slider } from "@/components/ui/slider"
 import { useSliderWithInput } from "@/hooks/use-slider-with-input"
 import { ArrowUp, ArrowLeft, Copy, Check, Trash2, Pencil, Phone, Mail, Globe, Upload, FileText, X, Plus, Camera } from "lucide-react"
 import { ChannelIcon } from "@/components/ui/channel-icon"
+import { AgentIntegrationsTab } from "@/components/app/agent-integrations"
 
 interface Agent {
   id: string; name: string; description: string; system_prompt: string
@@ -626,6 +627,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
             { key: "agent", label: "Agent" },
             { key: "model", label: "System Prompt" },
             { key: "channels", label: "Channels" },
+            { key: "integrations", label: "Integrations" },
             { key: "knowledge", label: "Knowledge Base" },
           ].map(t => (
             <button
@@ -1004,6 +1006,25 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                 </DialogContent>
               </Dialog>
 
+              </div>
+            )}
+
+            {/* Integrations tab */}
+            {activeTab === "integrations" && (
+              <div>
+                {isNew ? (
+                  <div className="flex flex-col items-center justify-center py-10 border border-dashed border-[#d4d4d4] rounded-xl bg-[#fafafa]">
+                    <div className="h-12 w-12 rounded-full bg-[#f0f0f0] flex items-center justify-center mb-3">
+                      <FileText size={22} className="text-[#a3a3a3]" />
+                    </div>
+                    <div className="text-sm font-medium text-[#525252]">Integrations available after creating the agent</div>
+                    <div className="text-xs text-[#a3a3a3] mt-1 text-center max-w-sm">
+                      Save this agent first, then connect Gmail, Slack, Notion, and 1000+ other services so it can take real actions in conversations.
+                    </div>
+                  </div>
+                ) : agent ? (
+                  <AgentIntegrationsTab agentId={agent.id} />
+                ) : null}
               </div>
             )}
 

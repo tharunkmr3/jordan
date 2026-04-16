@@ -4,7 +4,19 @@
 // ============================================================================
 
 import { createAdminClient } from '@/lib/supabase/admin'
-import { generateResponse, streamResponse, type ChatMessage, type ModelConfig } from './models'
+import {
+  generateResponse,
+  generateWithTools,
+  streamResponse,
+  supportsTools,
+  type ChatMessage,
+  type ModelConfig,
+} from './models'
+import {
+  buildAgentTools,
+  executeAgentToolCall,
+  type AgentToolContext,
+} from '@/lib/composio/tools'
 import type {
   Agent,
   ChannelType,
@@ -13,6 +25,8 @@ import type {
   MessageInsert,
   UsageLogInsert,
 } from '@/types/database'
+
+const MAX_TOOL_ITERATIONS = 6   // cap agentic loops per request
 
 // ---------------------------------------------------------------------------
 // Types
@@ -103,9 +117,25 @@ export async function processChatMessage(
     maxTokens: agent.max_tokens,
   }
 
+  // 5a. Load any tools available to this agent
+  const toolsBundle = supportsTools(agent.model_provider)
+    ? await buildAgentTools(supabase, agent.id)
+    : null
+
   let response: string
   try {
-    response = await generateResponse(messages, modelConfig)
+    if (toolsBundle && toolsBundle.tools.length > 0) {
+      response = await runAgenticLoop(
+        supabase,
+        messages,
+        toolsBundle.tools,
+        toolsBundle.ctx,
+        modelConfig,
+        { conversationId: conversation.id }
+      )
+    } else {
+      response = await generateResponse(messages, modelConfig)
+    }
   } catch (error) {
     console.error('[chat-pipeline] Model API error:', error)
     response =
@@ -122,6 +152,7 @@ export async function processChatMessage(
     channel: input.channel,
     metadata: {
       model_used: `${agent.model_provider}/${agent.model_name}`,
+      tools_available: toolsBundle?.tools.length ?? 0,
     },
   })
 
@@ -356,4 +387,71 @@ function buildPrompt(agent: Agent, history: ChatMessage[], currentMessage: strin
 async function logUsage(supabase: SupabaseAdmin, log: UsageLogInsert): Promise<void> {
   const { error } = await supabase.from('usage_logs').insert(log)
   if (error) console.error('[chat-pipeline] Failed to log usage:', error)
+}
+
+/**
+ * Multi-turn tool-calling loop: keep calling the model as long as it emits
+ * tool_calls, executing each against Composio and feeding results back.
+ * Bounded by MAX_TOOL_ITERATIONS to prevent runaway loops.
+ */
+async function runAgenticLoop(
+  supabase: SupabaseAdmin,
+  initialMessages: ChatMessage[],
+  tools: Parameters<typeof generateWithTools>[1],
+  ctx: AgentToolContext,
+  modelConfig: ModelConfig,
+  meta: { conversationId: string }
+): Promise<string> {
+  const working: ChatMessage[] = [...initialMessages]
+  let finalText = ''
+
+  for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
+    const round = await generateWithTools(working, tools, modelConfig)
+
+    // Track the assistant's response (including any tool_calls) so the next
+    // turn has context.
+    working.push(round.assistantMessage)
+
+    if (round.toolCalls.length === 0) {
+      finalText = round.text ?? ''
+      break
+    }
+
+    // Execute tool calls in parallel — each one is independent.
+    const results = await Promise.all(
+      round.toolCalls.map((call) =>
+        executeAgentToolCall(supabase, ctx, call, { conversationId: meta.conversationId }).then((r) => ({
+          call,
+          result: r,
+        }))
+      )
+    )
+
+    for (const { call, result } of results) {
+      working.push({
+        role: 'tool',
+        tool_call_id: call.id,
+        content: result.content,
+      })
+    }
+
+    // If this was the last iteration and model still wanted tools, use
+    // whatever text it gave and break.
+    if (i === MAX_TOOL_ITERATIONS - 1) {
+      finalText = round.text ?? ''
+    }
+  }
+
+  // If the model never produced a final text (e.g. last round only had
+  // tool_calls), do one more call with no tools to get a summary.
+  if (!finalText) {
+    try {
+      const finalRound = await generateWithTools(working, [], modelConfig)
+      finalText = finalRound.text ?? 'I ran into an issue using my tools. Please try again.'
+    } catch {
+      finalText = 'I ran into an issue using my tools. Please try again.'
+    }
+  }
+
+  return finalText
 }

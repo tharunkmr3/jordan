@@ -6,11 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "composio:bootstrap": "tsx scripts/composio-bootstrap.ts",
+    "composio:reconcile": "tsx scripts/composio-reconcile.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.88.0",
     "@base-ui/react": "^1.4.0",
+    "@composio/core": "^0.6.10",
     "@hookform/resolvers": "^5.2.2",
     "@phosphor-icons/react": "^2.1.10",
     "@radix-ui/react-accordion": "^1.2.12",
@@ -65,9 +68,11 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.2.3",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }

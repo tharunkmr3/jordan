@@ -25,7 +25,21 @@ export type UsageEventType =
   | 'tts_chars'
   | 'stt_seconds'
   | 'translation_chars';
-export type WebhookSource = 'stripe' | 'whatsapp' | 'facebook' | 'twilio';
+export type WebhookSource = 'stripe' | 'whatsapp' | 'facebook' | 'twilio' | 'composio';
+export type IntegrationStatus =
+  | 'initiated'
+  | 'pending'
+  | 'active'
+  | 'expired'
+  | 'revoked'
+  | 'failed'
+  | 'inactive';
+export type ConnectSessionStatus =
+  | 'pending'
+  | 'completed'
+  | 'failed'
+  | 'expired'
+  | 'cancelled';
 
 // ---------------------------------------------------------------------------
 // Row types
@@ -224,6 +238,114 @@ export interface WebhookEvent {
   event_type: string;
   payload: Record<string, unknown>;
   processed: boolean;
+  created_at: string;
+}
+
+// ---------------------------------------------------------------------------
+// Integrations (Composio)
+// ---------------------------------------------------------------------------
+
+export interface ComposioAuthConfig {
+  id: string;
+  toolkit_slug: string;
+  composio_auth_config_id: string;
+  org_id: string | null;
+  display_name: string | null;
+  is_active: boolean;
+  is_composio_managed: boolean;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ComposioToolkitCache {
+  slug: string;
+  name: string;
+  description: string | null;
+  logo_url: string | null;
+  categories: string[];
+  auth_schemes: string[];
+  no_auth: boolean;
+  is_local: boolean;
+  tools_count: number;
+  tags: string[];
+  raw: Record<string, unknown> | null;
+  fetched_at: string;
+}
+
+export interface OrgIntegration {
+  id: string;
+  org_id: string;
+  toolkit_slug: string;
+  connected_account_id: string;
+  auth_config_id: string;
+  account_label: string | null;
+  status: IntegrationStatus;
+  status_detail: string | null;
+  connected_by_user_id: string | null;
+  metadata: Record<string, unknown>;
+  last_synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgentIntegration {
+  id: string;
+  agent_id: string;
+  org_integration_id: string;
+  org_id: string;
+  enabled_tools: string[];
+  tool_configs: Record<string, Record<string, unknown>>;
+  attached_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IntegrationConnectSession {
+  id: string;
+  org_id: string;
+  initiated_by_user_id: string;
+  agent_id: string | null;
+  toolkit_slug: string;
+  auth_config_id: string;
+  composio_connection_request_id: string | null;
+  redirect_url: string | null;
+  csrf_token: string;
+  status: ConnectSessionStatus;
+  resulting_org_integration_id: string | null;
+  error_message: string | null;
+  created_at: string;
+  expires_at: string;
+  completed_at: string | null;
+}
+
+export interface IntegrationAuditLog {
+  id: string;
+  org_id: string;
+  actor_user_id: string | null;
+  actor_type: 'user' | 'system' | 'webhook';
+  action: string;
+  org_integration_id: string | null;
+  agent_id: string | null;
+  toolkit_slug: string | null;
+  details: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface IntegrationToolCall {
+  id: string;
+  org_id: string;
+  agent_id: string;
+  conversation_id: string | null;
+  message_id: string | null;
+  org_integration_id: string | null;
+  toolkit_slug: string;
+  tool_slug: string;
+  arguments: Record<string, unknown> | null;
+  result: Record<string, unknown> | null;
+  success: boolean;
+  error_message: string | null;
+  latency_ms: number | null;
   created_at: string;
 }
 
