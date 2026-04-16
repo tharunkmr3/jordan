@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { processChatMessage, streamChatMessage } from '@/lib/ai/chat-pipeline'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -47,17 +48,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Agent is not active' }, { status: 403, headers: corsHeaders })
     }
 
-    // Test Chat panel passes isTest=true explicitly; fall back to the
-    // `test-` visitorId convention used by older callers.
-    const computedIsTest = Boolean(isTest) || (typeof visitorId === 'string' && visitorId.startsWith('test-'))
+    // If an authenticated Jordon team member is hitting this endpoint,
+    // scope the conversation to THEIR user id. That way two operators
+    // testing the same agent — or any chat from a logged-in user with
+    // an internal agent — each get their own private history instead
+    // of mingling into a shared "Test" contact.
+    //
+    // Unauthenticated callers (the public widget on a customer's site)
+    // fall through to using whatever visitorId / visitorName the client
+    // provided, which is the real end-customer identifier.
+    const serverSupabase = await createClient()
+    const { data: { user: teamUser } } = await serverSupabase.auth.getUser()
+
+    let effectiveVisitorId: string | undefined = visitorId
+    let effectiveVisitorName: string | undefined = visitorName
+    let effectiveIsTest = Boolean(isTest) || (typeof visitorId === 'string' && visitorId.startsWith('test-'))
+
+    if (teamUser) {
+      effectiveVisitorId = `test-${teamUser.id}`
+      effectiveVisitorName =
+        (teamUser.user_metadata?.full_name as string | undefined) ||
+        teamUser.email?.split('@')[0] ||
+        'You'
+      effectiveIsTest = true
+    }
 
     const pipelineInput = {
       agentId,
       message,
       conversationId: conversationId || undefined,
       channel: 'website' as const,
-      isTest: computedIsTest,
-      contactInfo: visitorId ? { channelUserId: visitorId, name: visitorName || undefined } : undefined,
+      isTest: effectiveIsTest,
+      contactInfo: effectiveVisitorId
+        ? { channelUserId: effectiveVisitorId, name: effectiveVisitorName || undefined }
+        : undefined,
     }
 
     // Streaming mode — Server-Sent Events

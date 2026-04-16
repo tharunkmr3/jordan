@@ -140,6 +140,31 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
     loadKnowledgeBases()
   }, [id, loadChannels, loadKnowledgeBases])
 
+  // Auto-load the current user's prior test chat with this agent so
+  // history persists across sessions instead of starting fresh each
+  // time the Test Chat panel opens. The /api/chat/history?agentId
+  // endpoint scopes by the authenticated user, so two operators see
+  // separate threads.
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/chat/history?agentId=${id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (cancelled || !data) return
+        if (data.conversationId) setConversationId(data.conversationId)
+        if (Array.isArray(data.messages) && data.messages.length > 0) {
+          type HistoryMsg = { role: 'user' | 'assistant' | string; content: string }
+          setMessages(
+            (data.messages as HistoryMsg[])
+              .filter(m => m.role === 'user' || m.role === 'assistant')
+              .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+          )
+        }
+      })
+      .catch(() => { /* fresh start on failure — non-critical */ })
+    return () => { cancelled = true }
+  }, [id])
+
   async function handleSave() {
     // Optimistic: update UI + sidebar immediately
     setAgent(prev => prev ? { ...prev, ...editData } as Agent : prev)
@@ -973,7 +998,21 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
         header={
           <>
             <span className="text-sm font-medium text-[#2e2e2e]">Test Chat</span>
-            <Button variant="ghost" size="sm" className="ml-auto text-xs" onClick={() => { setMessages([]); setConversationId(null) }}>Clear</Button>
+            <Button variant="ghost" size="sm" className="ml-auto text-xs" onClick={async () => {
+              // Optimistic UI: clear immediately.
+              const idToResolve = conversationId
+              setMessages([])
+              setConversationId(null)
+              // End the server-side thread so the next send opens a
+              // fresh conversation instead of re-finding the active one.
+              if (idToResolve) {
+                fetch(`/api/inbox/${idToResolve}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ status: 'resolved' }),
+                }).catch(() => { /* non-critical; a new conversation will still be created on next send */ })
+              }
+            }}>Clear</Button>
           </>
         }
       >
