@@ -29,6 +29,7 @@ interface Agent {
   temperature: number; max_tokens: number; greeting_message: string
   fallback_message: string; escalation_enabled: boolean; escalation_email: string
   status: string; created_at: string
+  settings?: Record<string, unknown>
 }
 
 interface AgentChannel {
@@ -531,6 +532,16 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                   <TabsContent value="general" className="space-y-4 pt-4">
                     <div><Label>Name</Label><Input value={editData.name || ""} onChange={e => setEditData({...editData, name: e.target.value})} className="mt-1.5" /></div>
                     <div><Label>Description</Label><Textarea value={editData.description || ""} onChange={e => setEditData({...editData, description: e.target.value})} className="mt-1.5" /></div>
+                    <div className="flex items-center justify-between rounded-lg border p-3">
+                      <div>
+                        <Label className="text-sm">Customer-facing agent</Label>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">On means this agent talks to your customers. Off means internal use only (HR, dev, ops).</p>
+                      </div>
+                      <Switch
+                        checked={(editData.settings as Record<string, unknown> | undefined)?.is_customer_facing !== false}
+                        onCheckedChange={v => setEditData({...editData, settings: { ...(editData.settings as object || {}), is_customer_facing: v }})}
+                      />
+                    </div>
                     <div><Label>Phone Greeting</Label><Textarea placeholder="Welcome to Jordon.ai, how may I help you today?" value={editData.greeting_message || ""} onChange={e => setEditData({...editData, greeting_message: e.target.value})} className="mt-1.5" /><p className="text-[11px] text-muted-foreground mt-1">Spoken when someone calls. Chat channels start empty.</p></div>
                     <div><Label>Fallback Message</Label><Textarea value={editData.fallback_message || ""} onChange={e => setEditData({...editData, fallback_message: e.target.value})} className="mt-1.5" /></div>
                     <div><Label>Status</Label><Select value={editData.status} onValueChange={v => v && setEditData({...editData, status: v})}><SelectTrigger className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="draft">Draft</SelectItem><SelectItem value="active">Active</SelectItem><SelectItem value="paused">Paused</SelectItem></SelectContent></Select></div>

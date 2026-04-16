@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
   const status = searchParams.get('status')
   const channel = searchParams.get('channel')
   const search = searchParams.get('search')
+  const agentId = searchParams.get('agentId')
 
   // Build conversations query with contact and agent joins
   let query = supabase
@@ -41,6 +42,10 @@ export async function GET(request: NextRequest) {
 
   if (channel) {
     query = query.eq('channel', channel)
+  }
+
+  if (agentId) {
+    query = query.eq('agent_id', agentId)
   }
 
   const { data: conversations, error } = await query

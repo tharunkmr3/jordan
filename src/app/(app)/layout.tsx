@@ -19,20 +19,21 @@ import {
   SidebarSimple,
   SignOut,
   PlusCircle,
+  DotsThreeVertical,
 } from "@phosphor-icons/react"
 import { cn } from "@/lib/utils"
 import { createBrowserClient } from "@supabase/ssr"
 
 const nav = [
   { label: "Home", href: "/dashboard", icon: House },
-  { label: "Inbox", href: "/inbox", icon: ChatCircleDots },
+  { label: "Conversations", href: "/inbox", icon: ChatCircleDots },
   { label: "Contacts", href: "/contacts", icon: UsersThree },
   { label: "Knowledge", href: "/knowledge", icon: BookOpenText },
   { label: "Analytics", href: "/analytics", icon: ChartBar },
   { label: "Channels", href: "/channels", icon: Broadcast },
 ]
 
-interface SidebarAgent { id: string; name: string; status: string; avatar_url?: string | null }
+interface SidebarAgent { id: string; name: string; status: string; avatar_url?: string | null; settings?: { is_customer_facing?: boolean } }
 
 const bottomNav = [
   { label: "Billing", href: "/billing", icon: CreditCard },
@@ -85,6 +86,25 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [userEmail, setUserEmail] = useState("")
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [agents, setAgents] = useState<SidebarAgent[]>([])
+  const [agentMenuOpen, setAgentMenuOpen] = useState<string | null>(null)
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!agentMenuOpen) return
+    const close = () => setAgentMenuOpen(null)
+    window.addEventListener("click", close)
+    return () => window.removeEventListener("click", close)
+  }, [agentMenuOpen])
+
+  async function deleteAgent(id: string) {
+    if (!confirm("Delete this agent? This cannot be undone.")) return
+    setAgents(prev => prev.filter(a => a.id !== id))
+    setAgentMenuOpen(null)
+    await fetch(`/api/agents/${id}`, { method: "DELETE" })
+    if (pathname.startsWith(`/agents/${id}`) || pathname === "/inbox") {
+      router.push("/dashboard")
+    }
+  }
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -109,7 +129,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         const res = await fetch("/api/agents")
         if (res.ok) {
           const data = await res.json()
-          if (Array.isArray(data)) setAgents(data.map((a: SidebarAgent) => ({ id: a.id, name: a.name, status: a.status, avatar_url: a.avatar_url })))
+          if (Array.isArray(data)) setAgents(data.map((a: SidebarAgent) => ({ id: a.id, name: a.name, status: a.status, avatar_url: a.avatar_url, settings: a.settings })))
         }
       } catch { /* ignore */ }
     }
@@ -226,26 +246,65 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   <span className="truncate flex-1">New Agent</span>
                 </Link>
                 {agents.map((a) => {
-                  const isActive = pathname === `/agents/${a.id}`
+                  const isCustomerFacing = a.settings?.is_customer_facing !== false
+                  const href = isCustomerFacing ? `/inbox?agentId=${a.id}` : `/agents/${a.id}`
+                  const isActive = isCustomerFacing
+                    ? (pathname === "/inbox" && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("agentId") === a.id)
+                    : pathname === `/agents/${a.id}`
+                  const menuOpen = agentMenuOpen === a.id
                   return (
-                    <Link
-                      key={a.id}
-                      href={`/agents/${a.id}`}
-                      className={cn(
-                        "flex items-center gap-2 rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors",
-                        isActive ? "bg-white text-[#0a0a0a] shadow-sm ring-1 ring-[#ebebeb]" : "text-[#525252] hover:bg-[#ebebeb]"
-                      )}
-                    >
-                      {a.avatar_url ? (
-                        <img src={a.avatar_url} alt={a.name} className="h-5 w-5 rounded-full object-cover flex-shrink-0" />
-                      ) : (
-                        <div className="h-5 w-5 rounded-full bg-[#0a0a0a] text-white text-[9px] font-medium flex items-center justify-center flex-shrink-0">
-                          {a.name[0]?.toUpperCase() || 'A'}
+                    <div key={a.id} className="group/agent relative">
+                      <Link
+                        href={href}
+                        className={cn(
+                          "flex items-center gap-2 rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors",
+                          isActive ? "bg-white text-[#0a0a0a] shadow-sm ring-1 ring-[#ebebeb]" : "text-[#525252] hover:bg-[#ebebeb]"
+                        )}
+                      >
+                        {a.avatar_url ? (
+                          <img src={a.avatar_url} alt={a.name} className="h-5 w-5 rounded-full object-cover flex-shrink-0" />
+                        ) : (
+                          <div className="h-5 w-5 rounded-full bg-[#0a0a0a] text-white text-[9px] font-medium flex items-center justify-center flex-shrink-0">
+                            {a.name[0]?.toUpperCase() || 'A'}
+                          </div>
+                        )}
+                        <span className="truncate flex-1">{a.name}</span>
+                        {a.status === "active" && !menuOpen && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 flex-shrink-0 group-hover/agent:hidden" />}
+                      </Link>
+                      {/* 3-dot menu */}
+                      <button
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setAgentMenuOpen(menuOpen ? null : a.id) }}
+                        className={cn(
+                          "absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 hover:bg-[#ebebeb] transition-opacity",
+                          menuOpen ? "opacity-100" : "opacity-0 group-hover/agent:opacity-100"
+                        )}
+                        title="More"
+                      >
+                        <DotsThreeVertical size={14} weight="bold" className="text-[#737373]" />
+                      </button>
+                      {menuOpen && (
+                        <div
+                          className="absolute right-1 top-full mt-1 z-20 w-40 rounded-md border border-[#e5e5e5] bg-white shadow-lg py-1"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Link
+                            href={`/agents/${a.id}`}
+                            onClick={() => setAgentMenuOpen(null)}
+                            className="flex items-center gap-2 px-3 py-1.5 text-[12px] text-[#0a0a0a] hover:bg-[#f5f5f5]"
+                          >
+                            <GearSix size={14} className="text-[#737373]" />
+                            Settings
+                          </Link>
+                          <button
+                            onClick={() => deleteAgent(a.id)}
+                            className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] text-red-600 hover:bg-red-50"
+                          >
+                            <SignOut size={14} className="rotate-180" />
+                            Delete
+                          </button>
                         </div>
                       )}
-                      <span className="truncate flex-1">{a.name}</span>
-                      {a.status === "active" && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 flex-shrink-0" />}
-                    </Link>
+                    </div>
                   )
                 })}
               </div>

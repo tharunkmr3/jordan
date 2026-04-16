@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -183,7 +184,17 @@ function DetailSection({ title, children, defaultOpen = true, action }: { title:
 // ---------------------------------------------------------------------------
 
 export default function InboxPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading...</div>}>
+      <InboxInner />
+    </Suspense>
+  )
+}
+
+function InboxInner() {
   const supabase = createClient()
+  const searchParams = useSearchParams()
+  const agentFilter = searchParams.get('agentId')
 
   // State
   const [orgId, setOrgId] = useState<string | null>(null)
@@ -233,13 +244,14 @@ export default function InboxPage() {
     const params = new URLSearchParams()
     if (tab !== 'all') params.set('status', tab)
     if (search) params.set('search', search)
+    if (agentFilter) params.set('agentId', agentFilter)
     const res = await fetch(`/api/inbox?${params.toString()}`)
     if (res.ok) {
       const data: ConversationItem[] = await res.json()
       setConversations(data)
     }
     setLoading(false)
-  }, [orgId, tab, search])
+  }, [orgId, tab, search, agentFilter])
 
   useEffect(() => {
     setLoading(true)
@@ -385,7 +397,7 @@ export default function InboxPage() {
       <div className="flex w-[320px] flex-shrink-0 flex-col bg-white rounded-xl ring-1 ring-[#ebebeb] overflow-hidden">
         {/* Header */}
         <div className="flex h-12 items-center gap-3 px-4 border-b border-[#ebebeb] flex-shrink-0">
-          <span className="text-[15px] font-semibold text-[#0a0a0a]">Inbox</span>
+          <span className="text-[15px] font-semibold text-[#0a0a0a]">Conversations</span>
         </div>
 
         {/* Filter tabs */}
@@ -607,49 +619,48 @@ export default function InboxPage() {
               </div>
             </ScrollArea>
 
-            {/* Input */}
-            <div className="border-t border-[#ebebeb] bg-white px-5 py-3">
-              <div className="mx-auto max-w-2xl">
+            {/* Input — single bordered box with no top divider */}
+            <div className="bg-white px-5 pb-4 pt-2 flex-shrink-0">
+              <div className="mx-auto max-w-2xl rounded-xl border border-[#ebebeb] bg-white overflow-hidden focus-within:ring-1 focus-within:ring-[#0a0a0a]/10">
                 {/* Channel selector */}
-                <div className="flex items-center gap-2 mb-2">
-                  <button className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-[#f5f5f5] text-[12px] text-[#737373]">
+                <div className="flex items-center gap-2 px-3 pt-2">
+                  <button className="flex items-center gap-1.5 px-1.5 py-1 rounded-md hover:bg-[#f5f5f5] text-[13px] text-[#0a0a0a]">
                     {channelIcon(detail.channel, 14)}
-                    <span className="font-medium">{channelLabel(detail.channel)}</span>
+                    <span className="font-semibold">{channelLabel(detail.channel)}</span>
                     <CaretDown size={10} />
                   </button>
                 </div>
                 {/* Textarea */}
                 <Textarea
                   ref={textareaRef}
-                  placeholder="Type your reply... Use @@ for shortcuts"
+                  placeholder="Use ⌘K for shortcuts"
                   value={replyText}
                   onChange={handleTextareaInput}
                   onKeyDown={handleKeyDown}
                   rows={1}
-                  className="min-h-[60px] max-h-[160px] resize-none text-[13px] border-[#ebebeb] focus-visible:ring-1"
+                  className="min-h-[52px] max-h-[160px] resize-none text-[13px] border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-4 py-2"
                 />
                 {/* Bottom toolbar */}
-                <div className="flex items-center justify-between mt-2">
+                <div className="flex items-center justify-between px-3 pb-2">
                   <div className="flex items-center gap-0.5">
-                    <button className="p-1.5 rounded hover:bg-[#f5f5f5] text-[#737373]" title="Shortcuts"><Lightning size={15} /></button>
+                    <button className="p-1.5 rounded hover:bg-[#f5f5f5] text-[#0a0a0a]" title="Shortcuts"><Lightning size={16} weight="fill" /></button>
                     <button className="p-1.5 rounded hover:bg-[#f5f5f5] text-[#737373]" title="Attach"><Paperclip size={15} /></button>
                     <button className="p-1.5 rounded hover:bg-[#f5f5f5] text-[#737373]" title="Emoji"><Smiley size={15} /></button>
                     <button className="p-1.5 rounded hover:bg-[#f5f5f5] text-[#737373]" title="Mention"><At size={15} /></button>
                     <div className="h-4 w-px bg-[#ebebeb] mx-1" />
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 ml-1">
                       <Switch checked={aiAutoReply} onCheckedChange={(v) => { setAiAutoReply(v); if (!v) handleTakeOver() }} />
                       <span className="text-[11px] text-[#737373]">AI {aiAutoReply ? 'on' : 'off'}</span>
                     </div>
                   </div>
-                  <Button
-                    size="sm"
-                    className="h-8 px-4 gap-1.5 text-[12px] bg-[#0a0a0a] hover:bg-[#262626]"
+                  <button
                     onClick={handleSendReply}
                     disabled={!replyText.trim() || sending}
+                    className="flex items-center gap-1 text-[12px] text-[#737373] hover:text-[#0a0a0a] disabled:opacity-40 disabled:cursor-not-allowed px-2 py-1"
                   >
                     {sending ? 'Sending...' : 'Send'}
-                    <PaperPlaneTilt size={12} weight="fill" />
-                  </Button>
+                    <CaretDown size={10} />
+                  </button>
                 </div>
               </div>
             </div>
