@@ -55,7 +55,7 @@ export function ContactAvatar({
 
   return (
     <Avatar
-      className={cn("rounded-full", className)}
+      className={cn("rounded-full after:hidden", className)}
       style={{ width: size, height: size }}
     >
       {src && <AvatarImage src={src} alt={name || ""} />}

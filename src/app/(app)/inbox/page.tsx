@@ -453,7 +453,7 @@ function InboxInner() {
             <div className="px-2 py-1 space-y-0.5">
               {Array.from({ length: 8 }).map((_, i) => (
                 <div key={i} className="flex items-start gap-3 px-3 py-2.5">
-                  <Skeleton className="h-9 w-9 flex-shrink-0 rounded-full" />
+                  <Skeleton className="h-7 w-7 flex-shrink-0 rounded-full" />
                   <div className="flex-1 min-w-0 space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
                       <Skeleton className="h-3 w-24" />
@@ -493,8 +493,8 @@ function InboxInner() {
                     <ContactAvatar
                       name={contactName}
                       seed={conv.contact?.id || conv.id}
-                      size={36}
-                      className="flex-shrink-0"
+                      size={28}
+                      className="mt-0.5 flex-shrink-0"
                     />
                     {/* Content */}
                     <div className="flex-1 min-w-0">
