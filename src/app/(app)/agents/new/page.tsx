@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Phone, Globe, Database } from 'lucide-react'
-import { WhatsappLogo, MessengerLogo } from '@phosphor-icons/react'
+import { ArrowLeft, Database } from 'lucide-react'
+import { ChannelIcon } from '@/components/ui/channel-icon'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -383,10 +383,10 @@ export default function NewAgentPage() {
               <div>
                 <div className="space-y-0 opacity-60 pointer-events-none select-none">
                   {[
-                    { label: 'WhatsApp', icon: <WhatsappLogo size={18} weight="fill" />, tint: 'bg-green-50 text-green-700', desc: 'Receive messages on WhatsApp' },
-                    { label: 'Messenger', icon: <MessengerLogo size={18} weight="fill" />, tint: 'bg-blue-50 text-blue-600', desc: 'Facebook page messages' },
-                    { label: 'Phone', icon: <Phone size={18} />, tint: 'bg-purple-50 text-purple-700', desc: 'Inbound & outbound voice calls' },
-                    { label: 'Website', icon: <Globe size={18} />, tint: 'bg-amber-50 text-amber-700', desc: 'Embed a chat widget on your site' },
+                    { label: 'WhatsApp', icon: <ChannelIcon kind="whatsapp" size={18} />, tint: 'bg-green-50 text-green-700', desc: 'Receive messages on WhatsApp' },
+                    { label: 'Messenger', icon: <ChannelIcon kind="messenger" size={18} />, tint: 'bg-blue-50 text-blue-600', desc: 'Facebook page messages' },
+                    { label: 'Phone', icon: <ChannelIcon kind="phone" size={18} />, tint: 'bg-purple-50 text-purple-700', desc: 'Inbound & outbound voice calls' },
+                    { label: 'Website', icon: <ChannelIcon kind="website" size={18} />, tint: 'bg-amber-50 text-amber-700', desc: 'Embed a chat widget on your site' },
                   ].map(ch => (
                     <div key={ch.label} className="py-4 border-b border-black/[0.04] last:border-0 flex items-center justify-between">
                       <div className="flex items-center gap-3">

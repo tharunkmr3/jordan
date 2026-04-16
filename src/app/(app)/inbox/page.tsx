@@ -35,12 +35,9 @@ import {
   Paperclip,
   Smiley,
   At,
-  WhatsappLogo,
-  MessengerLogo,
-  Globe,
-  Phone as PhoneIcon,
   Check,
 } from '@phosphor-icons/react'
+import { ChannelIcon } from '@/components/ui/channel-icon'
 import type {
   ConversationStatus,
   ChannelType,
@@ -105,14 +102,14 @@ function formatTimestamp(dateStr: string): string {
 function channelIcon(channel: ChannelType, size = 14) {
   switch (channel) {
     case 'whatsapp':
-      return <WhatsappLogo size={size} weight="fill" className="text-[#25D366]" />
+      return <ChannelIcon kind="whatsapp" size={size} className="text-[#25D366]" />
     case 'facebook':
-      return <MessengerLogo size={size} weight="fill" className="text-[#0084FF]" />
+      return <ChannelIcon kind="messenger" size={size} className="text-[#0084FF]" />
     case 'phone':
-      return <PhoneIcon size={size} weight="fill" className="text-[#a855f7]" />
+      return <ChannelIcon kind="phone" size={size} className="text-[#a855f7]" />
     case 'website':
     default:
-      return <Globe size={size} weight="fill" className="text-[#f59e0b]" />
+      return <ChannelIcon kind="website" size={size} className="text-[#f59e0b]" />
   }
 }
 

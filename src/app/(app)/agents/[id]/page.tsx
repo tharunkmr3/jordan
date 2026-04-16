@@ -23,7 +23,7 @@ import { avatarColor, avatarInitial } from "@/lib/utils"
 import { Slider } from "@/components/ui/slider"
 import { useSliderWithInput } from "@/hooks/use-slider-with-input"
 import { ArrowUp, ArrowLeft, Copy, Check, Trash2, Pencil, Phone, Mail, Globe, Upload, FileText, X, Plus, Camera } from "lucide-react"
-import { WhatsappLogo, MessengerLogo } from "@phosphor-icons/react"
+import { ChannelIcon } from "@/components/ui/channel-icon"
 
 interface Agent {
   id: string; name: string; description: string; system_prompt: string
@@ -57,10 +57,10 @@ const modelLabels: Record<string, string> = { sarvam: "Sarvam 30B", openai: "GPT
 const statusColors: Record<string, string> = { active: "bg-green-50 text-green-700", draft: "bg-gray-100 text-gray-600", paused: "bg-yellow-50 text-yellow-700" }
 
 const channelMeta: Record<string, { label: string; icon: React.ReactNode; description: string; connectedLabel: (config: Record<string, unknown>) => string }> = {
-  website: { label: "Website", icon: <Globe size={18} />, description: "Chat widget on your site", connectedLabel: () => "Embed code ready" },
-  whatsapp: { label: "WhatsApp", icon: <WhatsappLogo size={18} weight="fill" />, description: "Receive messages on WhatsApp", connectedLabel: (c) => c.phone_number ? `${c.phone_number}` : "Connected" },
-  facebook: { label: "Messenger", icon: <MessengerLogo size={18} weight="fill" />, description: "Facebook page messages", connectedLabel: (c) => c.page_name ? `${c.page_name}` : "Connected" },
-  phone: { label: "Phone", icon: <Phone size={18} />, description: "Receive voice calls", connectedLabel: (c) => c.twilio_phone_number ? `${c.twilio_phone_number}` : "Connected" },
+  website: { label: "Website", icon: <ChannelIcon kind="website" size={18} />, description: "Chat widget on your site", connectedLabel: () => "Embed code ready" },
+  whatsapp: { label: "WhatsApp", icon: <ChannelIcon kind="whatsapp" size={18} />, description: "Receive messages on WhatsApp", connectedLabel: (c) => c.phone_number ? `${c.phone_number}` : "Connected" },
+  facebook: { label: "Messenger", icon: <ChannelIcon kind="messenger" size={18} />, description: "Facebook page messages", connectedLabel: (c) => c.page_name ? `${c.page_name}` : "Connected" },
+  phone: { label: "Phone", icon: <ChannelIcon kind="phone" size={18} />, description: "Receive voice calls", connectedLabel: (c) => c.twilio_phone_number ? `${c.twilio_phone_number}` : "Connected" },
 }
 
 function Field({ label, description, children }: { label: string; description?: string; children: React.ReactNode }) {
@@ -742,7 +742,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                     <>
                       <DialogHeader>
                         <div className="flex items-center gap-2">
-                          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-50 text-blue-600"><MessengerLogo size={18} weight="fill" /></div>
+                          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-50 text-blue-600"><ChannelIcon kind="messenger" size={18} /></div>
                           <DialogTitle>Connect Facebook Messenger</DialogTitle>
                         </div>
                       </DialogHeader>
@@ -757,7 +757,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                             <>
                               <p className="text-sm text-muted-foreground text-center">Log in with Facebook to connect your page</p>
                               <Button onClick={() => connectWithFacebook("facebook")} className="bg-[#1877F2] hover:bg-[#166FE5] text-white">
-                                <MessengerLogo size={16} weight="fill" className="mr-2" />Connect with Facebook
+                                <ChannelIcon kind="messenger" size={16} className="mr-2" />Connect with Facebook
                               </Button>
                             </>
                           )}
@@ -784,7 +784,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                     <>
                       <DialogHeader>
                         <div className="flex items-center gap-2">
-                          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-green-50 text-green-700"><WhatsappLogo size={18} weight="fill" /></div>
+                          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-green-50 text-green-700"><ChannelIcon kind="whatsapp" size={18} /></div>
                           <DialogTitle>Connect WhatsApp</DialogTitle>
                         </div>
                       </DialogHeader>
@@ -799,7 +799,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                             <>
                               <p className="text-sm text-muted-foreground text-center">Log in with Facebook to connect your WhatsApp Business number</p>
                               <Button onClick={() => connectWithFacebook("whatsapp")} className="bg-[#25D366] hover:bg-[#20BD5A] text-white">
-                                <WhatsappLogo size={16} weight="fill" className="mr-2" />Connect with WhatsApp
+                                <ChannelIcon kind="whatsapp" size={16} className="mr-2" />Connect with WhatsApp
                               </Button>
                             </>
                           )}
