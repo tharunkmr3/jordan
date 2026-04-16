@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { processChatMessage, streamChatMessage } from '@/lib/ai/chat-pipeline'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import { providerForModelName } from '@/lib/ai/catalog'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -21,7 +22,7 @@ export async function OPTIONS() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { agentId, message, conversationId, visitorId, visitorName, stream, isTest } = body
+    const { agentId, message, conversationId, visitorId, visitorName, stream, isTest, modelName } = body
 
     if (!agentId || typeof agentId !== 'string') {
       return NextResponse.json({ error: 'agentId is required' }, { status: 400, headers: corsHeaders })
@@ -73,12 +74,23 @@ export async function POST(request: NextRequest) {
       effectiveIsTest = true
     }
 
+    // Per-turn model override — only accept a model the catalog knows
+    // about AND only honor it for authenticated team members. Public
+    // widget requests can't switch models (that would be a cost /
+    // capability-escalation vector).
+    let modelOverride: { name: string; provider: 'openai' | 'anthropic' | 'sarvam' | 'gemini' } | undefined
+    if (teamUser && typeof modelName === 'string' && modelName.length > 0) {
+      const provider = providerForModelName(modelName)
+      if (provider) modelOverride = { name: modelName, provider }
+    }
+
     const pipelineInput = {
       agentId,
       message,
       conversationId: conversationId || undefined,
       channel: 'website' as const,
       isTest: effectiveIsTest,
+      modelOverride,
       contactInfo: effectiveVisitorId
         ? { channelUserId: effectiveVisitorId, name: effectiveVisitorName || undefined }
         : undefined,

@@ -12,6 +12,7 @@ import { AiComposer } from '@/components/ui/ai-composer'
 import { Loader } from '@/components/ui/loader'
 import { ContactAvatar } from '@/components/ui/contact-avatar'
 import { ChannelIcon } from '@/components/ui/channel-icon'
+import { MODEL_CATALOG } from '@/lib/ai/catalog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -157,12 +158,14 @@ function InternalNewChatHero({
   onChangeValue,
   onSend,
   sending,
+  model,
 }: {
   agentName: string
   replyText: string
   onChangeValue: (next: string) => void
   onSend: () => void
   sending: boolean
+  model: { value: string; options: { value: string; label: string }[]; onChange: (v: string) => void }
 }) {
   return (
     <div className="flex flex-1 flex-col bg-[#fafafa]">
@@ -182,6 +185,7 @@ function InternalNewChatHero({
             sending={sending}
             variant="hero"
             placeholder="Ask anything"
+            model={model}
           />
         </div>
       </div>
@@ -244,6 +248,24 @@ function InboxInner() {
   const [savingNotes, setSavingNotes] = useState(false)
   const [rightTab, setRightTab] = useState<'details' | 'copilot'>('details')
   const [starred, setStarred] = useState<Set<string>>(new Set())
+  /**
+   * Per-turn model override for internal-agent chats. Persisted per
+   * (user, agent) in localStorage so switching conversations or
+   * reloading keeps the pick — sending nothing (null) falls back to
+   * the agent's configured model.
+   */
+  const [chatModel, setChatModelState] = useState<string | null>(null)
+  useEffect(() => {
+    if (!agentFilter || typeof window === 'undefined') return
+    const raw = window.localStorage.getItem(`inbox:chat-model:${agentFilter}`)
+    setChatModelState(raw)
+  }, [agentFilter])
+  function setChatModel(name: string) {
+    setChatModelState(name)
+    if (agentFilter && typeof window !== 'undefined') {
+      window.localStorage.setItem(`inbox:chat-model:${agentFilter}`, name)
+    }
+  }
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -491,6 +513,7 @@ function InboxInner() {
           conversationId: convId ?? undefined,
           stream: false,
           isTest: true,
+          modelName: chatModel || undefined,
         }),
       })
       if (!res.ok) throw new Error(await res.text().catch(() => 'Failed to send'))
@@ -589,6 +612,23 @@ function InboxInner() {
   const isInternalAgent = filteredAgent?.settings
     ? (filteredAgent.settings as { is_customer_facing?: boolean }).is_customer_facing === false
     : false
+
+  /**
+   * Model picker slot for <AiComposer>. Only shown on internal-agent
+   * chats — operators shouldn't swap the customer's agent mid-reply.
+   * Default value falls back to the agent's configured model_name (we
+   * read it off filteredAgent.settings when present, but
+   * /api/agents/:id.settings doesn't include model_name; so the fallback
+   * is the first catalog entry). User's pick overrides per-agent via
+   * localStorage.
+   */
+  const composerModel = isInternalAgent
+    ? {
+        value: chatModel || (filteredAgent?.settings as { model_name?: string } | null)?.model_name || MODEL_CATALOG[0].name,
+        options: MODEL_CATALOG.map(m => ({ value: m.name, label: m.short ?? m.label })),
+        onChange: setChatModel,
+      }
+    : undefined
 
   function seedBlankInternalDetail(): ConversationDetail | null {
     if (!filteredAgent) return null
@@ -812,6 +852,7 @@ function InboxInner() {
             onChangeValue={setReplyText}
             onSend={() => { void handleInternalChatSend() }}
             sending={sending}
+            model={composerModel!}
           />
         ) : detail ? (
           <>
@@ -964,6 +1005,7 @@ function InboxInner() {
                 onChange={setReplyText}
                 onSubmit={() => { void (isInternalAgent ? handleInternalChatSend() : handleSendReply()) }}
                 sending={sending}
+                model={composerModel}
                 variant="inline"
                 placeholder={isInternalAgent ? 'Ask anything' : `Reply on ${channelLabel(detail.channel)}`}
               />

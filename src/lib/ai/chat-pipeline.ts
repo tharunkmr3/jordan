@@ -43,6 +43,16 @@ export interface PipelineInput {
    * inbox can optionally hide it.
    */
   isTest?: boolean
+  /**
+   * Per-turn model override (internal-agent chat UI allows the user
+   * to switch models from the composer). Must be a name present in
+   * MODEL_CATALOG; server resolves provider. When omitted the pipeline
+   * falls back to the agent's configured model_name / model_provider.
+   */
+  modelOverride?: {
+    name: string
+    provider: 'openai' | 'anthropic' | 'sarvam' | 'gemini'
+  }
   contactInfo?: {
     name?: string
     email?: string
@@ -109,16 +119,20 @@ export async function processChatMessage(
   const kbContextStr = kbContext.length > 0 ? kbContext.join('\n\n') : ''
   const messages = buildPrompt(agent, history, input.message, kbContextStr, input.channel)
 
-  // 5. Call AI model
+  // 5. Call AI model. Per-turn override wins over the agent's configured
+  // model — the internal-chat composer uses this to let users switch
+  // models without editing agent settings.
+  const effectiveProvider = input.modelOverride?.provider ?? agent.model_provider
+  const effectiveModelName = input.modelOverride?.name ?? agent.model_name
   const modelConfig: ModelConfig = {
-    provider: agent.model_provider,
-    model: agent.model_name,
+    provider: effectiveProvider,
+    model: effectiveModelName,
     temperature: agent.temperature,
     maxTokens: agent.max_tokens,
   }
 
   // 5a. Load any tools available to this agent
-  const toolsBundle = supportsTools(agent.model_provider)
+  const toolsBundle = supportsTools(effectiveProvider)
     ? await buildAgentTools(supabase, agent.id)
     : null
 
@@ -155,7 +169,10 @@ export async function processChatMessage(
     content: response,
     channel: input.channel,
     metadata: {
-      model_used: `${agent.model_provider}/${agent.model_name}`,
+      // Record the model that actually handled this turn (override-aware)
+      // so history shows "this reply came from Opus, that one from Sonnet".
+      model_used: `${effectiveProvider}/${effectiveModelName}`,
+      model_overridden: Boolean(input.modelOverride),
       tools_available: toolsBundle?.tools.length ?? 0,
     },
   })
@@ -211,9 +228,13 @@ export async function* streamChatMessage(
   const kbContextStr = kbContext.length > 0 ? kbContext.join('\n\n') : ''
   const messages = buildPrompt(agent, history, input.message, kbContextStr, input.channel)
 
+  // Per-turn override applies here too (internal chat composer sends
+  // a modelOverride for the currently-selected model).
+  const effectiveProvider = input.modelOverride?.provider ?? agent.model_provider
+  const effectiveModelName = input.modelOverride?.name ?? agent.model_name
   const modelConfig: ModelConfig = {
-    provider: agent.model_provider,
-    model: agent.model_name,
+    provider: effectiveProvider,
+    model: effectiveModelName,
     temperature: agent.temperature,
     maxTokens: agent.max_tokens,
   }
@@ -225,7 +246,7 @@ export async function* streamChatMessage(
   // to see the full tool_calls array before executing). If the agent has
   // tools enabled, run the non-streaming agentic loop then yield the final
   // text as a single chunk. UX: slightly slower first token, but tools work.
-  const toolsBundle = supportsTools(agent.model_provider)
+  const toolsBundle = supportsTools(effectiveProvider)
     ? await buildAgentTools(supabase, agent.id)
     : null
 
@@ -265,7 +286,8 @@ export async function* streamChatMessage(
       content: fullResponse,
       channel: input.channel,
       metadata: {
-        model_used: `${agent.model_provider}/${agent.model_name}`,
+        model_used: `${effectiveProvider}/${effectiveModelName}`,
+        model_overridden: Boolean(input.modelOverride),
         tools_available: toolsBundle.tools.length,
       },
     }).catch(err => console.error('[chat-pipeline] Save response failed:', err))
@@ -275,7 +297,7 @@ export async function* streamChatMessage(
       agent_id: agent.id,
       event_type: 'message',
       quantity: 1,
-      metadata: { conversation_id: conversation.id, channel: input.channel, model: `${agent.model_provider}/${agent.model_name}` },
+      metadata: { conversation_id: conversation.id, channel: input.channel, model: `${effectiveProvider}/${effectiveModelName}` },
     }).catch(err => console.error('[chat-pipeline] Usage log failed:', err))
 
     return
@@ -300,7 +322,10 @@ export async function* streamChatMessage(
     role: 'assistant',
     content: fullResponse,
     channel: input.channel,
-    metadata: { model_used: `${agent.model_provider}/${agent.model_name}` },
+    metadata: {
+      model_used: `${effectiveProvider}/${effectiveModelName}`,
+      model_overridden: Boolean(input.modelOverride),
+    },
   }).catch(err => console.error('[chat-pipeline] Save response failed:', err))
 
   logUsage(supabase, {
@@ -308,7 +333,7 @@ export async function* streamChatMessage(
     agent_id: agent.id,
     event_type: 'message',
     quantity: 1,
-    metadata: { conversation_id: conversation.id, channel: input.channel, model: `${agent.model_provider}/${agent.model_name}` },
+    metadata: { conversation_id: conversation.id, channel: input.channel, model: `${effectiveProvider}/${effectiveModelName}` },
   }).catch(err => console.error('[chat-pipeline] Usage log failed:', err))
 }
 

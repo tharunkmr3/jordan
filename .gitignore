@@ -45,3 +45,6 @@ next-env.d.ts
 .claude/
 .vscode/
 .idea/
+
+# local test fixtures — not tracked
+test-kb-files/

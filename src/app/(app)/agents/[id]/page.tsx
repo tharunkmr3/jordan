@@ -19,6 +19,7 @@ import { Markdown } from "@/components/ui/markdown"
 import { ChainOfThought, ChainOfThoughtStep, ChainOfThoughtTrigger, ChainOfThoughtContent, ChainOfThoughtItem } from "@/components/ui/chain-of-thought"
 import { AiWidgetProvider } from "@/components/ui/ai-widget"
 import { AiComposer } from "@/components/ui/ai-composer"
+import { MODEL_CATALOG, providerForModelName } from "@/lib/ai/catalog"
 import { Loader } from "@/components/ui/loader"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
@@ -739,30 +740,22 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                   <div className="text-sm font-semibold text-[#2e2e2e]">Models</div>
                 </div>
                 <Field label="AI model" description="The model that powers this agent's responses.">
-                  {/* Select value is the model_name so we can offer multiple
-                      models per provider (Sonnet vs Opus) under one dropdown.
-                      onValueChange derives the provider. */}
+                  {/* Source of truth: src/lib/ai/catalog.ts.
+                      Select value is model_name so Sonnet/Opus coexist under
+                      one dropdown; onValueChange derives provider. */}
                   <Select
                     value={editData.model_name || 'sarvam-m'}
                     onValueChange={v => {
                       if (!v) return
-                      const providerFor: Record<string, string> = {
-                        'sarvam-m': 'sarvam',
-                        'gpt-5.4': 'openai',
-                        'claude-sonnet-4-6': 'anthropic',
-                        'claude-opus-4-7': 'anthropic',
-                        'gemini-pro': 'gemini',
-                      }
-                      setEditData({ ...editData, model_name: v, model_provider: providerFor[v] || editData.model_provider })
+                      const provider = providerForModelName(String(v)) || editData.model_provider
+                      setEditData({ ...editData, model_name: String(v), model_provider: provider })
                     }}
                   >
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="sarvam-m">Sarvam 30B (Free)</SelectItem>
-                      <SelectItem value="gpt-5.4">OpenAI GPT-5.4</SelectItem>
-                      <SelectItem value="claude-sonnet-4-6">Claude Sonnet 4.6</SelectItem>
-                      <SelectItem value="claude-opus-4-7">Claude Opus 4.7</SelectItem>
-                      <SelectItem value="gemini-pro">Gemini Pro</SelectItem>
+                      {MODEL_CATALOG.map(m => (
+                        <SelectItem key={m.name} value={m.name}>{m.label}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </Field>
