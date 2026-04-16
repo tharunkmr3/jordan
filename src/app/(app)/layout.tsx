@@ -164,7 +164,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   // Derive page title from pathname
-  const pageTitle = nav.find(n => pathname === n.href || pathname.startsWith(n.href + "/"))?.label
+  const pageTitle = [...nav, ...bottomNav].find(n => pathname === n.href || pathname.startsWith(n.href + "/"))?.label
+    || (pathname.startsWith("/agents/") ? "Agent" : undefined)
     || bottomNav.find(n => pathname === n.href || pathname.startsWith(n.href + "/"))?.label
     || "Dashboard"
 
