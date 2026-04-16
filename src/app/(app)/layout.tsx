@@ -200,6 +200,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 {agents.length > 0 && <span className="text-[10px] text-[#a3a3a3]">{agents.length}</span>}
               </div>
               <div className="space-y-0.5">
+                <Link
+                  href="/agents/new"
+                  className={cn(
+                    "flex items-center gap-2 rounded-md px-3 py-1.5 text-[12px] font-[500] transition-colors",
+                    pathname === "/agents/new" ? "bg-[#ebebeb] text-[#0a0a0a]" : "text-[#737373] hover:bg-[#ebebeb] hover:text-[#0a0a0a]"
+                  )}
+                >
+                  <PlusCircle size={18} weight="regular" className="flex-shrink-0 text-[#737373]" />
+                  <span className="truncate flex-1">New Agent</span>
+                </Link>
                 {agents.map((a) => {
                   const isActive = pathname === `/agents/${a.id}`
                   return (
@@ -223,16 +233,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     </Link>
                   )
                 })}
-                <Link
-                  href="/agents/new"
-                  className={cn(
-                    "flex items-center gap-2 rounded-md px-3 py-1.5 text-[12px] font-[500] transition-colors",
-                    pathname === "/agents/new" ? "bg-[#ebebeb] text-[#0a0a0a]" : "text-[#737373] hover:bg-[#ebebeb] hover:text-[#0a0a0a]"
-                  )}
-                >
-                  <PlusCircle size={18} weight="regular" className="flex-shrink-0 text-[#737373]" />
-                  <span className="truncate flex-1">New Agent</span>
-                </Link>
               </div>
             </div>
           )}
