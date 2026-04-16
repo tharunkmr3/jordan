@@ -652,7 +652,7 @@ function InboxInner() {
 
             {/* Input — single bordered box with no top divider */}
             <div className="bg-white px-4 pb-4 pt-2 flex-shrink-0">
-              <div className="rounded-xl border border-black/[0.04] bg-white overflow-hidden focus-within:ring-1 focus-within:ring-[#2e2e2e]/10">
+              <div className="rounded-xl border border-black/[0.08] bg-white overflow-hidden focus-within:ring-1 focus-within:ring-[#2e2e2e]/10">
                 {/* Channel selector */}
                 <div className="flex items-center gap-2 px-3 pt-2">
                   <button className="flex items-center gap-1.5 px-1.5 py-1 rounded-md hover:bg-[#f5f5f5] text-sm text-[#2e2e2e]">

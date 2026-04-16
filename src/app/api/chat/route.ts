@@ -20,7 +20,7 @@ export async function OPTIONS() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { agentId, message, conversationId, visitorId, visitorName, stream } = body
+    const { agentId, message, conversationId, visitorId, visitorName, stream, isTest } = body
 
     if (!agentId || typeof agentId !== 'string') {
       return NextResponse.json({ error: 'agentId is required' }, { status: 400, headers: corsHeaders })
@@ -47,11 +47,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Agent is not active' }, { status: 403, headers: corsHeaders })
     }
 
+    // Test Chat panel passes isTest=true explicitly; fall back to the
+    // `test-` visitorId convention used by older callers.
+    const computedIsTest = Boolean(isTest) || (typeof visitorId === 'string' && visitorId.startsWith('test-'))
+
     const pipelineInput = {
       agentId,
       message,
       conversationId: conversationId || undefined,
       channel: 'website' as const,
+      isTest: computedIsTest,
       contactInfo: visitorId ? { channelUserId: visitorId, name: visitorName || undefined } : undefined,
     }
 

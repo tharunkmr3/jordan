@@ -25,12 +25,13 @@ export async function GET(request: NextRequest) {
   const agentId = searchParams.get('agentId')
 
   // Build conversations query with contact and agent joins
+  // Also pull agent.settings so we can honor per-agent "show_test_in_inbox"
   let query = supabase
     .from('conversations')
     .select(`
       *,
       contact:contacts(id, name, email, phone, channel, language, metadata, tags),
-      agent:agents(id, name, avatar_url)
+      agent:agents(id, name, avatar_url, settings)
     `)
     .eq('org_id', orgId)
     .order('updated_at', { ascending: false })
@@ -81,7 +82,15 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const enriched = conversations.map((conv) => ({
+  // Hide test conversations by default. Show them only when the agent
+  // has opted in via settings.show_test_in_inbox === true.
+  const visibleConversations = conversations.filter((conv) => {
+    if (!conv.is_test) return true
+    const agentSettings = (conv.agent as { settings?: Record<string, unknown> } | null)?.settings
+    return agentSettings?.show_test_in_inbox === true
+  })
+
+  const enriched = visibleConversations.map((conv) => ({
     ...conv,
     last_message: lastMsgMap.get(conv.id) || null,
     message_count: 0, // Computed on-demand in detail view

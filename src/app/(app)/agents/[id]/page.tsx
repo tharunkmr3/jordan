@@ -167,7 +167,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agentId: id, message: msg, conversationId, stream: true, visitorId: `test-${id}`, visitorName: "Test" }),
+        body: JSON.stringify({ agentId: id, message: msg, conversationId, stream: true, isTest: true, visitorId: `test-${id}`, visitorName: "Test" }),
       })
       if (!res.body) throw new Error("No stream")
       const reader = res.body.getReader()
@@ -556,6 +556,14 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                     onCheckedChange={v => {
                       const isCF = v
                       setEditData({...editData, settings: { ...(editData.settings as object || {}), is_customer_facing: isCF }, escalation_enabled: isCF ? true : editData.escalation_enabled })
+                    }}
+                  />
+                </Field>
+                <Field label="Show test chats in inbox" description="Include conversations from this agent's Test Chat panel in the inbox list. Off by default — keeps the inbox focused on real customer conversations.">
+                  <Switch
+                    checked={(editData.settings as Record<string, unknown> | undefined)?.show_test_in_inbox === true}
+                    onCheckedChange={v => {
+                      setEditData({...editData, settings: { ...(editData.settings as object || {}), show_test_in_inbox: v }})
                     }}
                   />
                 </Field>

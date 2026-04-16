@@ -23,6 +23,12 @@ export interface PipelineInput {
   message: string
   conversationId?: string
   channel: ChannelType
+  /**
+   * True when the message originates from the in-app Test Chat panel
+   * in agent settings. Flags the conversation as is_test=true so the
+   * inbox can optionally hide it.
+   */
+  isTest?: boolean
   contactInfo?: {
     name?: string
     email?: string
@@ -295,7 +301,7 @@ async function findOrCreateConversation(supabase: SupabaseAdmin, agent: Agent, c
 
   const { data, error } = await supabase
     .from('conversations')
-    .insert({ org_id: agent.org_id, agent_id: agent.id, contact_id: contact.id, channel: input.channel, status: 'active', started_at: new Date().toISOString(), resolved_at: null, channel_conversation_id: null, assigned_to: null })
+    .insert({ org_id: agent.org_id, agent_id: agent.id, contact_id: contact.id, channel: input.channel, status: 'active', started_at: new Date().toISOString(), resolved_at: null, channel_conversation_id: null, assigned_to: null, is_test: input.isTest ?? false })
     .select()
     .single()
 
