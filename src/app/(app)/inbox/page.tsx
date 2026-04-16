@@ -558,7 +558,13 @@ function InboxInner() {
             </div>
 
             {/* Messages */}
-            <ScrollArea className="flex-1 min-h-0 px-5 py-4 bg-white">
+            <ScrollArea
+              className="flex-1 min-h-0 px-5 py-6 bg-white"
+              style={{
+                WebkitMaskImage: 'linear-gradient(to bottom, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%)',
+                maskImage: 'linear-gradient(to bottom, transparent 0, #000 24px, #000 calc(100% - 24px), transparent 100%)',
+              }}
+            >
               <div className="mx-auto max-w-2xl space-y-3">
                 {detail.messages.length === 0 ? (
                   <div className="flex items-center justify-center py-16">
