@@ -258,7 +258,7 @@ export default function ChannelsPage() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-[15px] font-semibold text-[#0a0a0a]">Channels</h1>
+          <h1 className="text-[15px] font-semibold text-[#1f1f1f]">Channels</h1>
           <p className="text-[12px] text-[#a3a3a3] mt-1">
             Connect your agent to messaging platforms and your website.
           </p>

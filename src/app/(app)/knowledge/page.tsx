@@ -180,12 +180,12 @@ export default function KnowledgePage() {
       <div className="p-6">
         {/* Back + title */}
         <div className="flex items-center gap-3 mb-6">
-          <button onClick={() => setSelectedKb(null)} className="rounded-md p-1 text-[#737373] hover:bg-[#f5f5f5] hover:text-[#0a0a0a]">
+          <button onClick={() => setSelectedKb(null)} className="rounded-md p-1 text-[#737373] hover:bg-[#f5f5f5] hover:text-[#1f1f1f]">
             <ArrowLeft size={18} />
           </button>
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <h1 className="text-base font-semibold text-[#0a0a0a]">{activeKb.name}</h1>
+              <h1 className="text-base font-semibold text-[#1f1f1f]">{activeKb.name}</h1>
               {agentName && <Badge variant="secondary" className="text-xs">{agentName}</Badge>}
             </div>
             {activeKb.description && <p className="text-xs text-[#737373] mt-0.5">{activeKb.description}</p>}
@@ -233,7 +233,7 @@ export default function KnowledgePage() {
               <div key={doc.id} className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-[#fafafa] group transition-colors">
                 <FileText size={18} className="text-[#737373] shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-[#0a0a0a] truncate">{doc.name}</div>
+                  <div className="text-sm font-medium text-[#1f1f1f] truncate">{doc.name}</div>
                   <div className="text-xs text-[#a3a3a3]">
                     {doc.file_type || 'text'} · {(doc.char_count / 1000).toFixed(1)}k chars
                   </div>

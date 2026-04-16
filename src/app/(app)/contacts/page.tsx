@@ -2,7 +2,7 @@ export default function ContactsPage() {
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-[15px] font-semibold text-[#0a0a0a]">Contacts</h1>
+        <h1 className="text-[15px] font-semibold text-[#1f1f1f]">Contacts</h1>
       </div>
       <div className="flex items-center justify-center rounded-xl border border-dashed border-[#d4d4d4] bg-[#fafafa] py-24">
         <div className="text-center">

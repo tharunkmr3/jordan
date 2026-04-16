@@ -46,3 +46,7 @@ Never go below 11px for any visible text. Prefer `text-sm` (14px) as the default
 ### Cursor: pointer on all clickable elements
 
 Global CSS in `globals.css` sets `cursor: pointer` on `button`, `a`, `[role="button"]`, `select`, `summary`, `label[for]`, and input submit/button types. Never add `cursor-pointer` manually in Tailwind — it's handled globally. If a custom div or span is clickable, give it `role="button"` or use a `<button>` element.
+
+### Text color: softened black
+
+Use `#1f1f1f` for primary text — not pure `#000` or harsh `#0a0a0a`. The extra brightness is tiring on eyes. Secondary text stays at `#525252` / `#737373`, tertiary/hint at `#a3a3a3`. Avoid introducing new shades; pick from the existing palette.

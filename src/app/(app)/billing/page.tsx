@@ -95,7 +95,7 @@ export default function BillingPage() {
         description: `${PLANS[plan].name} Plan`,
         prefill: { email: data.email, contact: '' },
         notes: { org_id: data.orgId, plan },
-        theme: { color: '#0a0a0a' },
+        theme: { color: '#1f1f1f' },
         handler: async (response: { razorpay_payment_id: string; razorpay_subscription_id?: string; razorpay_signature: string; razorpay_order_id?: string }) => {
           // Verify payment on server
           const verifyRes = await fetch('/api/billing/verify-payment', {
@@ -139,7 +139,7 @@ export default function BillingPage() {
     return (
       <div className="p-6">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-[15px] font-semibold text-[#0a0a0a]">Billing</h1>
+          <h1 className="text-[15px] font-semibold text-[#1f1f1f]">Billing</h1>
         </div>
         <Card className="mb-6">
           <CardHeader>
@@ -174,7 +174,7 @@ export default function BillingPage() {
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-[15px] font-semibold text-[#0a0a0a]">Billing</h1>
+        <h1 className="text-[15px] font-semibold text-[#1f1f1f]">Billing</h1>
       </div>
 
       {/* Current Plan Status */}
@@ -214,14 +214,14 @@ export default function BillingPage() {
         {(Object.entries(PLANS) as [PlanKey, typeof PLANS[PlanKey]][]).map(([key, plan]) => {
           const isCurrent = currentPlan === key
           return (
-            <Card key={key} className={isCurrent ? 'border-[#0a0a0a]' : ''}>
+            <Card key={key} className={isCurrent ? 'border-[#1f1f1f]' : ''}>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-[14px]">{plan.name}</CardTitle>
                   {isCurrent && <Badge>Current</Badge>}
                 </div>
                 <CardDescription className="text-[12px]">
-                  <span className="text-[20px] font-semibold text-[#0a0a0a]">
+                  <span className="text-[20px] font-semibold text-[#1f1f1f]">
                     {'\u20B9'}{(plan.price / 100).toLocaleString('en-IN')}
                   </span>
                   <span className="text-[#737373]">/month</span>
@@ -231,7 +231,7 @@ export default function BillingPage() {
                 <ul className="space-y-2">
                   {plan.features.map((feature) => (
                     <li key={feature} className="flex items-center gap-2 text-[12px] text-[#525252]">
-                      <svg className="h-3.5 w-3.5 text-[#0a0a0a] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <svg className="h-3.5 w-3.5 text-[#1f1f1f] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                       </svg>
                       {feature}
