@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import {
   House,
   Robot,
@@ -74,6 +74,8 @@ function NavItem({ item, isActive, collapsed }: { item: typeof nav[0]; isActive:
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const currentAgentId = pathname === "/inbox" ? searchParams.get("agentId") : null
   const [collapsed, setCollapsed] = useState(false)
 
   // Listen for toggle events from child pages (e.g., inbox)
@@ -202,11 +204,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* Main nav */}
         <nav className="flex-1 overflow-y-auto space-y-0.5 px-2 pt-3">
-          {nav.map((item, idx) => (
+          {nav.map((item, idx) => {
+            // /inbox should NOT be active when filtered by agent — the agent row is active instead
+            const isInboxFiltered = item.href === "/inbox" && currentAgentId
+            const isActive = !isInboxFiltered && (pathname === item.href || pathname.startsWith(item.href + "/"))
+            return (
             <div key={item.href}>
               <NavItem
                 item={item}
-                isActive={pathname === item.href || pathname.startsWith(item.href + "/")}
+                isActive={isActive}
                 collapsed={collapsed}
               />
               {/* Search slot right below Home */}
@@ -225,7 +231,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </button>
               )}
             </div>
-          ))}
+            )
+          })}
 
           {/* Agents section */}
           {!collapsed && (
@@ -249,7 +256,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   const isCustomerFacing = a.settings?.is_customer_facing !== false
                   const href = isCustomerFacing ? `/inbox?agentId=${a.id}` : `/agents/${a.id}`
                   const isActive = isCustomerFacing
-                    ? (pathname === "/inbox" && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("agentId") === a.id)
+                    ? currentAgentId === a.id
                     : pathname === `/agents/${a.id}`
                   const menuOpen = agentMenuOpen === a.id
                   return (
