@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
+import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { avatarColor } from '@/lib/utils'
@@ -24,6 +25,7 @@ import {
   PaperPlaneTilt,
   Star,
   DotsThreeVertical,
+  GearSix,
   UserCircle,
   Plus,
   CaretDown,
@@ -417,7 +419,10 @@ function InboxInner() {
                   {filteredAgent.name[0]?.toUpperCase() || 'A'}
                 </div>
               ) })()}
-              <span className="text-[15px] font-semibold text-[#0a0a0a] truncate">{filteredAgent.name}</span>
+              <span className="text-[15px] font-semibold text-[#0a0a0a] truncate flex-1">{filteredAgent.name}</span>
+              <Link href={`/agents/${filteredAgent.id}`} className="rounded-md p-1 text-[#737373] hover:bg-[#f5f5f5] hover:text-[#0a0a0a]" title="Agent settings">
+                <GearSix size={16} weight="regular" />
+              </Link>
             </>
           ) : (
             <span className="text-[15px] font-semibold text-[#0a0a0a]">All conversations</span>
