@@ -511,11 +511,9 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
         <div className="flex items-center gap-1 px-5 border-b border-black/[0.06] flex-shrink-0 overflow-x-auto">
           {[
             { key: "agent", label: "Agent" },
-            { key: "model", label: "AI Model" },
-            { key: "voice", label: "Voice" },
+            { key: "model", label: "System Prompt" },
             { key: "channels", label: "Channels" },
             { key: "knowledge", label: "Knowledge Base" },
-            { key: "escalation", label: "Escalation" },
           ].map(t => (
             <button
               key={t.key}
@@ -545,70 +543,75 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                 <Field label="Status" description="Only active agents can receive messages.">
                   <Select value={editData.status} onValueChange={v => v && setEditData({...editData, status: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="draft">Draft</SelectItem><SelectItem value="active">Active</SelectItem><SelectItem value="paused">Paused</SelectItem></SelectContent></Select>
                 </Field>
-                <Field label="Customer-facing" description="On = talks to your customers. Off = internal use only (HR, dev, ops).">
+                <Field label="Customer-facing" description="On = talks to your customers. Off = internal use only.">
                   <Switch
                     checked={(editData.settings as Record<string, unknown> | undefined)?.is_customer_facing !== false}
-                    onCheckedChange={v => setEditData({...editData, settings: { ...(editData.settings as object || {}), is_customer_facing: v }})}
+                    onCheckedChange={v => {
+                      const isCF = v
+                      setEditData({...editData, settings: { ...(editData.settings as object || {}), is_customer_facing: isCF }, escalation_enabled: isCF ? true : editData.escalation_enabled })
+                    }}
                   />
                 </Field>
+                {(editData.settings as Record<string, unknown> | undefined)?.is_customer_facing !== false && (
+                  <Field label="Escalation email" description="When the AI can't help, conversations are escalated to this email.">
+                    <Input type="email" placeholder="support@company.com" value={editData.escalation_email || ""} onChange={e => setEditData({...editData, escalation_email: e.target.value})} />
+                  </Field>
+                )}
                 <Field label="Phone greeting" description="Spoken when someone calls. Chat channels start empty.">
                   <Textarea placeholder="Welcome to Jordon.ai, how may I help you today?" value={editData.greeting_message || ""} onChange={e => setEditData({...editData, greeting_message: e.target.value})} />
                 </Field>
                 <Field label="Fallback message" description="Shown when the AI fails to generate a response.">
                   <Textarea value={editData.fallback_message || ""} onChange={e => setEditData({...editData, fallback_message: e.target.value})} />
                 </Field>
-              </div>
-            )}
 
-            {/* AI Model tab */}
-            {activeTab === "model" && (
-              <div>
-                <Field label="Model provider" description="The AI model that powers this agent's responses.">
+                {/* Models section */}
+                <div className="pt-4 mt-4 border-t border-black/[0.06]">
+                  <div className="text-[13px] font-semibold text-[#0a0a0a] mb-2">Models</div>
+                </div>
+                <Field label="AI model" description="The model that powers this agent's responses.">
                   <Select value={editData.model_provider} onValueChange={v => {
                     if (!v) return
                     const defaults: Record<string, string> = { openai: "gpt-4o-mini", anthropic: "claude-sonnet-4-20250514", sarvam: "sarvam-m", gemini: "gemini-pro" }
                     setEditData({...editData, model_provider: v, model_name: defaults[v] || editData.model_name})
                   }}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="sarvam">Sarvam 30B (Free)</SelectItem><SelectItem value="openai">OpenAI GPT-4o mini</SelectItem><SelectItem value="anthropic">Claude Sonnet 4</SelectItem><SelectItem value="gemini">Gemini Pro</SelectItem></SelectContent></Select>
                 </Field>
-                <Field label="System prompt" description="Instructions that define how the agent behaves, what it knows, and how it should respond.">
-                  <Textarea value={editData.system_prompt || ""} onChange={e => setEditData({...editData, system_prompt: e.target.value})} className="min-h-[200px]" />
+                <Field label="Voice provider" description="How the agent speaks on phone calls.">
+                  <Select value={editData.voice_provider || "none"} onValueChange={v => v && setEditData({...editData, voice_provider: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Twilio Polly (Default)</SelectItem><SelectItem value="elevenlabs">ElevenLabs</SelectItem></SelectContent></Select>
                 </Field>
-                <Field label={`Temperature (${editData.temperature ?? 0.7})`} description="Lower = more focused and deterministic. Higher = more creative and varied.">
-                  <Input type="range" min={0} max={1} step={0.1} value={editData.temperature ?? 0.7} onChange={e => setEditData({...editData, temperature: parseFloat(e.target.value)})} />
+                {editData.voice_provider === "elevenlabs" && (
+                  <Field label="Voice" description="Pick a preset or paste a custom ElevenLabs voice ID.">
+                    <div className="space-y-2">
+                      <Select value={editData.voice_id || ""} onValueChange={v => v && setEditData({...editData, voice_id: v})}>
+                        <SelectTrigger><SelectValue placeholder="Select a voice" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="21m00Tcm4TlvDq8ikWAM">Rachel — Calm, Narration</SelectItem>
+                          <SelectItem value="EXAVITQu4vr4xnSDxMaL">Sarah — Mature, Reassuring</SelectItem>
+                          <SelectItem value="FGY2WhTYpPnrIDTdsKH5">Laura — Enthusiast, Quirky</SelectItem>
+                          <SelectItem value="IKne3meq5aSn9XLyUdCD">Charlie — Deep, Confident</SelectItem>
+                          <SelectItem value="JBFqnCBsd6RMkjVDRZzb">George — Warm Storyteller</SelectItem>
+                          <SelectItem value="TX3LPaxmHKxFdv7VOQHJ">Liam — Energetic Creator</SelectItem>
+                          <SelectItem value="Xb7hH8MSUJpSbSDYk0k2">Alice — Clear Educator</SelectItem>
+                          <SelectItem value="pFZP5JQG7iQjIQuC4Bku">Lily — Warm, Calm</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input placeholder="Or paste a custom Voice ID" value={editData.voice_id || ""} onChange={e => setEditData({...editData, voice_id: e.target.value})} />
+                    </div>
+                  </Field>
+                )}
+                <Field label="Primary language" description="The language the agent primarily speaks in.">
+                  <Select value={editData.language || "en"} onValueChange={v => v && setEditData({...editData, language: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{["en","hi","ta","te","kn","bn","mr","gu","ml","pa"].map(l => <SelectItem key={l} value={l}>{({en:"English",hi:"Hindi",ta:"Tamil",te:"Telugu",kn:"Kannada",bn:"Bengali",mr:"Marathi",gu:"Gujarati",ml:"Malayalam",pa:"Punjabi"} as Record<string,string>)[l]}</SelectItem>)}</SelectContent></Select>
                 </Field>
               </div>
             )}
 
-            {/* Voice tab */}
-            {activeTab === "voice" && (
+            {/* System Prompt tab */}
+            {activeTab === "model" && (
               <div>
-                <Field label="Voice provider" description="Choose how the agent speaks on phone calls.">
-                  <Select value={editData.voice_provider || "none"} onValueChange={v => v && setEditData({...editData, voice_provider: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Twilio Polly (Default)</SelectItem><SelectItem value="elevenlabs">ElevenLabs</SelectItem></SelectContent></Select>
+                <Field label="System prompt" description="Instructions that define how the agent behaves, what it knows, and how it should respond.">
+                  <Textarea value={editData.system_prompt || ""} onChange={e => setEditData({...editData, system_prompt: e.target.value})} className="min-h-[300px]" />
                 </Field>
-                {editData.voice_provider === "elevenlabs" && (
-                  <>
-                    <Field label="Voice" description="Pick a preset or paste a custom ElevenLabs voice ID.">
-                      <div className="space-y-2">
-                        <Select value={editData.voice_id || ""} onValueChange={v => v && setEditData({...editData, voice_id: v})}>
-                          <SelectTrigger><SelectValue placeholder="Select a voice" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="21m00Tcm4TlvDq8ikWAM">Rachel — Calm, Narration</SelectItem>
-                            <SelectItem value="EXAVITQu4vr4xnSDxMaL">Sarah — Mature, Reassuring</SelectItem>
-                            <SelectItem value="FGY2WhTYpPnrIDTdsKH5">Laura — Enthusiast, Quirky</SelectItem>
-                            <SelectItem value="IKne3meq5aSn9XLyUdCD">Charlie — Deep, Confident</SelectItem>
-                            <SelectItem value="JBFqnCBsd6RMkjVDRZzb">George — Warm Storyteller</SelectItem>
-                            <SelectItem value="TX3LPaxmHKxFdv7VOQHJ">Liam — Energetic Creator</SelectItem>
-                            <SelectItem value="Xb7hH8MSUJpSbSDYk0k2">Alice — Clear Educator</SelectItem>
-                            <SelectItem value="pFZP5JQG7iQjIQuC4Bku">Lily — Warm, Calm</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Input placeholder="Or paste a custom Voice ID" value={editData.voice_id || ""} onChange={e => setEditData({...editData, voice_id: e.target.value})} />
-                      </div>
-                    </Field>
-                  </>
-                )}
-                <Field label="Primary language" description="The language the agent primarily speaks in.">
-                  <Select value={editData.language || "en"} onValueChange={v => v && setEditData({...editData, language: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{["en","hi","ta","te","kn","bn","mr","gu","ml","pa"].map(l => <SelectItem key={l} value={l}>{({en:"English",hi:"Hindi",ta:"Tamil",te:"Telugu",kn:"Kannada",bn:"Bengali",mr:"Marathi",gu:"Gujarati",ml:"Malayalam",pa:"Punjabi"} as Record<string,string>)[l]}</SelectItem>)}</SelectContent></Select>
+                <Field label={`Temperature (${editData.temperature ?? 0.7})`} description="Lower = more focused and deterministic. Higher = more creative and varied.">
+                  <Input type="range" min={0} max={1} step={0.1} value={editData.temperature ?? 0.7} onChange={e => setEditData({...editData, temperature: parseFloat(e.target.value)})} />
                 </Field>
               </div>
             )}
@@ -915,19 +918,6 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
               </div>
             )}
 
-            {/* Escalation tab */}
-            {activeTab === "escalation" && (
-              <div>
-                <Field label="Enable escalation" description="When on, the agent can hand off conversations to a human.">
-                  <Switch checked={editData.escalation_enabled || false} onCheckedChange={v => setEditData({...editData, escalation_enabled: v})} />
-                </Field>
-                {editData.escalation_enabled && (
-                  <Field label="Escalation email" description="Email address notified when a conversation is escalated.">
-                    <Input type="email" value={editData.escalation_email || ""} onChange={e => setEditData({...editData, escalation_email: e.target.value})} />
-                  </Field>
-                )}
-              </div>
-            )}
 
           </div>
         </div>
