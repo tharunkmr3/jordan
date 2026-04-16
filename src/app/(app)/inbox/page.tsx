@@ -114,10 +114,10 @@ function channelIcon(channel: ChannelType, size = 14) {
     case 'facebook':
       return <MessengerLogo size={size} weight="fill" className="text-[#0084FF]" />
     case 'phone':
-      return <PhoneIcon size={size} weight="fill" className="text-[#6b7280]" />
+      return <PhoneIcon size={size} weight="fill" className="text-[#a855f7]" />
     case 'website':
     default:
-      return <Globe size={size} weight="fill" className="text-[#6b7280]" />
+      return <Globe size={size} weight="fill" className="text-[#f59e0b]" />
   }
 }
 
@@ -142,10 +142,10 @@ function channelBg(channel: ChannelType): string {
     case 'facebook':
       return 'bg-[#e5f1ff] text-[#0084FF]'
     case 'phone':
-      return 'bg-[#f5f5f5] text-[#6b7280]'
+      return 'bg-[#f3e8ff] text-[#a855f7]'
     case 'website':
     default:
-      return 'bg-[#f5f5f5] text-[#6b7280]'
+      return 'bg-[#fef3c7] text-[#f59e0b]'
   }
 }
 
@@ -457,21 +457,13 @@ export default function InboxPage() {
                     }`}
                   >
                     {/* Channel icon avatar */}
-                    <div className={`relative flex-shrink-0 flex items-center justify-center h-9 w-9 rounded-full ${channelBg(conv.channel)}`}>
-                      {channelIcon(conv.channel, 16)}
-                      <div className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full bg-white flex items-center justify-center">
-                        <Avatar className="h-3.5 w-3.5">
-                          <AvatarFallback className="bg-[#0a0a0a] text-white text-[7px] font-semibold">{getInitials(contactName)}</AvatarFallback>
-                        </Avatar>
-                      </div>
+                    <div className={`flex-shrink-0 flex items-center justify-center h-9 w-9 rounded-full ${channelBg(conv.channel)}`}>
+                      {channelIcon(conv.channel, 18)}
                     </div>
                     {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="truncate text-[13px] font-semibold text-[#0a0a0a]">{contactName}</span>
-                          <span className="text-[11px] text-[#a3a3a3] flex-shrink-0">[{channelLabel(conv.channel)}]</span>
-                        </div>
+                        <span className="truncate text-[13px] font-semibold text-[#0a0a0a]">{contactName}</span>
                         <span className="flex-shrink-0 text-[11px] text-[#a3a3a3]">
                           {conv.last_message ? timeAgo(conv.last_message.created_at) : timeAgo(conv.updated_at)}
                         </span>
