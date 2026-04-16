@@ -27,7 +27,7 @@ export function FolderCard({ name, docCount, lastUpdated, onClick, className }: 
       )}
     >
       {/* Inline SVG with animated layers */}
-      <svg viewBox="0 0 307 321" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full max-w-[160px] mx-auto h-auto">
+      <svg viewBox="0 0 307 321" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full max-w-[120px] mx-auto h-auto">
         {/* Folder back */}
         <path
           d="M30 1H87.4727C97.1539 1.00012 106.196 5.83144 111.578 13.8789L117.539 22.792C125.148 34.1696 137.933 40.9999 151.62 41H277C293.016 41 306 53.9837 306 70V257C306 273.016 293.016 286 277 286H30C13.9837 286 1 273.016 1 257V30C1 13.9837 13.9837 1 30 1Z"
