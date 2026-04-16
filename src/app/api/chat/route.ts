@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'message too long (max 4000 characters)' }, { status: 400, headers: corsHeaders })
     }
 
-    // Validate agent exists and is active
+    // Validate agent exists
     const supabase = createAdminClient()
     const { data: agent } = await supabase
       .from('agents')
@@ -44,21 +44,21 @@ export async function POST(request: NextRequest) {
     if (!agent) {
       return NextResponse.json({ error: 'Agent not found' }, { status: 404, headers: corsHeaders })
     }
-    if (agent.status !== 'active') {
-      return NextResponse.json({ error: 'Agent is not active' }, { status: 403, headers: corsHeaders })
-    }
 
-    // If an authenticated Jordon team member is hitting this endpoint,
-    // scope the conversation to THEIR user id. That way two operators
-    // testing the same agent — or any chat from a logged-in user with
-    // an internal agent — each get their own private history instead
-    // of mingling into a shared "Test" contact.
+    // Check for an authenticated Jordon team member. When present we
+    // scope the conversation to THEIR user id (private per-user test
+    // chat) AND relax the agent.status gate — team members need to be
+    // able to chat with draft/paused agents while iterating on them.
     //
     // Unauthenticated callers (the public widget on a customer's site)
-    // fall through to using whatever visitorId / visitorName the client
-    // provided, which is the real end-customer identifier.
+    // still require an active agent AND fall through to whatever
+    // visitorId / visitorName the client provided.
     const serverSupabase = await createClient()
     const { data: { user: teamUser } } = await serverSupabase.auth.getUser()
+
+    if (!teamUser && agent.status !== 'active') {
+      return NextResponse.json({ error: 'Agent is not active' }, { status: 403, headers: corsHeaders })
+    }
 
     let effectiveVisitorId: string | undefined = visitorId
     let effectiveVisitorName: string | undefined = visitorName
