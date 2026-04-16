@@ -408,7 +408,7 @@ function InboxInner() {
       {/* ============================================================= */}
       {/* LEFT: Conversation List */}
       {/* ============================================================= */}
-      <Panel resizable defaultWidth={320} minWidth={260} maxWidth={480} storageKey="inbox:list">
+      <Panel className="bg-[#fafafa]" resizable defaultWidth={320} minWidth={260} maxWidth={480} storageKey="inbox:list">
         {/* Header */}
         <div className="flex h-12 items-center gap-2.5 px-4 border-b border-black/[0.04] flex-shrink-0">
           {filteredAgent ? (
@@ -453,7 +453,7 @@ function InboxInner() {
               placeholder="Search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="h-8 pl-8 text-[13px] border-black/[0.04] bg-[#fafafa] focus-visible:ring-1"
+              className="h-8 pl-8 text-[13px] border-black/[0.04] bg-white focus-visible:ring-1"
             />
           </div>
         </div>
@@ -461,9 +461,9 @@ function InboxInner() {
         {/* List */}
         <ScrollArea className="flex-1">
           {loading ? (
-            <div>
+            <div className="px-2 py-1 space-y-0.5">
               {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="flex items-start gap-3 px-4 py-3 border-b border-[#f5f5f5]">
+                <div key={i} className="flex items-start gap-3 px-3 py-2.5">
                   <Skeleton className="h-9 w-9 flex-shrink-0 rounded-full" />
                   <div className="flex-1 min-w-0 space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
@@ -486,7 +486,7 @@ function InboxInner() {
               </div>
             </div>
           ) : (
-            <div>
+            <div className="px-2 py-1 space-y-0.5">
               {conversations.map((conv) => {
                 const isSelected = conv.id === selectedId
                 const contactName = conv.contact?.name || conv.contact?.phone || conv.contact?.email || 'Unknown'
@@ -494,8 +494,10 @@ function InboxInner() {
                   <button
                     key={conv.id}
                     onClick={() => setSelectedId(conv.id)}
-                    className={`flex w-full items-start gap-3 px-4 py-3 text-left transition-colors border-b border-[#f5f5f5] ${
-                      isSelected ? 'bg-[#eff6ff] border-l-2 border-l-[#3b82f6]' : 'hover:bg-[#fafafa] border-l-2 border-l-transparent'
+                    className={`flex w-full items-start gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                      isSelected
+                        ? 'bg-white shadow-[0_2px_4px_-1px_rgba(0,0,0,0.08),0_1px_2px_-1px_rgba(0,0,0,0.04)]'
+                        : 'hover:bg-white/70'
                     }`}
                   >
                     {/* Channel icon avatar */}
