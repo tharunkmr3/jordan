@@ -410,7 +410,7 @@ function InboxInner() {
       {/* ============================================================= */}
       <Panel className="bg-[#fafafa]" resizable defaultWidth={320} minWidth={260} maxWidth={480} storageKey="inbox:list">
         {/* Header */}
-        <div className="flex h-12 items-center gap-2.5 px-4 border-b border-black/[0.04] flex-shrink-0">
+        <div className="flex h-12 items-center gap-2.5 px-4 border-b border-black/[0.06] flex-shrink-0">
           {filteredAgent ? (
             <>
               {filteredAgent.avatar_url ? (
@@ -431,7 +431,7 @@ function InboxInner() {
         </div>
 
         {/* Filter tabs */}
-        <div className="flex items-center gap-1 px-3 py-2.5 border-b border-black/[0.04]">
+        <div className="flex items-center gap-1 px-3 py-2.5 border-b border-black/[0.06]">
           {(['all', 'active', 'escalated'] as const).map((t) => (
             <button
               key={t}
@@ -446,7 +446,7 @@ function InboxInner() {
         </div>
 
         {/* Search */}
-        <div className="px-3 py-2 border-b border-black/[0.04]">
+        <div className="px-3 py-2 border-b border-black/[0.06]">
           <div className="relative">
             <MagnifyingGlass size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#a3a3a3]" />
             <Input
