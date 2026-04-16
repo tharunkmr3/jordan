@@ -15,11 +15,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Panel } from "@/components/ui/panel"
 import { Message, MessageAvatar, MessageContent } from "@/components/ui/message"
+import { Markdown } from "@/components/ui/markdown"
+import { ChainOfThought, ChainOfThoughtStep, ChainOfThoughtTrigger, ChainOfThoughtContent, ChainOfThoughtItem } from "@/components/ui/chain-of-thought"
 import { PromptInput, PromptInputTextarea, PromptInputActions, PromptInputAction } from "@/components/ui/prompt-input"
 import { Loader } from "@/components/ui/loader"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
-import { avatarColor, avatarInitial } from "@/lib/utils"
+import { avatarColor, avatarInitial, cn } from "@/lib/utils"
 import { Slider } from "@/components/ui/slider"
 import { useSliderWithInput } from "@/hooks/use-slider-with-input"
 import { ArrowUp, ArrowLeft, Copy, Check, Trash2, Pencil, Phone, Mail, Globe, Upload, FileText, X, Plus, Camera } from "lucide-react"
@@ -52,7 +54,18 @@ interface KbDocument {
   char_count: number; created_at: string
 }
 
-interface ChatMsg { role: "user" | "assistant"; content: string }
+/** Tool-call step in the agent's chain of thought, as streamed by the pipeline. */
+export type ThoughtStep =
+  | { kind: "thinking"; id: string; trigger: string; items: string[] }
+  | { kind: "tool_call"; id: string; tool: string; args: Record<string, unknown>; status: "running" }
+  | { kind: "tool_done"; id: string; tool: string; resultPreview: string }
+
+interface ChatMsg {
+  role: "user" | "assistant"
+  content: string
+  /** Chain-of-thought steps that accumulated during tool calling. */
+  thoughts?: ThoughtStep[]
+}
 
 const modelLabels: Record<string, string> = { sarvam: "Sarvam 30B", openai: "GPT-4o", anthropic: "Claude 3.5", gemini: "Gemini Pro" }
 const statusColors: Record<string, string> = { active: "bg-green-50 text-green-700", draft: "bg-gray-100 text-gray-600", paused: "bg-yellow-50 text-yellow-700" }
@@ -253,8 +266,19 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
       let assistantMsg = ""
-      setMessages(prev => [...prev, { role: "assistant", content: "" }])
+      const thoughts: ThoughtStep[] = []
+      setMessages(prev => [...prev, { role: "assistant", content: "", thoughts: [] }])
       setChatLoading(false)
+
+      const updateLastAssistant = (patch: (prev: ChatMsg) => ChatMsg) => {
+        setMessages(prev => {
+          const updated = [...prev]
+          const last = updated[updated.length - 1]
+          if (!last || last.role !== "assistant") return prev
+          updated[updated.length - 1] = patch(last)
+          return updated
+        })
+      }
 
       while (true) {
         const { done, value } = await reader.read()
@@ -268,11 +292,19 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
             const parsed = JSON.parse(payload)
             if (parsed.type === "token") {
               assistantMsg += parsed.data
-              setMessages(prev => {
-                const updated = [...prev]
-                updated[updated.length - 1] = { role: "assistant", content: assistantMsg }
-                return updated
-              })
+              updateLastAssistant(prev => ({ ...prev, content: assistantMsg }))
+            } else if (parsed.type === "thought") {
+              // Collapse by id: 'tool_done' upgrades the matching
+              // 'tool_call' step in place instead of appending a new row.
+              const ev = JSON.parse(parsed.data) as ThoughtStep
+              if (ev.kind === "tool_done") {
+                const idx = thoughts.findIndex(t => t.kind === "tool_call" && t.id === ev.id)
+                if (idx >= 0) thoughts[idx] = ev
+                else thoughts.push(ev)
+              } else {
+                thoughts.push(ev)
+              }
+              updateLastAssistant(prev => ({ ...prev, thoughts: [...thoughts] }))
             } else if (parsed.type === "meta") {
               const meta = JSON.parse(parsed.data)
               if (meta.conversationId) setConversationId(meta.conversationId)
@@ -1199,7 +1231,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
             {messages.map((msg, i) => (
               <Message key={i} className={msg.role === "user" ? "flex-row-reverse" : ""}>
                 <MessageAvatar src={msg.role === "assistant" ? (agent?.avatar_url || "") : ""} alt={msg.role === "assistant" ? (agent?.name || "Assistant") : "You"} fallback={msg.role === "assistant" ? (agent?.name?.[0]?.toUpperCase() || "J") : "Y"} className={msg.role === "assistant" ? "bg-[#2e2e2e] text-white" : "bg-[#ebebeb]"} />
-                <MessageContent className={msg.role === "user" ? "bg-[#f7f7f7] text-[#2e2e2e] rounded-3xl px-3.5 py-2 text-sm leading-relaxed" : "bg-white text-[#2e2e2e] rounded-3xl px-3.5 py-2 text-sm leading-relaxed ring-1 ring-black/[0.04]"}>{msg.content}</MessageContent>
+                <AssistantBubble msg={msg} />
               </Message>
             ))}
             {chatLoading && (
@@ -1238,6 +1270,94 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
       </Dialog>
       )}
     </div>
+  )
+}
+
+/**
+ * Renders a single chat bubble — user messages stay plain-text, assistant
+ * messages mount a ChainOfThought (if tool steps exist) above the final
+ * markdown content. Empty assistant content with no thoughts yet shows
+ * a typing indicator so there's never a blank bubble during tool calls.
+ */
+function AssistantBubble({ msg }: { msg: ChatMsg }) {
+  const isUser = msg.role === "user"
+  const base = isUser
+    ? "bg-[#f7f7f7] text-[#2e2e2e] rounded-3xl px-3.5 py-2 text-[13px] leading-relaxed"
+    : "bg-white text-[#2e2e2e] rounded-3xl px-3.5 py-2 text-[13px] leading-relaxed ring-1 ring-black/[0.04]"
+
+  if (isUser) {
+    return <MessageContent className={base}>{msg.content}</MessageContent>
+  }
+
+  const hasThoughts = (msg.thoughts?.length ?? 0) > 0
+  const hasContent = msg.content.trim().length > 0
+
+  return (
+    <div className={cn(base, "min-w-[220px] max-w-[640px]")}>
+      {hasThoughts && (
+        <ChainOfThought className="mb-2">
+          {msg.thoughts!.map((t, idx) => <ThoughtRow key={`${t.kind}-${('id' in t ? t.id : idx)}-${idx}`} step={t} />)}
+        </ChainOfThought>
+      )}
+      {hasContent ? (
+        <Markdown className="prose prose-sm max-w-none text-[#2e2e2e] prose-headings:mt-3 prose-headings:mb-1 prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0 prose-a:text-[#2e2e2e] prose-a:underline prose-code:text-[#2e2e2e] prose-code:bg-[#f3f3f3] prose-code:rounded prose-code:px-1">
+          {msg.content}
+        </Markdown>
+      ) : (
+        <div className="py-1"><Loader variant="typing" size="md" /></div>
+      )}
+    </div>
+  )
+}
+
+function ThoughtRow({ step }: { step: ThoughtStep }) {
+  if (step.kind === "thinking") {
+    return (
+      <ChainOfThoughtStep>
+        <ChainOfThoughtTrigger>{step.trigger}</ChainOfThoughtTrigger>
+        {step.items.length > 0 && (
+          <ChainOfThoughtContent>
+            {step.items.map((it, i) => <ChainOfThoughtItem key={i}>{it}</ChainOfThoughtItem>)}
+          </ChainOfThoughtContent>
+        )}
+      </ChainOfThoughtStep>
+    )
+  }
+  if (step.kind === "tool_call") {
+    const argPreview = Object.keys(step.args).length === 0
+      ? null
+      : JSON.stringify(step.args)
+    return (
+      <ChainOfThoughtStep>
+        <ChainOfThoughtTrigger>
+          <span className="inline-flex items-center gap-1.5">
+            <Loader variant="typing" size="sm" />
+            Calling <code className="text-[11px] font-mono text-[#737373]">{step.tool}</code>
+          </span>
+        </ChainOfThoughtTrigger>
+        {argPreview && (
+          <ChainOfThoughtContent>
+            <ChainOfThoughtItem>
+              <code className="text-[11px] font-mono break-all">{argPreview}</code>
+            </ChainOfThoughtItem>
+          </ChainOfThoughtContent>
+        )}
+      </ChainOfThoughtStep>
+    )
+  }
+  // tool_done
+  return (
+    <ChainOfThoughtStep>
+      <ChainOfThoughtTrigger>
+        <span className="inline-flex items-center gap-1.5">
+          <Check size={12} className="text-emerald-600" />
+          <code className="text-[11px] font-mono text-[#737373]">{step.tool}</code>
+        </span>
+      </ChainOfThoughtTrigger>
+      <ChainOfThoughtContent>
+        <ChainOfThoughtItem>{step.resultPreview}</ChainOfThoughtItem>
+      </ChainOfThoughtContent>
+    </ChainOfThoughtStep>
   )
 }
 

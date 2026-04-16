@@ -187,7 +187,7 @@ export async function processChatMessage(
  */
 export async function* streamChatMessage(
   input: PipelineInput
-): AsyncGenerator<{ type: 'token' | 'meta'; data: string }> {
+): AsyncGenerator<{ type: 'token' | 'meta' | 'thought'; data: string }> {
   const supabase = createAdminClient()
 
   const agent = await loadAgent(supabase, input.agentId)
@@ -232,14 +232,22 @@ export async function* streamChatMessage(
   let fullResponse = ''
   if (toolsBundle && toolsBundle.tools.length > 0) {
     try {
-      fullResponse = await runAgenticLoop(
+      for await (const ev of runAgenticLoopStream(
         supabase,
         messages,
         toolsBundle.tools,
         toolsBundle.ctx,
         modelConfig,
-        { conversationId: conversation.id }
-      )
+        { conversationId: conversation.id },
+      )) {
+        if (ev.kind === 'final_text') {
+          fullResponse = ev.text
+        } else {
+          // Forward every non-final event to the client as a 'thought'
+          // frame so the UI can render a chain-of-thought timeline.
+          yield { type: 'thought', data: JSON.stringify(ev) }
+        }
+      }
     } catch (error) {
       console.error('[chat-pipeline] Tool loop error:', error)
       fullResponse = formatPipelineError(error, agent.fallback_message)
@@ -545,4 +553,105 @@ async function runAgenticLoop(
   }
 
   return finalText
+}
+
+/**
+ * Streaming sibling of runAgenticLoop. Yields progress events while the
+ * agent is working so the UI can render a chain-of-thought timeline
+ * ("Analyzing your request", "Calling GOOGLECALENDAR_EVENTS_LIST", etc.)
+ * instead of staring at an empty bubble for 5–15 seconds.
+ *
+ * The caller is expected to consume all events; the final text lives in
+ * the last 'final' event's data field.
+ */
+export type ThoughtEvent =
+  | { kind: 'thinking'; id: string; trigger: string; items: string[] }
+  | { kind: 'tool_call'; id: string; tool: string; args: Record<string, unknown>; status: 'running' }
+  | { kind: 'tool_done'; id: string; tool: string; resultPreview: string }
+  | { kind: 'final_text'; text: string }
+
+async function* runAgenticLoopStream(
+  supabase: SupabaseAdmin,
+  initialMessages: ChatMessage[],
+  tools: Parameters<typeof generateWithTools>[1],
+  ctx: AgentToolContext,
+  modelConfig: ModelConfig,
+  meta: { conversationId: string }
+): AsyncGenerator<ThoughtEvent> {
+  const working: ChatMessage[] = [...initialMessages]
+  let finalText = ''
+
+  for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
+    yield {
+      kind: 'thinking',
+      id: `think-${i}`,
+      trigger: i === 0 ? 'Analyzing request' : `Deciding next step (round ${i + 1})`,
+      items: [],
+    }
+
+    const round = await generateWithTools(working, tools, modelConfig)
+    working.push(round.assistantMessage)
+
+    if (round.toolCalls.length === 0) {
+      finalText = round.text ?? ''
+      break
+    }
+
+    // Emit a tool_call event per call + execute them in parallel.
+    const calls = round.toolCalls.map((call) => {
+      let parsedArgs: Record<string, unknown> = {}
+      try { parsedArgs = JSON.parse(call.function.arguments) as Record<string, unknown> } catch { /* ignore */ }
+      return { call, parsedArgs }
+    })
+    for (const { call, parsedArgs } of calls) {
+      yield { kind: 'tool_call', id: call.id, tool: call.function.name, args: parsedArgs, status: 'running' }
+    }
+
+    const results = await Promise.all(
+      calls.map(({ call }) =>
+        executeAgentToolCall(supabase, ctx, call, { conversationId: meta.conversationId }).then((r) => ({
+          call,
+          result: r,
+        }))
+      )
+    )
+
+    for (const { call, result } of results) {
+      // Compress the result for the preview — the full content goes to
+      // the model as tool context, but the UI only needs a one-liner.
+      const preview = summarizeToolResult(result.content)
+      yield { kind: 'tool_done', id: call.id, tool: call.function.name, resultPreview: preview }
+
+      working.push({
+        role: 'tool',
+        tool_call_id: call.id,
+        content: result.content,
+      })
+    }
+
+    if (i === MAX_TOOL_ITERATIONS - 1) {
+      finalText = round.text ?? ''
+    }
+  }
+
+  if (!finalText) {
+    try {
+      const finalRound = await generateWithTools(working, [], modelConfig)
+      finalText = finalRound.text ?? 'I ran into an issue using my tools. Please try again.'
+    } catch {
+      finalText = 'I ran into an issue using my tools. Please try again.'
+    }
+  }
+
+  yield { kind: 'final_text', text: finalText }
+}
+
+/**
+ * One-liner preview of a tool result — trimmed, collapsed whitespace,
+ * and truncated so the chain-of-thought step stays compact.
+ */
+function summarizeToolResult(content: string): string {
+  const collapsed = content.replace(/\s+/g, ' ').trim()
+  if (collapsed.length <= 120) return collapsed
+  return collapsed.slice(0, 117) + '…'
 }
