@@ -57,7 +57,7 @@ function NavItem({ item, isActive, collapsed }: { item: typeof nav[0]; isActive:
       href={item.href}
       title={collapsed ? item.label : undefined}
       className={cn(
-        "flex items-center gap-3 rounded-md px-3 py-2 text-[13px] font-[500] transition-colors",
+        "flex items-center gap-3 rounded-md px-3 py-2 text-[13px] font-semibold transition-colors",
         collapsed && "justify-center px-0",
         isActive
           ? "bg-[#ebebeb] text-[#0a0a0a]"
@@ -175,7 +175,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   type="button"
                   title={collapsed ? "Search" : undefined}
                   className={cn(
-                    "flex w-full items-center gap-3 rounded-md px-3 py-2 text-[13px] font-[500] text-[#0a0a0a] hover:bg-[#ebebeb] transition-colors",
+                    "flex w-full items-center gap-3 rounded-md px-3 py-2 text-[13px] font-semibold text-[#0a0a0a] hover:bg-[#ebebeb] transition-colors",
                     collapsed && "justify-center px-0"
                   )}
                 >
@@ -198,7 +198,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <Link
                   href="/agents/new"
                   className={cn(
-                    "flex items-center gap-2 rounded-md px-3 py-1.5 text-[12px] font-[500] transition-colors",
+                    "flex items-center gap-2 rounded-md px-3 py-1.5 text-[12px] font-semibold transition-colors",
                     pathname === "/agents/new" ? "bg-[#ebebeb] text-[#0a0a0a]" : "text-[#737373] hover:bg-[#ebebeb] hover:text-[#0a0a0a]"
                   )}
                 >
@@ -212,7 +212,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                       key={a.id}
                       href={`/agents/${a.id}`}
                       className={cn(
-                        "flex items-center gap-2 rounded-md px-3 py-1.5 text-[12px] font-[500] transition-colors",
+                        "flex items-center gap-2 rounded-md px-3 py-1.5 text-[12px] font-semibold transition-colors",
                         isActive ? "bg-[#ebebeb] text-[#0a0a0a]" : "text-[#525252] hover:bg-[#ebebeb]"
                       )}
                     >
@@ -261,7 +261,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               {!collapsed && (
                 <>
                   <div className="flex-1 min-w-0">
-                    <div className="truncate text-[13px] font-[500] text-[#0a0a0a]">{userName || "Loading..."}</div>
+                    <div className="truncate text-[13px] font-semibold text-[#0a0a0a]">{userName || "Loading..."}</div>
                   </div>
                   <CaretDown size={12} weight="bold" className="text-[#a3a3a3]" />
                 </>
@@ -278,7 +278,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               collapsed ? "left-1 w-48" : "left-2 right-2"
             )}>
               <div className="px-3 py-2 border-b border-[#ebebeb]">
-                <div className="truncate text-[13px] font-[500] text-[#0a0a0a]">{userName}</div>
+                <div className="truncate text-[13px] font-semibold text-[#0a0a0a]">{userName}</div>
                 <div className="truncate text-[12px] text-[#737373]">{userEmail}</div>
               </div>
               <button
