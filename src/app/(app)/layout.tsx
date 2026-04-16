@@ -61,7 +61,7 @@ function NavItem({ item, isActive, collapsed }: { item: typeof nav[0]; isActive:
       href={item.href}
       title={collapsed ? item.label : undefined}
       className={cn(
-        "flex items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium transition-colors",
+        "flex items-center gap-3 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors",
         collapsed && "justify-center px-0",
         isActive
           ? "bg-white text-[#2e2e2e] shadow-[0_1px_3px_rgba(0,0,0,0.04)] ring-1 ring-black/[0.06]"
@@ -218,7 +218,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               type="button"
               title={collapsed ? "Search" : undefined}
               className={cn(
-                "flex w-full items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium text-[#525252] hover:bg-[#ebebeb] hover:text-[#2e2e2e] transition-colors",
+                "flex w-full items-center gap-3 rounded-md px-3 py-1.5 text-[13px] font-medium text-[#525252] hover:bg-[#ebebeb] hover:text-[#2e2e2e] transition-colors",
                 collapsed && "justify-center px-0"
               )}
             >
@@ -254,7 +254,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <Link
                   href="/agents/new"
                   className={cn(
-                    "flex items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium transition-colors",
+                    "flex items-center gap-3 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors",
                     pathname === "/agents/new" ? "bg-white text-[#2e2e2e] shadow-[0_1px_3px_rgba(0,0,0,0.04)] ring-1 ring-black/[0.06]" : "text-[#737373] hover:bg-[#ebebeb] hover:text-[#2e2e2e]"
                   )}
                 >
@@ -271,7 +271,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                       <Link
                         href={href}
                         className={cn(
-                          "flex items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium transition-colors",
+                          "flex items-center gap-3 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors",
                           isActive ? "bg-white text-[#2e2e2e] shadow-[0_1px_3px_rgba(0,0,0,0.04)] ring-1 ring-black/[0.06]" : "text-[#525252] hover:bg-[#ebebeb] hover:text-[#2e2e2e]"
                         )}
                       >
