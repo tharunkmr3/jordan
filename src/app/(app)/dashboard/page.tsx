@@ -253,7 +253,7 @@ export default function DashboardPage() {
               <a
                 key={i}
                 href="/inbox"
-                className="flex items-center gap-4 px-5 py-3.5 hover:bg-muted/50 transition-colors border-b last:border-0"
+                className="flex items-center gap-4 px-5 py-3 hover:bg-[#fafafa] transition-colors"
               >
                 <Avatar className="h-8 w-8">
                   <AvatarFallback className="text-xs font-semibold bg-muted">
