@@ -447,7 +447,7 @@ export default function InboxPage() {
             <div>
               {conversations.map((conv) => {
                 const isSelected = conv.id === selectedId
-                const contactName = conv.contact?.name || 'Unknown'
+                const contactName = conv.contact?.name || conv.contact?.phone || conv.contact?.email || 'Unknown'
                 return (
                   <button
                     key={conv.id}
@@ -524,7 +524,7 @@ export default function InboxPage() {
                 <Avatar className="h-8 w-8">
                   <AvatarFallback className="bg-[#0a0a0a] text-[10px] text-white">{getInitials(detail.contact?.name)}</AvatarFallback>
                 </Avatar>
-                <span className="text-[14px] font-semibold text-[#0a0a0a]">{detail.contact?.name || 'Unknown'}</span>
+                <span className="text-[14px] font-semibold text-[#0a0a0a]">{detail.contact?.name || detail.contact?.phone || detail.contact?.email || 'Unknown'}</span>
               </div>
               <div className="flex items-center gap-1">
                 <button onClick={() => toggleStar(detail.id)} className="p-1.5 rounded hover:bg-[#f5f5f5]">

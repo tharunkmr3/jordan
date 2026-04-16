@@ -234,22 +234,38 @@ async function loadAgent(supabase: SupabaseAdmin, agentId: string): Promise<Agen
 
 async function findOrCreateContact(supabase: SupabaseAdmin, orgId: string, input: PipelineInput): Promise<Contact> {
   const info = input.contactInfo
+  const fallbackName = info?.name || (input.channel === 'phone' ? info?.phone : undefined) || undefined
+
+  // Helper: backfill name on an existing contact if we just learned one
+  async function enrich(existing: Contact): Promise<Contact> {
+    if (fallbackName && (!existing.name || existing.name === existing.phone || existing.name === 'Unknown')) {
+      const { data: updated } = await supabase
+        .from('contacts')
+        .update({ name: fallbackName })
+        .eq('id', existing.id)
+        .select()
+        .single()
+      return (updated || existing) as Contact
+    }
+    return existing
+  }
+
   if (info?.channelUserId) {
     const { data } = await supabase.from('contacts').select('*').eq('org_id', orgId).eq('channel_user_id', info.channelUserId).eq('channel', input.channel).single()
-    if (data) return data as Contact
+    if (data) return enrich(data as Contact)
   }
   if (info?.email) {
     const { data } = await supabase.from('contacts').select('*').eq('org_id', orgId).eq('email', info.email).single()
-    if (data) return data as Contact
+    if (data) return enrich(data as Contact)
   }
   if (info?.phone) {
     const { data } = await supabase.from('contacts').select('*').eq('org_id', orgId).eq('phone', info.phone).single()
-    if (data) return data as Contact
+    if (data) return enrich(data as Contact)
   }
 
   const { data, error } = await supabase
     .from('contacts')
-    .insert({ org_id: orgId, name: info?.name || null, email: info?.email || null, phone: info?.phone || null, channel: input.channel, channel_user_id: info?.channelUserId || null, metadata: {}, tags: [] })
+    .insert({ org_id: orgId, name: fallbackName || null, email: info?.email || null, phone: info?.phone || null, channel: input.channel, channel_user_id: info?.channelUserId || null, metadata: {}, tags: [] })
     .select()
     .single()
 

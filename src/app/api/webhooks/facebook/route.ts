@@ -117,6 +117,20 @@ async function handleWebhook(body: Record<string, unknown>): Promise<void> {
     message_id: parsed.messageId,
   })
 
+  // Try to fetch the sender's name from Facebook Graph API
+  let senderName: string | undefined
+  try {
+    const profileRes = await fetch(
+      `https://graph.facebook.com/v21.0/${parsed.senderId}?fields=name,first_name,last_name&access_token=${pageToken}`
+    )
+    if (profileRes.ok) {
+      const profile = await profileRes.json()
+      senderName = profile.name || [profile.first_name, profile.last_name].filter(Boolean).join(' ') || undefined
+    }
+  } catch (err) {
+    console.error('[facebook-webhook] Could not fetch sender profile:', err)
+  }
+
   // Process through the AI chat pipeline
   try {
     const result = await processChatMessage({
@@ -125,6 +139,7 @@ async function handleWebhook(body: Record<string, unknown>): Promise<void> {
       channel: 'facebook',
       contactInfo: {
         channelUserId: parsed.senderId,
+        name: senderName,
       },
     })
 
