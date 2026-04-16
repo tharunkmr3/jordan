@@ -6,6 +6,8 @@ import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Panel } from '@/components/ui/panel'
+import { Markdown } from '@/components/ui/markdown'
+import { AiWidgetProvider } from '@/components/ui/ai-widget'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { ContactAvatar } from '@/components/ui/contact-avatar'
 import { Badge } from '@/components/ui/badge'
@@ -390,9 +392,9 @@ function InboxInner() {
     }
   }
 
-  async function handleInternalChatSend() {
+  async function handleInternalChatSend(override?: { message: string }) {
     if (!filteredAgent) return
-    const content = replyText.trim()
+    const content = (override?.message ?? replyText).trim()
     if (!content) return
     const nowIso = new Date().toISOString()
     const convId = selectedId
@@ -440,8 +442,10 @@ function InboxInner() {
       } as ConversationDetail)
     }
 
-    setReplyText('')
-    if (textareaRef.current) textareaRef.current.style.height = 'auto'
+    if (!override) {
+      setReplyText('')
+      if (textareaRef.current) textareaRef.current.style.height = 'auto'
+    }
     setTimeout(scrollToBottom, 50)
 
     setSending(true)
@@ -877,7 +881,23 @@ function InboxInner() {
                                 : 'bg-white text-[#2e2e2e] ring-1 ring-black/[0.04]'
                             }`}
                           >
-                            <div className="whitespace-pre-wrap">{msg.content}</div>
+                            {/* Wrap every bubble in AiWidgetProvider so fenced
+                                ```ui blocks inside the message render as
+                                interactive widgets. Interactive only when:
+                                - This is an internal-agent chat (operator IS
+                                  the user and their submits drive the agent)
+                                - AND the message is the most recent one
+                                Customer-facing conversations show widgets
+                                read-only so team members don't submit on the
+                                customer's behalf. */}
+                            <AiWidgetProvider
+                              submit={(message) => { void handleInternalChatSend({ message }) }}
+                              disabled={!isInternalAgent || idx !== detail.messages.length - 1}
+                            >
+                              <Markdown className="prose prose-sm max-w-none [&>:first-child]:mt-0 [&>:last-child]:mb-0 prose-p:my-1 prose-headings:mt-2 prose-headings:mb-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-a:text-[#2e2e2e] prose-a:underline prose-code:text-[#2e2e2e] prose-code:bg-[#f3f3f3] prose-code:rounded prose-code:px-1 prose-pre:my-1.5">
+                                {msg.content}
+                              </Markdown>
+                            </AiWidgetProvider>
                             <div className={`mt-1 flex items-center gap-1 text-[10px] text-[#a3a3a3] leading-none select-none ${isOutgoing ? 'justify-end' : 'justify-start'}`}>
                               <span>{formatTimestamp(msg.created_at)}</span>
                               {isOutgoing && <Check size={10} weight="bold" className="text-[#3b82f6]" />}

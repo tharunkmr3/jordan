@@ -431,13 +431,22 @@ function buildPrompt(agent: Agent, history: ChatMessage[], currentMessage: strin
     systemPrompt += `\n\n--- Relevant Knowledge Base Context ---\n${kbContext}\n--- End Context ---\n\nUse the above context to answer the user's question when relevant. If the context doesn't help, answer from your general knowledge.`
   }
 
-  // For voice calls, instruct the AI to avoid markdown and keep responses short
+  // Channel-aware output rules. Three tiers depending on what the
+  // receiving surface can actually render:
+  //
+  //  - phone:         voice — plain spoken prose, no markdown, no widgets.
+  //  - whatsapp / fb: text messengers — light markdown, no widgets
+  //                   (a `ui` block would land as a raw JSON code fence).
+  //  - website:       our chat widget + test chat + internal agents —
+  //                   full markdown + generative UI widgets available.
   if (channel === 'phone') {
     systemPrompt += `\n\n--- Voice Call Mode ---\nYou are on a phone call. Respond conversationally in 1-3 short sentences. Do NOT use markdown, bullet points, asterisks, or headings — these will be read aloud literally. Speak naturally as if you were talking.`
+  } else if (channel === 'whatsapp' || channel === 'facebook') {
+    systemPrompt += `\n\n--- Messenger Mode ---\nYou are replying inside ${channel === 'whatsapp' ? 'WhatsApp' : 'Facebook Messenger'}. Respond in plain text. Light markdown is OK (*bold*, _italic_, simple lists) but do NOT emit headings, tables, or fenced code blocks — especially not "ui" blocks, they render as raw JSON on this channel. Keep replies concise.`
   } else {
-    // Chat channels can render generative UI widgets. Keep the
-    // instruction short and concrete — the model over-uses widgets
-    // if we give it long schemas to study.
+    // website channel covers the customer chat widget, the agent
+    // settings Test Chat panel, and internal-agent chats in the
+    // inbox — all surfaces that can render our generative UI.
     systemPrompt += `\n\n--- Generative UI ---\nWhen you need structured input from the user, or a structured response would read better than prose (e.g. a disambiguation list, a confirmation before a destructive action, or tabular data), you MAY embed a single fenced code block tagged "ui" containing JSON of one of these shapes:
 - form: {"type":"form","title":"...","fields":[{"name":"","label":"","type":"text|email|url|number|textarea|select|boolean","required":true,"options":[{"value":"","label":""}]}],"submit":{"label":"Submit","action":"optional_hint"}}
 - confirm: {"type":"confirm","message":"...","confirm":{"label":"Yes","variant":"default|destructive"},"cancel":{"label":"Cancel"}}
