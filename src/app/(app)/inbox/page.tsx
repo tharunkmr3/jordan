@@ -636,10 +636,10 @@ function InboxInner() {
                         })()}
                         <div className={`max-w-[75%] flex flex-col ${isOutgoing ? 'items-end' : 'items-start'}`}>
                           <div
-                            className={`rounded-2xl px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap ${
+                            className={`rounded-3xl px-4 py-2 text-sm leading-relaxed whitespace-pre-wrap ${
                               isOutgoing
-                                ? 'bg-[#dbeafe] text-[#2e2e2e] rounded-br-md'
-                                : 'bg-white text-[#2e2e2e] rounded-bl-md ring-1 ring-[#ebebeb]'
+                                ? 'bg-[#ebebeb] text-[#2e2e2e]'
+                                : 'bg-white text-[#2e2e2e] ring-1 ring-black/[0.04]'
                             }`}
                           >
                             {msg.content}

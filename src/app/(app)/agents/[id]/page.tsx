@@ -974,13 +974,13 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
             {messages.map((msg, i) => (
               <Message key={i} className={msg.role === "user" ? "flex-row-reverse" : ""}>
                 <MessageAvatar src={msg.role === "assistant" ? (agent.avatar_url || "") : ""} alt={msg.role === "assistant" ? agent.name : "You"} fallback={msg.role === "assistant" ? (agent.name[0]?.toUpperCase() || "J") : "Y"} className={msg.role === "assistant" ? "bg-[#2e2e2e] text-white" : "bg-[#ebebeb]"} />
-                <MessageContent className={msg.role === "user" ? "bg-[#2e2e2e] text-white rounded-2xl rounded-tr-sm px-4 py-2.5" : "bg-[#f5f5f5] rounded-2xl rounded-tl-sm px-4 py-2.5"}>{msg.content}</MessageContent>
+                <MessageContent className={msg.role === "user" ? "bg-[#ebebeb] text-[#2e2e2e] rounded-3xl px-4 py-2.5" : "bg-white text-[#2e2e2e] rounded-3xl px-4 py-2.5 ring-1 ring-black/[0.04]"}>{msg.content}</MessageContent>
               </Message>
             ))}
             {chatLoading && (
               <Message>
                 <MessageAvatar src={agent.avatar_url || ""} alt={agent.name} fallback={agent.name[0]?.toUpperCase() || "J"} className="bg-[#2e2e2e] text-white" />
-                <div className="bg-[#f5f5f5] rounded-2xl rounded-tl-sm px-4 py-3"><Loader variant="typing" size="sm" /></div>
+                <div className="bg-white rounded-3xl px-4 py-3 ring-1 ring-black/[0.04]"><Loader variant="typing" size="sm" /></div>
               </Message>
             )}
           </div>
