@@ -19,7 +19,7 @@ import { Loader } from "@/components/ui/loader"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { avatarColor } from "@/lib/utils"
-import { ArrowUp, Copy, Check, Trash2, Pencil, Phone, Mail, Globe, Upload, FileText, X, Plus, Camera } from "lucide-react"
+import { ArrowUp, ArrowLeft, Copy, Check, Trash2, Pencil, Phone, Mail, Globe, Upload, FileText, X, Plus, Camera } from "lucide-react"
 import { WhatsappLogo, MessengerLogo } from "@phosphor-icons/react"
 
 interface Agent {
@@ -472,7 +472,10 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
     <div className="flex h-full gap-3 p-3 bg-[#f5f5f5] overflow-hidden">
       {/* Left: Agent details */}
       <div className="flex-1 flex flex-col rounded-xl bg-white ring-1 ring-black/[0.06] shadow-sm overflow-hidden">
-        <div className="flex h-12 items-center px-5 border-b border-black/[0.06] flex-shrink-0">
+        <div className="flex h-12 items-center gap-3 px-5 border-b border-black/[0.06] flex-shrink-0">
+          <button onClick={() => router.push(`/inbox?agentId=${id}`)} className="rounded-md p-1 text-[#737373] hover:bg-[#f5f5f5] hover:text-[#0a0a0a]" title="Back to conversations">
+            <ArrowLeft size={16} />
+          </button>
           <span className="text-[15px] font-semibold text-[#0a0a0a]">Agent settings</span>
         </div>
         <div className="flex-1 overflow-y-auto p-6">
