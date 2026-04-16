@@ -24,13 +24,15 @@ export async function GET(request: NextRequest) {
   const search = searchParams.get('search')
   const agentId = searchParams.get('agentId')
 
-  // Build conversations query with contact and agent joins
-  // Also pull agent.settings so we can honor per-agent "show_test_in_inbox"
+  // Build conversations query with contact and agent joins.
+  // - agent.settings lets us honor per-agent visibility toggles.
+  // - contact.channel_user_id lets us scope internal-agent chats to
+  //   the current user (stored as `test-<userId>`).
   let query = supabase
     .from('conversations')
     .select(`
       *,
-      contact:contacts(id, name, email, phone, channel, language, metadata, tags),
+      contact:contacts(id, name, email, phone, channel, channel_user_id, language, metadata, tags),
       agent:agents(id, name, avatar_url, settings)
     `)
     .eq('org_id', orgId)
@@ -82,11 +84,21 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Hide test conversations by default. Show them only when the agent
-  // has opted in via settings.show_test_in_inbox === true.
+  // Visibility rules:
+  // - Real customer conversations (is_test === false) are always shown.
+  // - Internal-agent chats (agent.settings.is_customer_facing === false)
+  //   are private per-user; each team member only sees their OWN
+  //   threads, identified by contact.channel_user_id = 'test-<userId>'.
+  // - Customer-facing agents' test chats stay hidden unless the agent
+  //   opted in via settings.show_test_in_inbox === true.
   const visibleConversations = conversations.filter((conv) => {
     if (!conv.is_test) return true
     const agentSettings = (conv.agent as { settings?: Record<string, unknown> } | null)?.settings
+    const isInternalAgent = agentSettings?.is_customer_facing === false
+    if (isInternalAgent) {
+      const channelUserId = (conv.contact as { channel_user_id?: string | null } | null)?.channel_user_id
+      return channelUserId === `test-${user.id}`
+    }
     return agentSettings?.show_test_in_inbox === true
   })
 

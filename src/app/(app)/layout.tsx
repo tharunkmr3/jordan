@@ -269,8 +269,11 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
             const internalAgents = agents.filter(a => a.settings?.is_customer_facing === false)
 
             const renderAgent = (a: SidebarAgent) => {
-              const isCustomerFacing = a.settings?.is_customer_facing !== false
-              const href = isCustomerFacing ? `/inbox?agentId=${a.id}` : `/agents/${a.id}`
+              // Both customer-facing and internal agents land in the
+              // inbox view — internal agents use a ChatGPT-style list
+              // of the user's own chats + "+ New chat" affordance,
+              // driven by settings.is_customer_facing inside inbox/page.
+              const href = `/inbox?agentId=${a.id}`
               const isActive = currentAgentId === a.id || pathname === `/agents/${a.id}`
               const menuOpen = agentMenuOpen === a.id
               return (

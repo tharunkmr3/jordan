@@ -189,7 +189,7 @@ function InboxInner() {
 
   // State
   const [orgId, setOrgId] = useState<string | null>(null)
-  const [filteredAgent, setFilteredAgent] = useState<{ id: string; name: string; avatar_url: string | null } | null>(null)
+  const [filteredAgent, setFilteredAgent] = useState<{ id: string; name: string; avatar_url: string | null; settings?: Record<string, unknown> | null } | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
   const [userName, setUserName] = useState<string>('')
   const [conversations, setConversations] = useState<ConversationItem[]>([])
@@ -236,7 +236,7 @@ function InboxInner() {
     if (!agentFilter) { setFilteredAgent(null); return }
     fetch(`/api/agents/${agentFilter}`)
       .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data?.id) setFilteredAgent({ id: data.id, name: data.name, avatar_url: data.avatar_url }) })
+      .then(data => { if (data?.id) setFilteredAgent({ id: data.id, name: data.name, avatar_url: data.avatar_url, settings: data.settings ?? null }) })
       .catch(() => {})
   }, [agentFilter])
 
@@ -309,6 +309,13 @@ function InboxInner() {
   }, [orgId, fetchConversations, scrollToBottom]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSendReply() {
+    // Internal agent mode: ChatGPT-style. Send via /api/chat which
+    // handles auth-based visitor scoping, may create the conversation
+    // if selectedId is null, and generates an AI response.
+    if (isInternalAgent && filteredAgent) {
+      if (!replyText.trim() || sending) return
+      return handleInternalChatSend()
+    }
     if (!replyText.trim() || !selectedId || sending) return
     const content = replyText.trim()
     const convId = selectedId
@@ -383,6 +390,130 @@ function InboxInner() {
     }
   }
 
+  async function handleInternalChatSend() {
+    if (!filteredAgent) return
+    const content = replyText.trim()
+    if (!content) return
+    const nowIso = new Date().toISOString()
+    const convId = selectedId
+    const tempUserId = `temp-user-${Date.now()}`
+    const tempAsstId = `temp-asst-${Date.now() + 1}`
+
+    // Optimistic user bubble (role: 'user' for internal chats, since the
+    // logged-in user IS the end user in this flow).
+    const optimisticUser: Message = {
+      id: tempUserId,
+      conversation_id: convId ?? '',
+      org_id: detail?.org_id ?? orgId ?? '',
+      role: 'user' as MessageRole,
+      content,
+      channel: 'website' as ChannelType,
+      metadata: { optimistic: true },
+      created_at: nowIso,
+    } as Message
+
+    if (convId) {
+      setDetail(prev => prev && prev.id === convId
+        ? { ...prev, messages: [...prev.messages, optimisticUser] }
+        : prev)
+    } else {
+      // No conversation yet — synthesize a placeholder detail so the UI
+      // switches out of the empty state and shows the bubble immediately.
+      setDetail({
+        id: '',
+        org_id: orgId ?? '',
+        agent_id: filteredAgent.id,
+        contact_id: null,
+        channel: 'website' as ChannelType,
+        status: 'active',
+        assigned_to: null,
+        started_at: nowIso,
+        resolved_at: null,
+        created_at: nowIso,
+        updated_at: nowIso,
+        contact: null,
+        agent: { id: filteredAgent.id, name: filteredAgent.name, avatar_url: filteredAgent.avatar_url },
+        last_message: null,
+        message_count: 1,
+        messages: [optimisticUser],
+        conversation_count: 0,
+      } as ConversationDetail)
+    }
+
+    setReplyText('')
+    if (textareaRef.current) textareaRef.current.style.height = 'auto'
+    setTimeout(scrollToBottom, 50)
+
+    setSending(true)
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentId: filteredAgent.id,
+          message: content,
+          conversationId: convId ?? undefined,
+          stream: false,
+          isTest: true,
+        }),
+      })
+      if (!res.ok) throw new Error(await res.text().catch(() => 'Failed to send'))
+      const data = (await res.json()) as { response: string; conversationId: string; messageId: string }
+
+      const assistantMsg: Message = {
+        id: data.messageId,
+        conversation_id: data.conversationId,
+        org_id: orgId ?? '',
+        role: 'assistant' as MessageRole,
+        content: data.response,
+        channel: 'website' as ChannelType,
+        metadata: {},
+        created_at: new Date().toISOString(),
+      } as Message
+
+      // Swap optimistic user bubble (if no convId yet) with the real
+      // conversation id, and append the assistant reply.
+      if (!convId) {
+        setSelectedId(data.conversationId)
+      }
+      setDetail(prev => {
+        if (!prev) return prev
+        const withRealConv = { ...prev, id: data.conversationId }
+        const nextMessages = [
+          ...withRealConv.messages.map(m => m.id === tempUserId ? { ...m, conversation_id: data.conversationId } : m),
+          { ...assistantMsg, id: tempAsstId }, // keep a stable temp id locally so realtime INSERT can dedupe by data.messageId
+        ]
+        return { ...withRealConv, messages: nextMessages }
+      })
+
+      // Ensure the list reflects this conversation at the top.
+      setConversations(prev => {
+        const existing = prev.find(c => c.id === data.conversationId)
+        const lastMsg = { content: data.response, role: 'assistant' as MessageRole, created_at: new Date().toISOString() }
+        if (existing) {
+          const rest = prev.filter(c => c.id !== data.conversationId)
+          return [{ ...existing, last_message: lastMsg, updated_at: lastMsg.created_at }, ...rest]
+        }
+        // Brand-new conversation — fetch the list so the server provides a
+        // well-formed ConversationItem (avoids drift between client shape
+        // and API shape).
+        fetchConversations()
+        return prev
+      })
+
+      setTimeout(scrollToBottom, 100)
+    } catch (err) {
+      console.error('Internal chat send failed:', err)
+      // Roll back optimistic bubble.
+      setDetail(prev => prev
+        ? { ...prev, messages: prev.messages.filter(m => m.id !== tempUserId) }
+        : prev)
+      setReplyText(content)
+    } finally {
+      setSending(false)
+    }
+  }
+
   async function handleStatusChange(newStatus: ConversationStatus) {
     if (!selectedId) return
     const res = await fetch(`/api/inbox/${selectedId}`, {
@@ -447,6 +578,49 @@ function InboxInner() {
   }
 
 
+  const isInternalAgent = filteredAgent?.settings
+    ? (filteredAgent.settings as { is_customer_facing?: boolean }).is_customer_facing === false
+    : false
+
+  function seedBlankInternalDetail(): ConversationDetail | null {
+    if (!filteredAgent) return null
+    const nowIso = new Date().toISOString()
+    return {
+      id: '',
+      org_id: orgId ?? '',
+      agent_id: filteredAgent.id,
+      contact_id: null,
+      channel: 'website' as ChannelType,
+      status: 'active',
+      assigned_to: null,
+      started_at: nowIso,
+      resolved_at: null,
+      created_at: nowIso,
+      updated_at: nowIso,
+      contact: null,
+      agent: { id: filteredAgent.id, name: filteredAgent.name, avatar_url: filteredAgent.avatar_url },
+      last_message: null,
+      message_count: 0,
+      messages: [],
+      conversation_count: 0,
+    } as ConversationDetail
+  }
+
+  function startNewChat() {
+    setSelectedId(null)
+    setDetail(seedBlankInternalDetail())
+    setReplyText('')
+  }
+
+  // Auto-enter new-chat mode when landing on an internal agent with no
+  // selection — keeps the composer visible so the user can start typing.
+  useEffect(() => {
+    if (!isInternalAgent || !filteredAgent) return
+    if (selectedId || detail) return
+    setDetail(seedBlankInternalDetail())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isInternalAgent, filteredAgent, selectedId, detail])
+
   return (
     <div className="flex h-full bg-[#f5f5f5] overflow-hidden gap-3 p-3 pt-3">
       {/* ============================================================= */}
@@ -473,20 +647,32 @@ function InboxInner() {
           )}
         </div>
 
-        {/* Filter tabs */}
-        <div className="flex items-center gap-1 px-3 py-2.5 border-b border-black/[0.04]">
-          {(['all', 'active', 'escalated'] as const).map((t) => (
+        {/* Filter tabs / New chat CTA */}
+        {isInternalAgent ? (
+          <div className="px-3 py-2 border-b border-black/[0.04]">
             <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                tab === t ? 'bg-[#ebebeb] text-[#2e2e2e]' : 'text-[#737373] hover:bg-[#f5f5f5]'
-              }`}
+              onClick={startNewChat}
+              className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] font-medium text-[#2e2e2e] hover:bg-white transition-colors"
             >
-              {t === 'all' ? 'All' : t === 'active' ? 'Active' : 'Escalated'}
+              <Plus size={14} weight="bold" />
+              New chat
             </button>
-          ))}
-        </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1 px-3 py-2.5 border-b border-black/[0.04]">
+            {(['all', 'active', 'escalated'] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                  tab === t ? 'bg-[#ebebeb] text-[#2e2e2e]' : 'text-[#737373] hover:bg-[#f5f5f5]'
+                }`}
+              >
+                {t === 'all' ? 'All' : t === 'active' ? 'Active' : 'Escalated'}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Search */}
         <div className="px-3 py-2 border-b border-black/[0.04]">
@@ -533,6 +719,12 @@ function InboxInner() {
               {conversations.map((conv) => {
                 const isSelected = conv.id === selectedId
                 const contactName = conv.contact?.name || conv.contact?.phone || conv.contact?.email || 'Unknown'
+                // Internal chats use last-message content as the row title
+                // (ChatGPT-style). Contact name here would just be the
+                // logged-in user on every row, which is noise.
+                const rowTitle = isInternalAgent
+                  ? (conv.last_message?.content ? truncate(conv.last_message.content, 40) : 'New chat')
+                  : contactName
                 return (
                   <button
                     key={conv.id}
@@ -543,29 +735,31 @@ function InboxInner() {
                         : 'hover:bg-white/70'
                     }`}
                   >
-                    {/* Contact avatar */}
-                    <ContactAvatar
-                      name={contactName}
-                      seed={conv.contact?.id || conv.id}
-                      size={28}
-                      className="mt-0.5 flex-shrink-0"
-                    />
-                    {/* Content */}
+                    {!isInternalAgent && (
+                      <ContactAvatar
+                        name={contactName}
+                        seed={conv.contact?.id || conv.id}
+                        size={28}
+                        className="mt-0.5 flex-shrink-0"
+                      />
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-sm font-semibold text-[#2e2e2e]">{contactName}</span>
+                        <span className={`truncate text-sm text-[#2e2e2e] ${isInternalAgent ? 'font-medium' : 'font-semibold'}`}>{rowTitle}</span>
                         <span className="flex-shrink-0 text-xs text-[#a3a3a3]">
                           {conv.last_message ? timeAgo(conv.last_message.created_at) : timeAgo(conv.updated_at)}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="truncate text-[13px] text-[#737373]">
-                          {conv.last_message ? truncate(conv.last_message.content, 45) : 'No messages yet'}
-                        </span>
-                        {conv.status === 'escalated' && (
-                          <Badge className="h-4 flex-shrink-0 px-1 text-[9px] bg-red-50 text-red-600 hover:bg-red-50">Escalated</Badge>
-                        )}
-                      </div>
+                      {!isInternalAgent && (
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="truncate text-[13px] text-[#737373]">
+                            {conv.last_message ? truncate(conv.last_message.content, 45) : 'No messages yet'}
+                          </span>
+                          {conv.status === 'escalated' && (
+                            <Badge className="h-4 flex-shrink-0 px-1 text-[9px] bg-red-50 text-red-600 hover:bg-red-50">Escalated</Badge>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </button>
                 )
@@ -580,7 +774,7 @@ function InboxInner() {
       {/* CENTER: Conversation */}
       {/* ============================================================= */}
       <Panel className="flex-1 min-w-0">
-        {!selectedId ? (
+        {!detail ? (
           <div className="flex flex-1 items-center justify-center">
             <div className="text-center">
               <div className="h-14 w-14 rounded-full bg-[#f5f5f5] flex items-center justify-center mx-auto mb-3">
@@ -667,19 +861,33 @@ function InboxInner() {
                     const isUser = msg.role === 'user'
                     const isAI = msg.role === 'assistant'
                     const isHumanAgent = msg.role === 'human_agent'
-                    const isOutgoing = isAI || isHumanAgent
+                    // In internal-agent mode the logged-in user IS the
+                    // "user", so flip: user→right (outgoing), assistant→left.
+                    // In customer-facing mode, the customer is "user"
+                    // (left) and assistant/human_agent are outgoing (right).
+                    const isOutgoing = isInternalAgent ? isUser : (isAI || isHumanAgent)
                     const prevMsg = idx > 0 ? detail.messages[idx - 1] : null
                     const showAvatar = !prevMsg || prevMsg.role !== msg.role
 
                     return (
                       <div key={msg.id} className={`flex items-end gap-2 ${isOutgoing ? 'justify-end' : 'justify-start'}`}>
                         {!isOutgoing && (
-                          <ContactAvatar
-                            name={detail.contact?.name || detail.contact?.phone || detail.contact?.email || ''}
-                            seed={detail.contact?.id || detail.contact?.name || ''}
-                            size={24}
-                            className={`flex-shrink-0 ${showAvatar ? '' : 'invisible'}`}
-                          />
+                          isInternalAgent ? (
+                            <ContactAvatar
+                              src={filteredAgent?.avatar_url}
+                              name={filteredAgent?.name || 'Assistant'}
+                              seed={filteredAgent?.id || 'agent'}
+                              size={24}
+                              className={`flex-shrink-0 ${showAvatar ? '' : 'invisible'}`}
+                            />
+                          ) : (
+                            <ContactAvatar
+                              name={detail.contact?.name || detail.contact?.phone || detail.contact?.email || ''}
+                              seed={detail.contact?.id || detail.contact?.name || ''}
+                              size={24}
+                              className={`flex-shrink-0 ${showAvatar ? '' : 'invisible'}`}
+                            />
+                          )
                         )}
                         <div className={`max-w-[75%] flex flex-col ${isOutgoing ? 'items-end' : 'items-start'}`}>
                           <div
@@ -754,9 +962,9 @@ function InboxInner() {
       </Panel>
 
       {/* ============================================================= */}
-      {/* RIGHT: Details */}
+      {/* RIGHT: Details — hidden for internal agents (no customer to show) */}
       {/* ============================================================= */}
-      {detail?.contact && (
+      {detail?.contact && !isInternalAgent && (
         <Panel resizable defaultWidth={320} minWidth={260} maxWidth={480} storageKey="inbox:details">
           {/* Tabs */}
           <div className="flex h-12 bg-white border-b border-black/[0.04] flex-shrink-0">
