@@ -68,7 +68,7 @@ function NavItem({ item, isActive, collapsed }: { item: typeof nav[0]; isActive:
           : "text-[#0a0a0a] hover:bg-[#ebebeb]"
       )}
     >
-      <Icon size={18} weight={isActive ? "fill" : "regular"} className={isActive ? "text-[#0a0a0a]" : "text-[#737373]"} />
+      <Icon size={18} weight="regular" className={isActive ? "text-[#0a0a0a]" : "text-[#737373]"} />
       {!collapsed && item.label}
     </Link>
   )
