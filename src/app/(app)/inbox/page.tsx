@@ -32,6 +32,7 @@ import {
   GearSix,
   UserCircle,
   Plus,
+  CircleDashed,
   CaretDown,
   CaretUp,
   Lightning,
@@ -152,6 +153,82 @@ function truncate(str: string | undefined | null, len: number): string {
 // ---------------------------------------------------------------------------
 // Collapsible section for right panel
 // ---------------------------------------------------------------------------
+
+/**
+ * Empty-state for an internal agent chat with no messages yet —
+ * shown when the user clicks "+ New chat" in the sidebar, or when
+ * they first open an internal agent they've never spoken to.
+ *
+ * Centered hero prompt + a single composer on a pale background,
+ * ChatGPT-landing-style. Once the first message is sent the normal
+ * message-list layout takes over.
+ */
+function InternalNewChatHero({
+  agentName,
+  replyText,
+  onChange,
+  onSend,
+  sending,
+  textareaRef,
+}: {
+  agentName: string
+  replyText: string
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
+  onSend: () => void
+  sending: boolean
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>
+}) {
+  return (
+    <div className="flex flex-1 flex-col bg-[#fafafa]">
+      <div className="flex flex-1 flex-col items-center justify-center px-6 -mt-8">
+        <h1 className="text-2xl font-semibold text-[#2e2e2e] tracking-tight text-center">
+          What can I do for you?
+        </h1>
+        <p className="mt-2 text-[13px] text-[#a3a3a3] text-center">
+          Ask {agentName} anything — a fresh conversation starts with your first message.
+        </p>
+
+        <div className="mt-8 w-full max-w-2xl">
+          <div className="rounded-2xl border border-black/[0.06] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04),0_2px_8px_-2px_rgba(0,0,0,0.04)] focus-within:border-black/[0.12] transition-colors">
+            <Textarea
+              ref={textareaRef}
+              placeholder="Ask anything"
+              value={replyText}
+              onChange={onChange}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  if (replyText.trim() && !sending) onSend()
+                }
+              }}
+              rows={3}
+              className="min-h-[88px] resize-none border-0 bg-transparent px-4 pt-3.5 pb-2 text-[14px] leading-relaxed focus-visible:ring-0 focus-visible:border-0 shadow-none"
+            />
+            <div className="flex items-center justify-between px-3 pb-3 pt-1">
+              <button
+                type="button"
+                className="flex h-7 w-7 items-center justify-center rounded-full text-[#737373] hover:bg-[#f5f5f5]"
+                title="Attach"
+              >
+                <Plus size={14} weight="bold" />
+              </button>
+              <button
+                type="button"
+                onClick={onSend}
+                disabled={!replyText.trim() || sending}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-[#2e2e2e] text-white disabled:bg-[#ebebeb] disabled:text-[#a3a3a3] transition-colors"
+                title="Send"
+                aria-label="Send message"
+              >
+                <PaperPlaneTilt size={13} weight="fill" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function DetailSection({ title, children, defaultOpen = true, action }: { title: string; children: React.ReactNode; defaultOpen?: boolean; action?: React.ReactNode }) {
   const [open, setOpen] = useState(defaultOpen)
@@ -652,22 +729,6 @@ function InboxInner() {
           )}
         </div>
 
-        {/* New chat CTA (internal agents only). Conversation-level
-            status filters (All / Active / Escalated) are intentionally
-            hidden for now — the whole status model is pending a
-            redesign; every conversation stays "active" in the mean time. */}
-        {isInternalAgent && (
-          <div className="px-3 py-2 border-b border-black/[0.04]">
-            <button
-              onClick={startNewChat}
-              className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] font-medium text-[#2e2e2e] hover:bg-white transition-colors"
-            >
-              <Plus size={14} weight="bold" />
-              New chat
-            </button>
-          </div>
-        )}
-
         {/* Search */}
         <div className="px-3 py-2 border-b border-black/[0.04]">
           <div className="relative">
@@ -680,6 +741,22 @@ function InboxInner() {
             />
           </div>
         </div>
+
+        {/* New chat CTA (internal agents only). Conversation-level
+            status filters (All / Active / Escalated) are intentionally
+            hidden for now — the whole status model is pending a
+            redesign; every conversation stays "active" in the mean time. */}
+        {isInternalAgent && (
+          <div className="px-3 pt-2">
+            <button
+              onClick={startNewChat}
+              className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] font-medium text-[#2e2e2e] hover:bg-white transition-colors"
+            >
+              <Plus size={14} weight="bold" />
+              New chat
+            </button>
+          </div>
+        )}
 
         {/* List */}
         <ScrollArea className="flex-1">
@@ -729,7 +806,13 @@ function InboxInner() {
                         : 'hover:bg-white/70'
                     }`}
                   >
-                    {!isInternalAgent && (
+                    {isInternalAgent ? (
+                      <CircleDashed
+                        size={16}
+                        weight="bold"
+                        className="mt-0.5 flex-shrink-0 text-[#a3a3a3]"
+                      />
+                    ) : (
                       <ContactAvatar
                         name={contactName}
                         seed={conv.contact?.id || conv.id}
@@ -791,6 +874,20 @@ function InboxInner() {
               ))}
             </div>
           </div>
+        ) : isInternalAgent && detail.messages.length === 0 ? (
+          // Internal-agent new-chat hero: empty conversation (either
+          // freshly created via "+ New chat" or a brand-new landing
+          // on an agent the user hasn't spoken to yet). Centered
+          // prompt + single composer — the normal message-list
+          // layout would leave a huge empty column otherwise.
+          <InternalNewChatHero
+            agentName={filteredAgent?.name ?? 'agent'}
+            replyText={replyText}
+            onChange={handleTextareaInput}
+            onSend={() => { void handleInternalChatSend() }}
+            sending={sending}
+            textareaRef={textareaRef}
+          />
         ) : detail ? (
           <>
             {/* Header */}
