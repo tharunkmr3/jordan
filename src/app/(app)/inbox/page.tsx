@@ -407,9 +407,9 @@ function InboxInner() {
       {/* ============================================================= */}
       {/* LEFT: Conversation List */}
       {/* ============================================================= */}
-      <div className="flex w-[320px] flex-shrink-0 flex-col bg-white rounded-xl ring-1 ring-[#ebebeb] overflow-hidden">
+      <div className="flex w-[320px] flex-shrink-0 flex-col bg-white rounded-xl ring-1 ring-black/[0.06] shadow-sm overflow-hidden">
         {/* Header */}
-        <div className="flex h-12 items-center gap-2.5 px-4 border-b border-[#ebebeb] flex-shrink-0">
+        <div className="flex h-12 items-center gap-2.5 px-4 border-b border-black/[0.06] flex-shrink-0">
           {filteredAgent ? (
             <>
               {filteredAgent.avatar_url ? (
@@ -430,7 +430,7 @@ function InboxInner() {
         </div>
 
         {/* Filter tabs */}
-        <div className="flex items-center gap-1 px-3 py-2.5 border-b border-[#ebebeb]">
+        <div className="flex items-center gap-1 px-3 py-2.5 border-b border-black/[0.06]">
           {(['all', 'active', 'escalated'] as const).map((t) => (
             <button
               key={t}
@@ -445,14 +445,14 @@ function InboxInner() {
         </div>
 
         {/* Search */}
-        <div className="px-3 py-2 border-b border-[#ebebeb]">
+        <div className="px-3 py-2 border-b border-black/[0.06]">
           <div className="relative">
             <MagnifyingGlass size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#a3a3a3]" />
             <Input
               placeholder="Search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="h-8 pl-8 text-[12px] border-[#ebebeb] bg-[#fafafa] focus-visible:ring-1"
+              className="h-8 pl-8 text-[12px] border-black/[0.06] bg-[#fafafa] focus-visible:ring-1"
             />
           </div>
         </div>
@@ -530,7 +530,7 @@ function InboxInner() {
       {/* ============================================================= */}
       {/* CENTER: Conversation */}
       {/* ============================================================= */}
-      <div className="flex flex-1 flex-col bg-white min-w-0 min-h-0 rounded-xl ring-1 ring-[#ebebeb] overflow-hidden">
+      <div className="flex flex-1 flex-col bg-white min-w-0 min-h-0 rounded-xl ring-1 ring-black/[0.06] shadow-sm overflow-hidden">
         {!selectedId ? (
           <div className="flex flex-1 items-center justify-center">
             <div className="text-center">
@@ -543,7 +543,7 @@ function InboxInner() {
           </div>
         ) : detailLoading ? (
           <div className="flex flex-1 flex-col">
-            <div className="flex h-12 items-center justify-between border-b border-[#ebebeb] px-5 flex-shrink-0">
+            <div className="flex h-12 items-center justify-between border-b border-black/[0.06] px-5 flex-shrink-0">
               <div className="flex items-center gap-3">
                 <Skeleton className="h-8 w-8 rounded-full" />
                 <Skeleton className="h-4 w-32" />
@@ -560,7 +560,7 @@ function InboxInner() {
         ) : detail ? (
           <>
             {/* Header */}
-            <div className="flex h-12 items-center justify-between border-b border-[#ebebeb] px-5 flex-shrink-0">
+            <div className="flex h-12 items-center justify-between border-b border-black/[0.06] px-5 flex-shrink-0">
               <div className="flex items-center gap-3">
                 {(() => {
                   const seed = detail.contact?.id || detail.contact?.name || ''
@@ -665,7 +665,7 @@ function InboxInner() {
 
             {/* Input — single bordered box with no top divider */}
             <div className="bg-white px-4 pb-4 pt-2 flex-shrink-0">
-              <div className="rounded-xl border border-[#ebebeb] bg-white overflow-hidden focus-within:ring-1 focus-within:ring-[#0a0a0a]/10">
+              <div className="rounded-xl border border-black/[0.06] bg-white overflow-hidden focus-within:ring-1 focus-within:ring-[#0a0a0a]/10">
                 {/* Channel selector */}
                 <div className="flex items-center gap-2 px-3 pt-2">
                   <button className="flex items-center gap-1.5 px-1.5 py-1 rounded-md hover:bg-[#f5f5f5] text-[13px] text-[#0a0a0a]">
@@ -716,9 +716,9 @@ function InboxInner() {
       {/* RIGHT: Details */}
       {/* ============================================================= */}
       {detail?.contact && (
-        <div className="flex w-[320px] flex-shrink-0 flex-col bg-white rounded-xl ring-1 ring-[#ebebeb] overflow-hidden">
+        <div className="flex w-[320px] flex-shrink-0 flex-col bg-white rounded-xl ring-1 ring-black/[0.06] shadow-sm overflow-hidden">
           {/* Tabs */}
-          <div className="flex h-12 bg-white border-b border-[#ebebeb] flex-shrink-0">
+          <div className="flex h-12 bg-white border-b border-black/[0.06] flex-shrink-0">
             {(['details', 'copilot'] as const).map((t) => (
               <button
                 key={t}
@@ -815,7 +815,7 @@ function InboxInner() {
                       value={contactNotes}
                       onChange={(e) => setContactNotes(e.target.value)}
                       rows={3}
-                      className="text-[12px] resize-none border-[#ebebeb]"
+                      className="text-[12px] resize-none border-black/[0.06]"
                     />
                     <Button
                       variant="outline"
