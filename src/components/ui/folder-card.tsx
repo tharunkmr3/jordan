@@ -184,12 +184,12 @@ export function FolderCard({ id, name, docCount, color, lastUpdated, onClick, co
     {menuOpen && contextActions && (
       <div
         ref={menuRef}
-        className="fixed z-50 min-w-[180px] rounded-lg border border-black/[0.06] bg-white shadow-lg py-1 animate-in fade-in-0 zoom-in-95"
+        className="fixed z-50 min-w-[180px] rounded-lg border border-black/[0.04] bg-white shadow-lg py-1 animate-in fade-in-0 zoom-in-95"
         style={{ left: menuPos.x, top: menuPos.y }}
       >
         {contextActions.map((action, i) => (
           <React.Fragment key={i}>
-            {action.divider && <div className="my-1 border-t border-black/[0.06]" />}
+            {action.divider && <div className="my-1 border-t border-black/[0.04]" />}
             <button
               onClick={(e) => {
                 e.stopPropagation()

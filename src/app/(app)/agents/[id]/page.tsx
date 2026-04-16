@@ -447,7 +447,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
 
   if (loading) return (
     <div className="flex h-full gap-3 p-3 bg-[#f5f5f5] overflow-hidden">
-      <div className="flex-1 overflow-y-auto rounded-xl bg-white ring-1 ring-black/[0.06] shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-6">
+      <div className="flex-1 overflow-y-auto rounded-xl bg-white ring-1 ring-black/[0.04] shadow-[0_1px_3px_rgba(0,0,0,0.04)] p-6">
         <div className="max-w-xl mx-auto space-y-5">
           <div className="flex items-start gap-4">
             <Skeleton className="h-14 w-14 rounded-full" />
@@ -467,8 +467,8 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
           ))}
         </div>
       </div>
-      <div className="w-[400px] flex flex-col rounded-xl bg-white ring-1 ring-black/[0.06] shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
-        <div className="h-12 border-b border-black/[0.06] px-4 flex items-center">
+      <div className="w-[400px] flex flex-col rounded-xl bg-white ring-1 ring-black/[0.04] shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+        <div className="h-12 border-b border-black/[0.04] px-4 flex items-center">
           <Skeleton className="h-4 w-20" />
         </div>
         <div className="flex-1 p-4 space-y-3">
@@ -484,9 +484,9 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
   return (
     <div className="flex h-full gap-3 p-3 bg-[#f5f5f5] overflow-hidden">
       {/* Left: Agent details */}
-      <div className="flex-1 flex flex-col rounded-xl bg-white ring-1 ring-black/[0.06] shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+      <div className="flex-1 flex flex-col rounded-xl bg-white ring-1 ring-black/[0.04] shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
         {/* Header with avatar + name + save */}
-        <div className="flex items-center gap-3 px-5 py-3 border-b border-black/[0.06] flex-shrink-0">
+        <div className="flex items-center gap-3 px-5 py-3 border-b border-black/[0.04] flex-shrink-0">
           <button onClick={() => router.push(`/inbox?agentId=${id}`)} className="rounded-md p-1 text-[#737373] hover:bg-[#f5f5f5] hover:text-[#2e2e2e]" title="Back to conversations">
             <ArrowLeft size={16} />
           </button>
@@ -510,7 +510,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-1 px-5 border-b border-black/[0.06] flex-shrink-0 overflow-x-auto">
+        <div className="flex items-center gap-1 px-5 border-b border-black/[0.04] flex-shrink-0 overflow-x-auto">
           {[
             { key: "agent", label: "Agent" },
             { key: "model", label: "System Prompt" },
@@ -521,7 +521,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
               key={t.key}
               onClick={() => setActiveTab(t.key)}
               className={`px-3 py-2.5 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
-                activeTab === t.key ? "border-[#2e2e2e] text-[#2e2e2e]" : "border-transparent text-[#737373] hover:text-[#2e2e2e]"
+                activeTab === t.key ? "border-[#F4511E] text-[#2e2e2e]" : "border-transparent text-[#737373] hover:text-[#2e2e2e]"
               }`}
             >
               {t.label}
@@ -951,8 +951,8 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
       </div>
 
       {/* Right: Chat test panel */}
-      <div className="w-[400px] flex flex-col rounded-xl bg-white ring-1 ring-black/[0.06] shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
-        <div className="h-12 flex items-center justify-between px-4 border-b border-black/[0.06]">
+      <div className="w-[400px] flex flex-col rounded-xl bg-white ring-1 ring-black/[0.04] shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+        <div className="h-12 flex items-center justify-between px-4 border-b border-black/[0.04]">
           <span className="text-sm font-medium">Test Chat</span>
           <Button variant="ghost" size="sm" className="text-xs" onClick={() => { setMessages([]); setConversationId(null) }}>Clear</Button>
         </div>
@@ -972,7 +972,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
             )}
           </div>
         </ScrollArea>
-        <div className="p-3 border-t border-black/[0.06]">
+        <div className="p-3 border-t border-black/[0.04]">
           <PromptInput>
             <PromptInputTextarea
               placeholder="Type a message..."

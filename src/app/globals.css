@@ -7,6 +7,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-brand: #F4511E;
+  --color-brand-soft: #FFF4EE;
   --font-sans: "Google Sans", "Inter", system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-sans);
@@ -121,6 +123,10 @@
   * {
     @apply border-border outline-ring/50;
     scrollbar-width: none;
+  }
+  /* Icon stroke weight: match font-weight 500 */
+  svg.lucide {
+    stroke-width: 2.25;
   }
   *:hover {
     scrollbar-width: thin;

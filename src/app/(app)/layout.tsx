@@ -64,7 +64,7 @@ function NavItem({ item, isActive, collapsed }: { item: typeof nav[0]; isActive:
         "flex items-center gap-3 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors",
         collapsed && "justify-center px-0",
         isActive
-          ? "bg-white text-[#2e2e2e] shadow-[0_1px_3px_rgba(0,0,0,0.04)] ring-1 ring-black/[0.06]"
+          ? "bg-white text-[#2e2e2e] shadow-[0_2px_4px_-1px_rgba(0,0,0,0.08),0_1px_2px_-1px_rgba(0,0,0,0.04)]"
           : "text-[#525252] hover:bg-[#ebebeb] hover:text-[#2e2e2e]"
       )}
     >
@@ -229,7 +229,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* Divider */}
-          <div className={cn("my-3 border-t border-black/[0.06]", collapsed ? "mx-2" : "mx-1")} />
+          <div className={cn("my-3 border-t border-black/[0.04]", collapsed ? "mx-2" : "mx-1")} />
 
           {/* Group 2: main entities */}
           <div className="space-y-0.5">
@@ -241,7 +241,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* Divider */}
-          {!collapsed && <div className="my-3 mx-1 border-t border-black/[0.06]" />}
+          {!collapsed && <div className="my-3 mx-1 border-t border-black/[0.04]" />}
 
           {/* Group 3: Agents */}
           {!collapsed && (
@@ -255,7 +255,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   href="/agents/new"
                   className={cn(
                     "flex items-center gap-3 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors",
-                    pathname === "/agents/new" ? "bg-white text-[#2e2e2e] shadow-[0_1px_3px_rgba(0,0,0,0.04)] ring-1 ring-black/[0.06]" : "text-[#737373] hover:bg-[#ebebeb] hover:text-[#2e2e2e]"
+                    pathname === "/agents/new" ? "bg-white text-[#2e2e2e] shadow-[0_2px_4px_-1px_rgba(0,0,0,0.08),0_1px_2px_-1px_rgba(0,0,0,0.04)]" : "text-[#737373] hover:bg-[#ebebeb] hover:text-[#2e2e2e]"
                   )}
                 >
                   <PlusCircle size={16} weight="regular" className="flex-shrink-0 text-[#737373]" />
@@ -272,7 +272,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         href={href}
                         className={cn(
                           "flex items-center gap-3 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors",
-                          isActive ? "bg-white text-[#2e2e2e] shadow-[0_1px_3px_rgba(0,0,0,0.04)] ring-1 ring-black/[0.06]" : "text-[#525252] hover:bg-[#ebebeb] hover:text-[#2e2e2e]"
+                          isActive ? "bg-white text-[#2e2e2e] shadow-[0_2px_4px_-1px_rgba(0,0,0,0.08),0_1px_2px_-1px_rgba(0,0,0,0.04)]" : "text-[#525252] hover:bg-[#ebebeb] hover:text-[#2e2e2e]"
                         )}
                       >
                         {a.avatar_url ? (
@@ -298,7 +298,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                       </button>
                       {menuOpen && (
                         <div
-                          className="absolute right-1 top-full mt-1 z-20 w-40 rounded-md border border-black/[0.06] bg-white shadow-lg py-1"
+                          className="absolute right-1 top-full mt-1 z-20 w-40 rounded-md border border-black/[0.04] bg-white shadow-lg py-1"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <Link
@@ -327,7 +327,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </nav>
 
         {/* Bottom nav */}
-        <div className="space-y-0.5 border-t border-black/[0.06] px-2 py-2">
+        <div className="space-y-0.5 border-t border-black/[0.04] px-2 py-2">
           {bottomNav.map((item) => (
             <NavItem
               key={item.href}
@@ -339,7 +339,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* User */}
-        <div className="relative border-t border-black/[0.06] px-2 py-2">
+        <div className="relative border-t border-black/[0.04] px-2 py-2">
           <div className={cn("flex items-center gap-1", collapsed && "flex-col")}>
             <button
               onClick={() => setShowUserMenu(!showUserMenu)}
@@ -372,7 +372,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               "absolute bottom-full mb-1 rounded-lg border border-[#e0e0e0] bg-white p-1 shadow-lg",
               collapsed ? "left-1 w-48" : "left-2 right-2"
             )}>
-              <div className="px-3 py-2 border-b border-black/[0.06]">
+              <div className="px-3 py-2 border-b border-black/[0.04]">
                 <div className="truncate text-sm font-medium text-[#2e2e2e]">{userName}</div>
                 <div className="truncate text-[13px] text-[#737373]">{userEmail}</div>
               </div>
@@ -396,9 +396,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       ) : (
         <div className="flex flex-1 flex-col overflow-hidden bg-[#f5f5f5] p-3">
-          <div className="flex h-full flex-col overflow-hidden rounded-xl bg-white ring-1 ring-black/[0.06]">
+          <div className="flex h-full flex-col overflow-hidden rounded-xl bg-white ring-1 ring-black/[0.04]">
             {/* Header (inside card) */}
-            <header className="flex h-12 items-center justify-between border-b border-black/[0.06] px-5 flex-shrink-0">
+            <header className="flex h-12 items-center justify-between border-b border-black/[0.04] px-5 flex-shrink-0">
               <span className="text-base font-semibold text-[#2e2e2e]">{pageTitle}</span>
               <div>
                 {pathname === "/knowledge" && (
