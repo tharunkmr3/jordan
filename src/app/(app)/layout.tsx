@@ -68,7 +68,7 @@ function NavItem({ item, isActive, collapsed }: { item: typeof nav[0]; isActive:
           : "text-[#525252] hover:bg-[#ebebeb] hover:text-[#2e2e2e]"
       )}
     >
-      <Icon size={16} weight="regular" className={isActive ? "text-[#2e2e2e]" : "text-[#737373]"} />
+      <Icon size={16} weight="bold" className={isActive ? "text-[#2e2e2e]" : "text-[#737373]"} />
       {!collapsed && item.label}
     </Link>
   )
@@ -222,7 +222,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 collapsed && "justify-center px-0"
               )}
             >
-              <MagnifyingGlass size={16} weight="regular" className="text-[#737373]" />
+              <MagnifyingGlass size={16} weight="bold" className="text-[#737373]" />
               {!collapsed && <span className="flex-1 text-left">Search</span>}
               {!collapsed && <span className="text-[11px] text-[#a3a3a3]">⌘K</span>}
             </button>
@@ -258,7 +258,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     pathname === "/agents/new" ? "bg-white text-[#2e2e2e] shadow-[0_2px_4px_-1px_rgba(0,0,0,0.08),0_1px_2px_-1px_rgba(0,0,0,0.04)]" : "text-[#737373] hover:bg-[#ebebeb] hover:text-[#2e2e2e]"
                   )}
                 >
-                  <PlusCircle size={16} weight="regular" className="flex-shrink-0 text-[#737373]" />
+                  <PlusCircle size={16} weight="bold" className="flex-shrink-0 text-[#737373]" />
                   <span className="truncate flex-1">New Agent</span>
                 </Link>
                 {agents.map((a) => {
@@ -363,7 +363,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               )}
             </button>
             <button className="relative rounded-md p-2 text-[#737373] hover:bg-[#ebebeb] hover:text-[#2e2e2e] flex-shrink-0" title="Notifications">
-              <Bell size={16} weight="regular" />
+              <Bell size={16} weight="bold" />
               <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[#2e2e2e]" />
             </button>
           </div>
@@ -380,7 +380,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 onClick={handleSignOut}
                 className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm text-red-600 hover:bg-red-50"
               >
-                <SignOut size={16} weight="regular" />
+                <SignOut size={16} weight="bold" />
                 Sign out
               </button>
             </div>
