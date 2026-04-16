@@ -57,7 +57,7 @@ function NavItem({ item, isActive, collapsed }: { item: typeof nav[0]; isActive:
       href={item.href}
       title={collapsed ? item.label : undefined}
       className={cn(
-        "flex items-center gap-3 rounded-md px-3 py-2 text-[13px] font-[550] transition-colors",
+        "flex items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium transition-colors",
         collapsed && "justify-center px-0",
         isActive
           ? "bg-[#ebebeb] text-[#0a0a0a]"
@@ -154,7 +154,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className={cn("flex h-12 items-center gap-2.5 px-4", collapsed && "justify-center px-0")}>
           <JordonLogo />
           {!collapsed && (
-            <span className="text-[15px] font-[550] tracking-tight text-[#0a0a0a]">
+            <span className="text-[15px] font-medium tracking-tight text-[#0a0a0a]">
               Jordon
             </span>
           )}
@@ -175,7 +175,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   type="button"
                   title={collapsed ? "Search" : undefined}
                   className={cn(
-                    "flex w-full items-center gap-3 rounded-md px-3 py-2 text-[13px] font-[550] text-[#0a0a0a] hover:bg-[#ebebeb] transition-colors",
+                    "flex w-full items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium text-[#0a0a0a] hover:bg-[#ebebeb] transition-colors",
                     collapsed && "justify-center px-0"
                   )}
                 >
@@ -191,14 +191,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {!collapsed && (
             <div className="pt-4">
               <div className="flex items-center justify-between px-3 mb-1">
-                <span className="text-[10px] font-[550] text-[#a3a3a3] uppercase tracking-wider">Agents</span>
+                <span className="text-[10px] font-medium text-[#a3a3a3] uppercase tracking-wider">Agents</span>
                 {agents.length > 0 && <span className="text-[10px] text-[#a3a3a3]">{agents.length}</span>}
               </div>
               <div className="space-y-0.5">
                 <Link
                   href="/agents/new"
                   className={cn(
-                    "flex items-center gap-2 rounded-md px-3 py-1.5 text-[12px] font-[550] transition-colors",
+                    "flex items-center gap-2 rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors",
                     pathname === "/agents/new" ? "bg-[#ebebeb] text-[#0a0a0a]" : "text-[#737373] hover:bg-[#ebebeb] hover:text-[#0a0a0a]"
                   )}
                 >
@@ -212,14 +212,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                       key={a.id}
                       href={`/agents/${a.id}`}
                       className={cn(
-                        "flex items-center gap-2 rounded-md px-3 py-1.5 text-[12px] font-[550] transition-colors",
+                        "flex items-center gap-2 rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors",
                         isActive ? "bg-[#ebebeb] text-[#0a0a0a]" : "text-[#525252] hover:bg-[#ebebeb]"
                       )}
                     >
                       {a.avatar_url ? (
                         <img src={a.avatar_url} alt={a.name} className="h-5 w-5 rounded-full object-cover flex-shrink-0" />
                       ) : (
-                        <div className="h-5 w-5 rounded-full bg-[#0a0a0a] text-white text-[9px] font-[550] flex items-center justify-center flex-shrink-0">
+                        <div className="h-5 w-5 rounded-full bg-[#0a0a0a] text-white text-[9px] font-medium flex items-center justify-center flex-shrink-0">
                           {a.name[0]?.toUpperCase() || 'A'}
                         </div>
                       )}
@@ -261,7 +261,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               {!collapsed && (
                 <>
                   <div className="flex-1 min-w-0">
-                    <div className="truncate text-[13px] font-[550] text-[#0a0a0a]">{userName || "Loading..."}</div>
+                    <div className="truncate text-[13px] font-medium text-[#0a0a0a]">{userName || "Loading..."}</div>
                   </div>
                   <CaretDown size={12} weight="bold" className="text-[#a3a3a3]" />
                 </>
@@ -278,7 +278,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               collapsed ? "left-1 w-48" : "left-2 right-2"
             )}>
               <div className="px-3 py-2 border-b border-[#ebebeb]">
-                <div className="truncate text-[13px] font-[550] text-[#0a0a0a]">{userName}</div>
+                <div className="truncate text-[13px] font-medium text-[#0a0a0a]">{userName}</div>
                 <div className="truncate text-[12px] text-[#737373]">{userEmail}</div>
               </div>
               <button
@@ -311,7 +311,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 >
                   <SidebarSimple size={18} weight="duotone" />
                 </button>
-                <span className="text-[15px] font-[550] text-[#0a0a0a]">{pageTitle}</span>
+                <span className="text-[15px] font-medium text-[#0a0a0a]">{pageTitle}</span>
               </div>
               <div />
 
