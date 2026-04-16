@@ -180,7 +180,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   )}
                 >
                   <MagnifyingGlass size={18} weight="regular" className="text-[#737373]" />
-                  {!collapsed && <span className="flex-1 text-left text-[#737373]">Search</span>}
+                  {!collapsed && <span className="flex-1 text-left">Search</span>}
                   {!collapsed && <span className="text-[10px] text-[#a3a3a3]">⌘K</span>}
                 </button>
               )}
