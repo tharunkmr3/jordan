@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { FolderCard, FolderColorPicker } from '@/components/ui/folder-card'
+import { FolderCard, FolderColorPicker, type FolderAction } from '@/components/ui/folder-card'
 import {
   Dialog,
   DialogContent,
@@ -119,6 +119,15 @@ export default function KnowledgePage() {
     await fetch(`/api/knowledge-base/${kbId}`, { method: 'DELETE' })
     setSelectedKb(null)
     await fetchKbs()
+  }
+
+  async function handleRenameKb(kbId: string, newName: string) {
+    await fetch(`/api/knowledge-base/${kbId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newName }),
+    })
+    setKbs(prev => prev.map(kb => kb.id === kbId ? { ...kb, name: newName } : kb))
   }
 
   async function handleUpload(file: File) {
@@ -361,6 +370,14 @@ export default function KnowledgePage() {
               color={(kb as unknown as { color?: string }).color}
               lastUpdated={kb.updated_at}
               onClick={() => setSelectedKb(kb.id)}
+              onRename={(newName) => handleRenameKb(kb.id, newName)}
+              contextActions={[
+                { label: "Open", icon: <ArrowLeft size={14} className="rotate-180" />, onClick: () => setSelectedKb(kb.id) },
+                { label: "Rename", icon: <FileText size={14} />, onClick: () => {} },
+                { label: "Upload file", icon: <Upload size={14} />, onClick: () => { setSelectedKb(kb.id); setTimeout(() => fileInputRef.current?.click(), 100) } },
+                { label: "Add FAQ", icon: <ChatDots size={14} />, onClick: () => { setSelectedKb(kb.id); setTimeout(() => setFaqOpen(true), 100) } },
+                { label: "Delete", icon: <Trash size={14} />, onClick: () => handleDeleteKb(kb.id), destructive: true, divider: true },
+              ] as FolderAction[]}
             />
           ))}
         </div>

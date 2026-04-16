@@ -1,5 +1,6 @@
 "use client"
 
+import * as React from "react"
 import { cn } from "@/lib/utils"
 
 export const FOLDER_COLORS = [
@@ -25,28 +26,86 @@ export function getFolderColorByName(name: string): FolderColor {
   return FOLDER_COLORS.find(c => c.name.toLowerCase() === name.toLowerCase()) || FOLDER_COLORS[0]
 }
 
+export interface FolderAction {
+  label: string
+  icon?: React.ReactNode
+  onClick: () => void
+  destructive?: boolean
+  divider?: boolean
+}
+
 interface FolderCardProps {
   id: string
   name: string
   docCount: number
-  color?: string // color name like "Blue", "Purple" etc
+  color?: string
   lastUpdated?: string
   onClick?: () => void
+  contextActions?: FolderAction[]
+  onRename?: (newName: string) => void
   className?: string
 }
 
-export function FolderCard({ id, name, docCount, color, lastUpdated, onClick, className }: FolderCardProps) {
+export function FolderCard({ id, name, docCount, color, lastUpdated, onClick, contextActions, onRename, className }: FolderCardProps) {
   const c = color ? getFolderColorByName(color) : getFolderColor(id)
   const dateStr = lastUpdated
     ? new Date(lastUpdated).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : null
 
-  // Unique gradient IDs to avoid SVG conflicts when multiple folders render
   const gid = `f_${id.slice(0, 8)}`
 
+  const [menuOpen, setMenuOpen] = React.useState(false)
+  const [menuPos, setMenuPos] = React.useState({ x: 0, y: 0 })
+  const [renaming, setRenaming] = React.useState(false)
+  const [renameValue, setRenameValue] = React.useState(name)
+  const menuRef = React.useRef<HTMLDivElement>(null)
+  const inputRef = React.useRef<HTMLInputElement>(null)
+
+  // Close menu on outside click
+  React.useEffect(() => {
+    if (!menuOpen) return
+    const close = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false)
+    }
+    document.addEventListener("mousedown", close)
+    return () => document.removeEventListener("mousedown", close)
+  }, [menuOpen])
+
+  // Focus input when renaming
+  React.useEffect(() => {
+    if (renaming) {
+      inputRef.current?.focus()
+      inputRef.current?.select()
+    }
+  }, [renaming])
+
+  function handleContextMenu(e: React.MouseEvent) {
+    if (!contextActions?.length) return
+    e.preventDefault()
+    e.stopPropagation()
+    setMenuPos({ x: e.clientX, y: e.clientY })
+    setMenuOpen(true)
+  }
+
+  function handleRenameSubmit() {
+    const trimmed = renameValue.trim()
+    if (trimmed && trimmed !== name && onRename) {
+      onRename(trimmed)
+    }
+    setRenaming(false)
+  }
+
+  function startRename() {
+    setRenameValue(name)
+    setRenaming(true)
+    setMenuOpen(false)
+  }
+
   return (
+    <>
     <button
       onClick={onClick}
+      onContextMenu={handleContextMenu}
       className={cn(
         "group relative w-full text-left rounded-2xl pt-5 px-3 pb-3 transition-all duration-200 hover:bg-[#f5f5f5] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         className
@@ -99,7 +158,19 @@ export function FolderCard({ id, name, docCount, color, lastUpdated, onClick, cl
       </svg>
 
       <div className="text-center mt-1">
-        <h3 className="text-sm font-semibold text-[#0a0a0a] truncate">{name}</h3>
+        {renaming ? (
+          <input
+            ref={inputRef}
+            value={renameValue}
+            onChange={e => setRenameValue(e.target.value)}
+            onBlur={handleRenameSubmit}
+            onKeyDown={e => { if (e.key === "Enter") handleRenameSubmit(); if (e.key === "Escape") setRenaming(false) }}
+            onClick={e => e.stopPropagation()}
+            className="text-sm font-semibold text-[#0a0a0a] text-center w-full bg-transparent border-b border-[#0a0a0a]/20 outline-none focus:border-[#0a0a0a]/50 px-1"
+          />
+        ) : (
+          <h3 className="text-sm font-semibold text-[#0a0a0a] truncate" onDoubleClick={(e) => { e.stopPropagation(); if (onRename) startRename() }}>{name}</h3>
+        )}
         <p className="text-xs text-[#737373] mt-0.5">
           {docCount} {docCount === 1 ? "Document" : "Documents"}
         </p>
@@ -108,6 +179,37 @@ export function FolderCard({ id, name, docCount, color, lastUpdated, onClick, cl
         )}
       </div>
     </button>
+
+    {/* Context menu */}
+    {menuOpen && contextActions && (
+      <div
+        ref={menuRef}
+        className="fixed z-50 min-w-[180px] rounded-lg border border-black/[0.06] bg-white shadow-lg py-1 animate-in fade-in-0 zoom-in-95"
+        style={{ left: menuPos.x, top: menuPos.y }}
+      >
+        {contextActions.map((action, i) => (
+          <React.Fragment key={i}>
+            {action.divider && <div className="my-1 border-t border-black/[0.06]" />}
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                if (action.label === "Rename" && onRename) { startRename() }
+                else { action.onClick() }
+                setMenuOpen(false)
+              }}
+              className={cn(
+                "flex w-full items-center gap-2.5 px-3 py-1.5 text-sm transition-colors",
+                action.destructive ? "text-red-600 hover:bg-red-50" : "text-[#0a0a0a] hover:bg-[#f5f5f5]"
+              )}
+            >
+              {action.icon}
+              {action.label}
+            </button>
+          </React.Fragment>
+        ))}
+      </div>
+    )}
+    </>
   )
 }
 
