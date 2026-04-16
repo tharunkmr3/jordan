@@ -264,9 +264,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 {agents.map((a) => {
                   const isCustomerFacing = a.settings?.is_customer_facing !== false
                   const href = isCustomerFacing ? `/inbox?agentId=${a.id}` : `/agents/${a.id}`
-                  const isActive = isCustomerFacing
-                    ? currentAgentId === a.id
-                    : pathname === `/agents/${a.id}`
+                  const isActive = currentAgentId === a.id || pathname === `/agents/${a.id}`
                   const menuOpen = agentMenuOpen === a.id
                   return (
                     <div key={a.id} className="group/agent relative">
