@@ -114,6 +114,11 @@ export const COMPOSER_ACCEPT = [
 /**
  * Shape returned by POST /api/chat/attachments. Included in the
  * message metadata.attachments array when the chat message is sent.
+ *
+ * `extractedText` is populated at upload time for docs (PDF/docx/
+ * xlsx/pptx/md/txt) by extract.ts; `transcript` for audio via
+ * Whisper. Images have neither — the pipeline attaches them inline
+ * as vision parts using a signed URL from `path`.
  */
 export interface UploadedAttachment {
   id: string
@@ -122,6 +127,10 @@ export interface UploadedAttachment {
   size: number
   mime: string
   kind: AttachmentKind
+  /** Extracted body text for documents. Present when kind is pdf/docx/xlsx/pptx/markdown/text. */
+  extractedText?: string
+  /** Whisper transcript. Present when kind is audio. */
+  transcript?: string
 }
 
 /**

@@ -6,9 +6,19 @@
 import OpenAI from 'openai'
 import Anthropic from '@anthropic-ai/sdk'
 
+/**
+ * A content part in a multimodal user message. Vision providers
+ * (OpenAI, Anthropic) accept an array of these instead of a string
+ * when the message includes images alongside text.
+ */
+export type ContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } }
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
-  content: string
+  /** String for plain text messages, or parts array for multimodal user messages. */
+  content: string | ContentPart[]
   /** For tool messages: the tool_call_id this result answers. */
   tool_call_id?: string
   /** For assistant messages that called tools: the list of calls. */
@@ -210,7 +220,8 @@ async function generateWithToolsAnthropic(
   config: ModelConfig
 ): Promise<GenerateWithToolsResult> {
   const anthropic = getAnthropic()
-  const systemMsg = messages.find((m) => m.role === 'system')?.content ?? ''
+  const systemMsgRaw = messages.find((m) => m.role === 'system')?.content ?? ''
+  const systemMsg = typeof systemMsgRaw === 'string' ? systemMsgRaw : contentPartsToText(systemMsgRaw)
 
   const anthTools = tools.map((t) => ({
     name: t.function.name,
@@ -270,25 +281,39 @@ import type { ChatCompletionMessageParam } from 'openai/resources/chat/completio
 
 function toOpenAiMessage(m: ChatMessage): ChatCompletionMessageParam {
   if (m.role === 'tool') {
+    // Tool results are always plain text.
     return {
       role: 'tool',
-      content: m.content,
+      content: typeof m.content === 'string' ? m.content : contentPartsToText(m.content),
       tool_call_id: m.tool_call_id ?? '',
     }
   }
   if (m.role === 'assistant') {
     return {
       role: 'assistant',
-      content: m.content,
+      content: typeof m.content === 'string' ? m.content : contentPartsToText(m.content),
       tool_calls: m.tool_calls as ChatCompletionMessageParam extends infer X
         ? X extends { tool_calls?: infer Y } ? Y : never
         : never,
     } as ChatCompletionMessageParam
   }
   if (m.role === 'system') {
-    return { role: 'system', content: m.content }
+    return { role: 'system', content: typeof m.content === 'string' ? m.content : contentPartsToText(m.content) }
+  }
+  // User messages can be multimodal — OpenAI's shape is
+  // { role: 'user', content: [ {type:'text',text}, {type:'image_url',image_url:{url}} ] }.
+  // Our ContentPart is already in that shape; cast through unknown
+  // because OpenAI's content type is a wider tagged union.
+  if (Array.isArray(m.content)) {
+    return { role: 'user', content: m.content as unknown as ChatCompletionMessageParam['content'] } as ChatCompletionMessageParam
   }
   return { role: 'user', content: m.content }
+}
+
+function contentPartsToText(parts: ContentPart[]): string {
+  return parts
+    .map(p => p.type === 'text' ? p.text : `[image]`)
+    .join('\n')
 }
 
 type AnthropicMsg = {
@@ -297,6 +322,7 @@ type AnthropicMsg = {
     | string
     | Array<
         | { type: 'text'; text: string }
+        | { type: 'image'; source: { type: 'url'; url: string } }
         | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
         | { type: 'tool_result'; tool_use_id: string; content: string }
       >
@@ -304,20 +330,33 @@ type AnthropicMsg = {
 
 function toAnthropicMessage(m: ChatMessage): AnthropicMsg {
   if (m.role === 'tool') {
+    const content = typeof m.content === 'string' ? m.content : contentPartsToText(m.content)
     return {
       role: 'user',
-      content: [{ type: 'tool_result', tool_use_id: m.tool_call_id ?? '', content: m.content }],
+      content: [{ type: 'tool_result', tool_use_id: m.tool_call_id ?? '', content }],
     }
   }
   if (m.role === 'assistant' && m.tool_calls && m.tool_calls.length > 0) {
     const blocks: AnthropicMsg['content'] = []
-    if (m.content) blocks.push({ type: 'text', text: m.content })
+    const textContent = typeof m.content === 'string' ? m.content : contentPartsToText(m.content)
+    if (textContent) blocks.push({ type: 'text', text: textContent })
     for (const c of m.tool_calls) {
       let input: Record<string, unknown> = {}
       try { input = JSON.parse(c.function.arguments) as Record<string, unknown> } catch { /* ignore */ }
       blocks.push({ type: 'tool_use', id: c.id, name: c.function.name, input })
     }
     return { role: 'assistant', content: blocks }
+  }
+  // Multimodal user messages: translate OpenAI-shaped parts
+  // (text + image_url) into Anthropic's text + image/source.url blocks.
+  if (Array.isArray(m.content)) {
+    const blocks: AnthropicMsg['content'] = m.content.map(p => {
+      if (p.type === 'image_url') {
+        return { type: 'image', source: { type: 'url', url: p.image_url.url } }
+      }
+      return { type: 'text', text: p.text }
+    })
+    return { role: m.role as 'user' | 'assistant', content: blocks }
   }
   return { role: m.role as 'user' | 'assistant', content: m.content }
 }
@@ -348,16 +387,19 @@ async function callAnthropic(
   config: ModelConfig
 ): Promise<string> {
   const anthropic = getAnthropic()
-  const systemMsg = messages.find((m) => m.role === 'system')?.content || ''
+  const systemMsgRaw = messages.find((m) => m.role === 'system')?.content ?? ''
+  const systemMsg = typeof systemMsgRaw === 'string' ? systemMsgRaw : contentPartsToText(systemMsgRaw)
+  // Route through toAnthropicMessage so image parts get converted to
+  // the { type: 'image', source: { type: 'url', url } } shape.
   const chatMessages = messages
     .filter((m) => m.role !== 'system')
-    .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+    .map(toAnthropicMessage)
 
   const response = await anthropic.messages.create({
     model: config.model || 'claude-sonnet-4-6',
     max_tokens: config.maxTokens ?? 1024,
     system: systemMsg,
-    messages: chatMessages,
+    messages: chatMessages as Parameters<typeof anthropic.messages.create>[0]['messages'],
     temperature: config.temperature ?? 0.7,
   })
   return response.content[0].type === 'text' ? response.content[0].text : ''
@@ -368,16 +410,17 @@ async function* streamAnthropic(
   config: ModelConfig
 ): AsyncGenerator<string> {
   const anthropic = getAnthropic()
-  const systemMsg = messages.find((m) => m.role === 'system')?.content || ''
+  const systemMsgRaw = messages.find((m) => m.role === 'system')?.content ?? ''
+  const systemMsg = typeof systemMsgRaw === 'string' ? systemMsgRaw : contentPartsToText(systemMsgRaw)
   const chatMessages = messages
     .filter((m) => m.role !== 'system')
-    .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+    .map(toAnthropicMessage)
 
   const stream = anthropic.messages.stream({
     model: config.model || 'claude-sonnet-4-6',
     max_tokens: config.maxTokens ?? 1024,
     system: systemMsg,
-    messages: chatMessages,
+    messages: chatMessages as Parameters<typeof anthropic.messages.stream>[0]['messages'],
     temperature: config.temperature ?? 0.7,
   })
   for await (const event of stream) {

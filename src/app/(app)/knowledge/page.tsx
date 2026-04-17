@@ -48,6 +48,43 @@ function safeXhrMessage(xhr: XMLHttpRequest): string | null {
   return null
 }
 
+/** "hello world" → "Hello world". Leaves already-capitalized strings alone. */
+function capitalizeFirst(s: string): string {
+  if (!s) return s
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+function fileExtension(name: string): string {
+  const idx = name.lastIndexOf('.')
+  if (idx < 0 || idx === name.length - 1) return ''
+  return name.slice(idx + 1).toLowerCase()
+}
+
+/** Bytes → "12.3 KB" / "4.5 MB". Uses base-1024. */
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`
+}
+
+/**
+ * ISO timestamp → "Just now" / "5m ago" / "3h ago" / "Apr 16".
+ * Anything older than ~30 days falls back to localized month + day.
+ */
+function formatRelative(iso: string): string {
+  const d = new Date(iso)
+  const diffMs = Date.now() - d.getTime()
+  const sec = Math.floor(diffMs / 1000)
+  if (sec < 60) return 'Just now'
+  const min = Math.floor(sec / 60)
+  if (min < 60) return `${min}m ago`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr}h ago`
+  const day = Math.floor(hr / 24)
+  if (day < 30) return `${day}d ago`
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
 export default function KnowledgePage() {
   const [kbs, setKbs] = useState<KnowledgeBaseWithDocs[]>([])
   const [agents, setAgents] = useState<Agent[]>([])
@@ -319,62 +356,11 @@ export default function KnowledgePage() {
           </Button>
         </HeaderActions>
 
-        {/* Optimistic upload queue — appears above the real docs list so
-            in-flight uploads are visible without a refresh. */}
-        {uploadQueue.length > 0 && (
-          <div className="space-y-1 mb-3">
-            {uploadQueue.map(task => (
-              <div
-                key={task.clientId}
-                className="flex items-center gap-3 px-4 py-3 rounded-lg bg-[#fafafa] ring-1 ring-black/[0.04]"
-              >
-                <FileText size={18} className="text-[#737373] shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <div className="text-sm font-medium text-[#2e2e2e] truncate">{task.file.name}</div>
-                    <div className="text-xs text-[#a3a3a3] shrink-0">
-                      {(task.file.size / 1024).toFixed(1)} KB
-                    </div>
-                  </div>
-                  {task.status === 'error' ? (
-                    <div className="text-xs text-red-600">{task.error}</div>
-                  ) : (
-                    <div className="h-1 rounded-full bg-black/[0.06] overflow-hidden">
-                      <div
-                        className={`h-full transition-[width] duration-200 ${
-                          task.status === 'done' ? 'bg-emerald-500' : 'bg-[#2e2e2e]'
-                        }`}
-                        style={{ width: `${task.progress}%` }}
-                      />
-                    </div>
-                  )}
-                </div>
-                <Badge
-                  variant="secondary"
-                  className={`text-xs shrink-0 ${
-                    task.status === 'error' ? 'bg-red-50 text-red-700' :
-                    task.status === 'done' ? 'bg-emerald-50 text-emerald-700' :
-                    'bg-blue-50 text-blue-700'
-                  }`}
-                >
-                  {task.status === 'uploading' ? `${task.progress}%` : task.status}
-                </Badge>
-                {(task.status === 'error' || task.status === 'done') && (
-                  <button
-                    onClick={() => dismissUploadTask(task.clientId)}
-                    className="p-1 rounded text-[#a3a3a3] hover:text-[#2e2e2e] hover:bg-black/[0.04]"
-                    aria-label="Dismiss"
-                  >
-                    <X size={14} />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Documents grid */}
-        {docs.length === 0 ? (
+        {/* Unified documents list. In-flight upload tasks render as rows
+            in the same layout so the experience feels continuous — the
+            only difference is the Status column shows a progress bar
+            instead of a badge while uploading. */}
+        {docs.length === 0 && uploadQueue.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 border border-dashed border-[#d4d4d4] rounded-xl bg-[#fafafa]">
             <div className="h-12 w-12 rounded-full bg-[#f0f0f0] flex items-center justify-center mb-3">
               <FileText size={22} className="text-[#a3a3a3]" />
@@ -386,29 +372,111 @@ export default function KnowledgePage() {
               disabled={uploadQueue.some(t => t.status === 'uploading')}
               onClick={() => fileInputRef.current?.click()}
             >
-              <Upload size={14} className="mr-1.5" />Upload Files
+              <Upload size={14} className="mr-1.5" />Upload files
             </Button>
           </div>
         ) : (
-          <div className="space-y-1">
-            {docs.map(doc => (
-              <div key={doc.id} className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-[#fafafa] group transition-colors">
-                <FileText size={18} className="text-[#737373] shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-[#2e2e2e] truncate">{doc.name}</div>
-                  <div className="text-xs text-[#a3a3a3]">
-                    {doc.file_type || 'text'} · {(doc.char_count / 1000).toFixed(1)}k chars
-                  </div>
+          <div className="rounded-xl border border-black/[0.04] overflow-hidden">
+            {/* Column headers. Grid widths match the row grid below. */}
+            <div className="grid grid-cols-[1fr_90px_110px_130px_160px_32px] items-center gap-3 px-4 py-2.5 bg-[#fafafa] text-[11px] font-medium tracking-wide text-[#737373] uppercase">
+              <div>Name</div>
+              <div>Type</div>
+              <div>Size</div>
+              <div>Uploaded</div>
+              <div>Status</div>
+              <div />
+            </div>
+
+            {/* In-flight upload rows first — appear at top so user sees
+                their action reflected immediately. */}
+            {uploadQueue.map(task => (
+              <div
+                key={task.clientId}
+                className="grid grid-cols-[1fr_90px_110px_130px_160px_32px] items-center gap-3 px-4 py-3 border-t border-black/[0.04] bg-[#fafafa]/40"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <FileText size={18} className="text-[#737373] shrink-0" />
+                  <span className="text-sm font-medium text-[#2e2e2e] truncate">
+                    {capitalizeFirst(task.file.name)}
+                  </span>
                 </div>
-                <Badge variant="secondary" className={`text-xs shrink-0 ${statusStyles[doc.status] || ''}`}>
-                  {doc.status}
-                </Badge>
-                <button
-                  onClick={() => handleDeleteDoc(doc.id)}
-                  className="p-1 rounded text-[#a3a3a3] hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <X size={14} />
-                </button>
+                <div className="text-xs text-[#737373]">
+                  {capitalizeFirst(fileExtension(task.file.name) || 'text')}
+                </div>
+                <div className="text-xs text-[#737373]">
+                  {formatBytes(task.file.size)}
+                </div>
+                <div className="text-xs text-[#737373]">
+                  Just now
+                </div>
+                <div>
+                  {task.status === 'error' ? (
+                    <span className="text-xs text-red-600 truncate block">{task.error}</span>
+                  ) : task.status === 'done' ? (
+                    <Badge variant="secondary" className="text-xs bg-emerald-50 text-emerald-700">Done</Badge>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-1 rounded-full bg-black/[0.06] overflow-hidden">
+                        <div
+                          className="h-full bg-[#2e2e2e] transition-[width] duration-200"
+                          style={{ width: `${task.progress}%` }}
+                        />
+                      </div>
+                      <span className="text-[11px] text-[#737373] shrink-0 w-8 text-right tabular-nums">
+                        {task.progress}%
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex justify-end">
+                  {(task.status === 'error' || task.status === 'done') && (
+                    <button
+                      onClick={() => dismissUploadTask(task.clientId)}
+                      className="p-1 rounded text-[#a3a3a3] hover:text-[#2e2e2e] hover:bg-black/[0.04]"
+                      aria-label="Dismiss"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {/* Real documents */}
+            {docs.map(doc => (
+              <div
+                key={doc.id}
+                className="grid grid-cols-[1fr_90px_110px_130px_160px_32px] items-center gap-3 px-4 py-3 border-t border-black/[0.04] hover:bg-[#fafafa] group transition-colors"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <FileText size={18} className="text-[#737373] shrink-0" />
+                  <span className="text-sm font-medium text-[#2e2e2e] truncate">
+                    {capitalizeFirst(doc.name)}
+                  </span>
+                </div>
+                <div className="text-xs text-[#737373]">
+                  {capitalizeFirst(doc.file_type || 'text')}
+                </div>
+                <div className="text-xs text-[#737373]">
+                  {(doc.char_count / 1000).toFixed(1)}k chars
+                </div>
+                <div className="text-xs text-[#737373]" title={new Date(doc.created_at).toLocaleString()}>
+                  {formatRelative(doc.created_at)}
+                </div>
+                <div>
+                  <Badge variant="secondary" className={`text-xs ${statusStyles[doc.status] || ''}`}>
+                    {capitalizeFirst(doc.status)}
+                  </Badge>
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => handleDeleteDoc(doc.id)}
+                    className="p-1 rounded text-[#a3a3a3] hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                    aria-label="Delete document"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
               </div>
             ))}
           </div>

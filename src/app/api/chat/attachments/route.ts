@@ -23,6 +23,7 @@ import {
   newAttachmentId,
   type AttachmentKind,
 } from '@/lib/chat-attachments/constants'
+import { extractDocumentText, transcribeAudio } from '@/lib/chat-attachments/extract'
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
@@ -81,6 +82,20 @@ export async function POST(req: NextRequest) {
 
   const kind: AttachmentKind = classifyMimeType(mime, file.name)
 
+  // Inline extraction at upload time. Failures don't fail the whole
+  // upload — the file is already saved, the manifest just lacks the
+  // enriched field. The pipeline's prompt builder uses whatever's
+  // present and falls back to a plain "[attached filename]" line.
+  let extractedText: string | undefined
+  let transcript: string | undefined
+  if (kind === 'audio') {
+    const t = await transcribeAudio(bytes, file.name, mime)
+    if (t) transcript = t
+  } else if (kind !== 'image') {
+    const t = await extractDocumentText(kind, bytes, file.name)
+    if (t) extractedText = t
+  }
+
   return NextResponse.json({
     id,
     path,
@@ -88,5 +103,7 @@ export async function POST(req: NextRequest) {
     size: file.size,
     mime,
     kind,
+    extractedText,
+    transcript,
   })
 }

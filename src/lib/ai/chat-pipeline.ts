@@ -10,6 +10,7 @@ import {
   streamResponse,
   supportsTools,
   type ChatMessage,
+  type ContentPart,
   type ModelConfig,
 } from './models'
 import {
@@ -25,6 +26,8 @@ import type {
   MessageInsert,
   UsageLogInsert,
 } from '@/types/database'
+import type { UploadedAttachment } from '@/lib/chat-attachments/constants'
+import { signAttachmentUrls } from '@/lib/chat-attachments/signing'
 
 const MAX_TOOL_ITERATIONS = 6   // cap agentic loops per request
 
@@ -59,6 +62,13 @@ export interface PipelineInput {
     phone?: string
     channelUserId?: string
   }
+  /**
+   * Attachments the user sent with this turn. Pre-processed on the
+   * upload route — docs arrive with extractedText, audio with
+   * transcript. Images get signed URLs inline at prompt-build time
+   * and are sent as vision content parts.
+   */
+  attachments?: UploadedAttachment[]
 }
 
 export interface PipelineOutput {
@@ -108,6 +118,11 @@ export async function processChatMessage(
       role: 'user',
       content: input.message,
       channel: input.channel,
+      // Persist attachments on the user message so history replay and
+      // the inbox bubble renderer can reconstruct the chips / previews.
+      metadata: input.attachments && input.attachments.length > 0
+        ? { attachments: input.attachments }
+        : undefined,
     }),
     loadHistory(supabase, conversation.id, 20),
     queryKnowledgeBase
@@ -117,7 +132,7 @@ export async function processChatMessage(
 
   // 4. Build prompt
   const kbContextStr = kbContext.length > 0 ? kbContext.join('\n\n') : ''
-  const messages = buildPrompt(agent, history, input.message, kbContextStr, input.channel)
+  const messages = await buildPrompt(agent, history, input.message, kbContextStr, input.channel, input.attachments)
 
   // 5. Call AI model. Per-turn override wins over the agent's configured
   // model — the internal-chat composer uses this to let users switch
@@ -218,6 +233,11 @@ export async function* streamChatMessage(
       role: 'user',
       content: input.message,
       channel: input.channel,
+      // Persist attachments on the user message so history replay and
+      // the inbox bubble renderer can reconstruct the chips / previews.
+      metadata: input.attachments && input.attachments.length > 0
+        ? { attachments: input.attachments }
+        : undefined,
     }),
     loadHistory(supabase, conversation.id, 20),
     queryKnowledgeBase
@@ -226,7 +246,7 @@ export async function* streamChatMessage(
   ])
 
   const kbContextStr = kbContext.length > 0 ? kbContext.join('\n\n') : ''
-  const messages = buildPrompt(agent, history, input.message, kbContextStr, input.channel)
+  const messages = await buildPrompt(agent, history, input.message, kbContextStr, input.channel, input.attachments)
 
   // Per-turn override applies here too (internal chat composer sends
   // a modelOverride for the currently-selected model).
@@ -448,7 +468,14 @@ async function loadHistory(supabase: SupabaseAdmin, conversationId: string, limi
     .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
 }
 
-function buildPrompt(agent: Agent, history: ChatMessage[], currentMessage: string, kbContext: string, channel?: string): ChatMessage[] {
+async function buildPrompt(
+  agent: Agent,
+  history: ChatMessage[],
+  currentMessage: string,
+  kbContext: string,
+  channel: ChannelType | undefined,
+  attachments: UploadedAttachment[] | undefined,
+): Promise<ChatMessage[]> {
   const messages: ChatMessage[] = []
   let systemPrompt = agent.system_prompt || 'You are a helpful assistant.'
 
@@ -488,9 +515,77 @@ Prose is still the default. Only emit a widget when structured input or structur
     (m, idx) => !(idx === history.length - 1 && m.role === 'user' && m.content === currentMessage)
   )
   messages.push(...filteredHistory)
-  // Always append the current user message to guarantee it's present
-  messages.push({ role: 'user', content: currentMessage })
+
+  // Append the current user message. Attachments are folded in:
+  // - Documents: extractedText is prepended as quoted context.
+  // - Audio: transcript is prepended as quoted context.
+  // - Images: converted to signed URLs and passed as vision content parts.
+  //
+  // If there are no images, the message stays a plain string (faster,
+  // and avoids bumping models that don't support multimodal content).
+  const userMsg = await buildUserMessage(currentMessage, attachments ?? [])
+  messages.push(userMsg)
   return messages
+}
+
+/**
+ * Build the current-turn user message. Combines the typed text with
+ * any pre-extracted attachment bodies, and inlines images as vision
+ * content parts via signed URLs.
+ */
+async function buildUserMessage(
+  text: string,
+  attachments: UploadedAttachment[],
+): Promise<ChatMessage> {
+  if (attachments.length === 0) {
+    return { role: 'user', content: text }
+  }
+
+  // Build a prose prefix for every non-image attachment — extracted
+  // text for docs, transcript for audio, filename as a fallback.
+  const contextBlocks: string[] = []
+  const images: UploadedAttachment[] = []
+
+  for (const a of attachments) {
+    if (a.kind === 'image') {
+      images.push(a)
+      continue
+    }
+    if (a.kind === 'audio' && a.transcript) {
+      contextBlocks.push(`[Attached audio: ${a.name}]\nTranscript:\n${a.transcript}`)
+      continue
+    }
+    if (a.extractedText) {
+      contextBlocks.push(`[Attached ${a.kind.toUpperCase()}: ${a.name}]\n${a.extractedText}`)
+      continue
+    }
+    contextBlocks.push(`[Attached ${a.kind}: ${a.name} — (no extracted content)]`)
+  }
+
+  const fullText = [
+    contextBlocks.join('\n\n---\n\n'),
+    contextBlocks.length > 0 ? '\n\n---\n\n' : '',
+    text,
+  ].filter(Boolean).join('').trim()
+
+  if (images.length === 0) {
+    return { role: 'user', content: fullText }
+  }
+
+  // Sign each image URL for LLM-side fetch. An hour is plenty for a
+  // single turn; history replays generate fresh URLs if needed.
+  const urls = await signAttachmentUrls(images.map(i => i.path))
+  const imageParts: ContentPart[] = []
+  for (let i = 0; i < images.length; i++) {
+    const url = urls[i]
+    if (!url) continue
+    imageParts.push({ type: 'image_url', image_url: { url } })
+  }
+
+  const parts: ContentPart[] = []
+  if (fullText.length > 0) parts.push({ type: 'text', text: fullText })
+  parts.push(...imageParts)
+  return { role: 'user', content: parts }
 }
 
 /**

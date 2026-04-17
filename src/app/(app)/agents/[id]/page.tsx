@@ -19,7 +19,9 @@ import { Markdown } from "@/components/ui/markdown"
 import { ChainOfThought, ChainOfThoughtStep, ChainOfThoughtTrigger, ChainOfThoughtContent, ChainOfThoughtItem } from "@/components/ui/chain-of-thought"
 import { AiWidgetProvider } from "@/components/ui/ai-widget"
 import { AiComposer } from "@/components/ui/ai-composer"
+import { AttachmentList } from "@/components/ui/attachment-preview"
 import { MODEL_CATALOG, providerForModelName } from "@/lib/ai/catalog"
+import type { UploadedAttachment } from "@/lib/chat-attachments/constants"
 import { Loader } from "@/components/ui/loader"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
@@ -67,6 +69,8 @@ interface ChatMsg {
   content: string
   /** Chain-of-thought steps that accumulated during tool calling. */
   thoughts?: ThoughtStep[]
+  /** Files the user sent with this message — populated on user-role rows. */
+  attachments?: UploadedAttachment[]
 }
 
 const modelLabels: Record<string, string> = { sarvam: "Sarvam 30B", openai: "GPT-4o", anthropic: "Claude 3.5", gemini: "Gemini Pro" }
@@ -253,18 +257,28 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
     router.push("/dashboard")
   }
 
-  async function sendChat(override?: { message: string }) {
+  async function sendChat(override?: { message: string; attachments?: UploadedAttachment[] }) {
     const incoming = override?.message ?? chatInput.trim()
-    if (!incoming || chatLoading) return
+    const attachments = override?.attachments
+    if ((!incoming && (!attachments || attachments.length === 0)) || chatLoading) return
     const msg = incoming
     if (!override) setChatInput("")
-    setMessages(prev => [...prev, { role: "user", content: msg }])
+    setMessages(prev => [...prev, { role: "user", content: msg, attachments }])
     setChatLoading(true)
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agentId: id, message: msg, conversationId, stream: true, isTest: true, visitorId: `test-${id}`, visitorName: "Test" }),
+        body: JSON.stringify({
+          agentId: id,
+          message: msg,
+          conversationId,
+          stream: true,
+          isTest: true,
+          visitorId: `test-${id}`,
+          visitorName: "Test",
+          attachments: attachments && attachments.length > 0 ? attachments : undefined,
+        }),
       })
       if (!res.body) throw new Error("No stream")
       const reader = res.body.getReader()
@@ -1256,7 +1270,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
           <AiComposer
             value={chatInput}
             onChange={setChatInput}
-            onSubmit={(ctx) => { void sendChat({ message: ctx.text }) }}
+            onSubmit={(ctx) => { void sendChat({ message: ctx.text, attachments: ctx.attachments }) }}
             sending={chatLoading}
             variant="inline"
             placeholder="Ask anything"
@@ -1287,6 +1301,20 @@ function AssistantBubble({ msg }: { msg: ChatMsg }) {
     : "bg-white text-[#2e2e2e] rounded-3xl px-3.5 py-2 text-[13px] leading-relaxed ring-1 ring-black/[0.04]"
 
   if (isUser) {
+    const atts = msg.attachments ?? []
+    // User bubbles can have attachments + text, text-only, or
+    // attachments-only. Wrap in a flex-col so attachments stack above
+    // the text with a little breathing room.
+    if (atts.length > 0) {
+      return (
+        <div className="flex flex-col items-end gap-2 max-w-[640px]">
+          <AttachmentList attachments={atts} />
+          {msg.content.trim() && (
+            <MessageContent className={bubble}>{msg.content}</MessageContent>
+          )}
+        </div>
+      )
+    }
     return <MessageContent className={bubble}>{msg.content}</MessageContent>
   }
 

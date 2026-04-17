@@ -9,6 +9,7 @@ import { Panel } from '@/components/ui/panel'
 import { Markdown } from '@/components/ui/markdown'
 import { AiWidgetProvider } from '@/components/ui/ai-widget'
 import { AiComposer } from '@/components/ui/ai-composer'
+import { AttachmentList } from '@/components/ui/attachment-preview'
 import { Loader } from '@/components/ui/loader'
 import { ContactAvatar } from '@/components/ui/contact-avatar'
 import { ChannelIcon } from '@/components/ui/channel-icon'
@@ -964,9 +965,23 @@ function InboxInner() {
                               submit={(message) => { void handleInternalChatSend({ message }) }}
                               disabled={!isInternalAgent || idx !== detail.messages.length - 1}
                             >
-                              <Markdown className="prose prose-sm max-w-none [&>:first-child]:mt-0 [&>:last-child]:mb-0 prose-p:my-1 prose-headings:mt-2 prose-headings:mb-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-a:text-[#2e2e2e] prose-a:underline prose-code:text-[#2e2e2e] prose-code:bg-[#f3f3f3] prose-code:rounded prose-code:px-1 prose-pre:my-1.5">
-                                {msg.content}
-                              </Markdown>
+                              {(() => {
+                                const attachmentsOnMsg = (msg.metadata as { attachments?: UploadedAttachment[] } | null | undefined)?.attachments
+                                return (
+                                  <>
+                                    {attachmentsOnMsg && attachmentsOnMsg.length > 0 && (
+                                      <div className={msg.content ? 'mb-2' : ''}>
+                                        <AttachmentList attachments={attachmentsOnMsg} />
+                                      </div>
+                                    )}
+                                    {msg.content && (
+                                      <Markdown className="prose prose-sm max-w-none [&>:first-child]:mt-0 [&>:last-child]:mb-0 prose-p:my-1 prose-headings:mt-2 prose-headings:mb-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-a:text-[#2e2e2e] prose-a:underline prose-code:text-[#2e2e2e] prose-code:bg-[#f3f3f3] prose-code:rounded prose-code:px-1 prose-pre:my-1.5">
+                                        {msg.content}
+                                      </Markdown>
+                                    )}
+                                  </>
+                                )
+                              })()}
                             </AiWidgetProvider>
                             <div className={`mt-1 flex items-center gap-1 text-[10px] text-[#a3a3a3] leading-none select-none ${isOutgoing ? 'justify-end' : 'justify-start'}`}>
                               <span>{formatTimestamp(msg.created_at)}</span>

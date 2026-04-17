@@ -22,7 +22,7 @@ export async function OPTIONS() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { agentId, message, conversationId, visitorId, visitorName, stream, isTest, modelName } = body
+    const { agentId, message, conversationId, visitorId, visitorName, stream, isTest, modelName, attachments } = body
 
     if (!agentId || typeof agentId !== 'string') {
       return NextResponse.json({ error: 'agentId is required' }, { status: 400, headers: corsHeaders })
@@ -84,6 +84,13 @@ export async function POST(request: NextRequest) {
       if (provider) modelOverride = { name: modelName, provider }
     }
 
+    // Attachments: only accept from authenticated team members. Public
+    // widget calls would need their own upload endpoint + validation
+    // before we trust arbitrary manifests.
+    const effectiveAttachments = teamUser && Array.isArray(attachments) && attachments.length > 0
+      ? attachments
+      : undefined
+
     const pipelineInput = {
       agentId,
       message,
@@ -91,6 +98,7 @@ export async function POST(request: NextRequest) {
       channel: 'website' as const,
       isTest: effectiveIsTest,
       modelOverride,
+      attachments: effectiveAttachments,
       contactInfo: effectiveVisitorId
         ? { channelUserId: effectiveVisitorId, name: effectiveVisitorName || undefined }
         : undefined,
