@@ -131,3 +131,50 @@ export async function sendWhatsAppMessage(
     console.error('[whatsapp] Failed to send message:', err)
   }
 }
+
+/**
+ * Send a media attachment (image / audio / video / document) via
+ * WhatsApp. Each call is one media object — the Cloud API doesn't
+ * allow combining text with media in a single message, so the caller
+ * dispatches one sendWhatsAppMessage for the text + one
+ * sendWhatsAppMedia per attachment.
+ *
+ * WhatsApp accepts either a URL the server can fetch or an uploaded
+ * media_id. We use URLs since our attachments bucket issues signed
+ * URLs — no double-hop through Meta's media API.
+ */
+export async function sendWhatsAppMedia(
+  phoneNumberId: string,
+  to: string,
+  media: { kind: 'image' | 'audio' | 'video' | 'document'; url: string; filename?: string; caption?: string },
+  token: string,
+): Promise<void> {
+  // WhatsApp's schema nests the payload under the kind key.
+  const mediaPayload: Record<string, unknown> = { link: media.url }
+  if (media.kind === 'document' && media.filename) mediaPayload.filename = media.filename
+  if ((media.kind === 'image' || media.kind === 'video' || media.kind === 'document') && media.caption) {
+    mediaPayload.caption = media.caption
+  }
+
+  const response = await fetch(
+    `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to,
+        type: media.kind,
+        [media.kind]: mediaPayload,
+      }),
+    },
+  )
+
+  if (!response.ok) {
+    const err = await response.text()
+    console.error('[whatsapp] Failed to send media:', err)
+  }
+}

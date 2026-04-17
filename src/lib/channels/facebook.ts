@@ -115,3 +115,36 @@ export async function sendFacebookMessage(
     console.error('[facebook] Failed to send message:', err)
   }
 }
+
+/**
+ * Send an attachment (image / audio / video / file) via Messenger
+ * Send API. Uses the URL-based attachment shape — Messenger fetches
+ * the file itself. is_reusable=false since our signed URLs expire.
+ */
+export async function sendFacebookAttachment(
+  recipientId: string,
+  attachment: { kind: 'image' | 'audio' | 'video' | 'file'; url: string },
+  pageToken: string,
+): Promise<void> {
+  const response = await fetch(
+    'https://graph.facebook.com/v18.0/me/messages',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recipient: { id: recipientId },
+        message: {
+          attachment: {
+            type: attachment.kind,
+            payload: { url: attachment.url, is_reusable: false },
+          },
+        },
+        access_token: pageToken,
+      }),
+    },
+  )
+  if (!response.ok) {
+    const err = await response.text()
+    console.error('[facebook] Failed to send attachment:', err)
+  }
+}

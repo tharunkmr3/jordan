@@ -368,18 +368,21 @@ function InboxInner() {
     return () => { supabase.removeChannel(channel) }
   }, [orgId, fetchConversations, scrollToBottom]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function handleSendReply(override?: { message: string }) {
+  async function handleSendReply(override?: { message: string; attachments?: UploadedAttachment[] }) {
     // Internal agent mode: ChatGPT-style. Send via /api/chat which
     // handles auth-based visitor scoping, may create the conversation
     // if selectedId is null, and generates an AI response.
     const fromOverride = override?.message?.trim() ?? ''
     const typed = replyText.trim()
     const content = fromOverride || typed
+    const attachmentsPayload = override?.attachments ?? []
+    const hasAttachments = attachmentsPayload.length > 0
+
     if (isInternalAgent && filteredAgent) {
-      if (!content || sending) return
-      return handleInternalChatSend({ message: content })
+      if ((!content && !hasAttachments) || sending) return
+      return handleInternalChatSend({ message: content, attachments: override?.attachments })
     }
-    if (!content || !selectedId || sending) return
+    if ((!content && !hasAttachments) || !selectedId || sending) return
     const convId = selectedId
     const tempId = `temp-${Date.now()}`
     const nowIso = new Date().toISOString()
@@ -393,7 +396,11 @@ function InboxInner() {
       role: 'human_agent' as MessageRole,
       content,
       channel: detail?.channel ?? null,
-      metadata: { optimistic: true, sent_by: userId ?? null },
+      metadata: {
+        optimistic: true,
+        sent_by: userId ?? null,
+        ...(hasAttachments ? { attachments: attachmentsPayload } : {}),
+      },
       created_at: nowIso,
     } as Message
 
@@ -408,9 +415,13 @@ function InboxInner() {
       const idx = prev.findIndex(c => c.id === convId)
       if (idx === -1) return prev
       const updated = [...prev]
+      const preview = content
+        || (hasAttachments
+          ? `📎 ${attachmentsPayload.length} attachment${attachmentsPayload.length === 1 ? '' : 's'}`
+          : '')
       const conv = {
         ...updated[idx],
-        last_message: { content, role: 'human_agent' as MessageRole, created_at: nowIso },
+        last_message: { content: preview, role: 'human_agent' as MessageRole, created_at: nowIso },
         message_count: (updated[idx].message_count || 0) + 1,
         updated_at: nowIso,
       }
@@ -427,7 +438,10 @@ function InboxInner() {
       const res = await fetch(`/api/inbox/${convId}/reply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({
+          content,
+          attachments: hasAttachments ? attachmentsPayload : undefined,
+        }),
       })
       if (!res.ok) throw new Error(await res.text().catch(() => 'Failed to send'))
       const saved = (await res.json()) as Message
@@ -1028,10 +1042,10 @@ function InboxInner() {
                   if (isInternalAgent) {
                     void handleInternalChatSend({ message: ctx.text, attachments: ctx.attachments })
                   } else {
-                    // Customer-facing reply: attachments aren't wired to the
-                    // reply API yet (separate step). The UI still lets ops
-                    // drop files for future messages; ignored for now.
-                    void handleSendReply({ message: ctx.text })
+                    // Customer-facing reply: attachments now wired. Reply
+                    // route persists them on the message and dispatches to
+                    // the platform (WhatsApp/Messenger) as media sends.
+                    void handleSendReply({ message: ctx.text, attachments: ctx.attachments })
                   }
                 }}
                 sending={sending}
