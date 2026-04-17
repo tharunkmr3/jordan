@@ -17,7 +17,9 @@ import {
   buildAgentTools,
   executeAgentToolCall,
   type AgentToolContext,
+  type LlmTool,
 } from '@/lib/composio/tools'
+import { buildBuiltinTools, type BuiltinToolsBundle } from '@/lib/builtin-tools'
 import type {
   Agent,
   ChannelType,
@@ -146,19 +148,29 @@ export async function processChatMessage(
     maxTokens: agent.max_tokens,
   }
 
-  // 5a. Load any tools available to this agent
-  const toolsBundle = supportsTools(effectiveProvider)
+  // 5a. Load tools — Composio integrations + built-in tools (web search,
+  // deep research) from agent.settings.builtin_tools. Merge into one
+  // list; executor dispatches by tool name.
+  const composioBundle = supportsTools(effectiveProvider)
     ? await buildAgentTools(supabase, agent.id)
     : null
+  const builtinsBundle = supportsTools(effectiveProvider)
+    ? buildBuiltinTools(agent.settings as Record<string, unknown> | null | undefined)
+    : null
+  const mergedTools: LlmTool[] = [
+    ...(composioBundle?.tools ?? []),
+    ...(builtinsBundle?.tools ?? []),
+  ]
 
   let response: string
   try {
-    if (toolsBundle && toolsBundle.tools.length > 0) {
+    if (mergedTools.length > 0) {
       response = await runAgenticLoop(
         supabase,
         messages,
-        toolsBundle.tools,
-        toolsBundle.ctx,
+        mergedTools,
+        composioBundle?.ctx ?? null,
+        builtinsBundle,
         modelConfig,
         { conversationId: conversation.id }
       )
@@ -188,7 +200,7 @@ export async function processChatMessage(
       // so history shows "this reply came from Opus, that one from Sonnet".
       model_used: `${effectiveProvider}/${effectiveModelName}`,
       model_overridden: Boolean(input.modelOverride),
-      tools_available: toolsBundle?.tools.length ?? 0,
+      tools_available: mergedTools.length,
     },
   })
 
@@ -266,18 +278,26 @@ export async function* streamChatMessage(
   // to see the full tool_calls array before executing). If the agent has
   // tools enabled, run the non-streaming agentic loop then yield the final
   // text as a single chunk. UX: slightly slower first token, but tools work.
-  const toolsBundle = supportsTools(effectiveProvider)
+  const composioBundle = supportsTools(effectiveProvider)
     ? await buildAgentTools(supabase, agent.id)
     : null
+  const builtinsBundle = supportsTools(effectiveProvider)
+    ? buildBuiltinTools(agent.settings as Record<string, unknown> | null | undefined)
+    : null
+  const mergedTools: LlmTool[] = [
+    ...(composioBundle?.tools ?? []),
+    ...(builtinsBundle?.tools ?? []),
+  ]
 
   let fullResponse = ''
-  if (toolsBundle && toolsBundle.tools.length > 0) {
+  if (mergedTools.length > 0) {
     try {
       for await (const ev of runAgenticLoopStream(
         supabase,
         messages,
-        toolsBundle.tools,
-        toolsBundle.ctx,
+        mergedTools,
+        composioBundle?.ctx ?? null,
+        builtinsBundle,
         modelConfig,
         { conversationId: conversation.id },
       )) {
@@ -308,7 +328,7 @@ export async function* streamChatMessage(
       metadata: {
         model_used: `${effectiveProvider}/${effectiveModelName}`,
         model_overridden: Boolean(input.modelOverride),
-        tools_available: toolsBundle.tools.length,
+        tools_available: mergedTools.length,
       },
     }).catch(err => console.error('[chat-pipeline] Save response failed:', err))
 
@@ -634,11 +654,45 @@ async function logUsage(supabase: SupabaseAdmin, log: UsageLogInsert): Promise<v
  * tool_calls, executing each against Composio and feeding results back.
  * Bounded by MAX_TOOL_ITERATIONS to prevent runaway loops.
  */
+/**
+ * Route a single tool call to the right executor:
+ *  - built-in name (web_search / deep_research) → builtins.execute
+ *  - anything else → Composio via executeAgentToolCall
+ * Returns a { call, content } pair so the caller can feed a well-shaped
+ * role:'tool' message back to the LLM.
+ */
+async function dispatchToolCall(
+  supabase: SupabaseAdmin,
+  call: { id: string; type: 'function'; function: { name: string; arguments: string } },
+  ctx: AgentToolContext | null,
+  builtins: BuiltinToolsBundle | null,
+  meta: { conversationId: string },
+): Promise<{ call: typeof call; content: string }> {
+  const name = call.function.name
+  // Built-ins take priority — they can't collide with Composio tool
+  // slugs (which are UPPERCASE_SNAKE), but belt-and-suspenders.
+  if (builtins && builtins.tools.some(t => t.function.name === name)) {
+    try {
+      const args = JSON.parse(call.function.arguments || '{}') as Record<string, unknown>
+      const content = await builtins.execute(name, args)
+      return { call, content }
+    } catch (err) {
+      return { call, content: JSON.stringify({ error: err instanceof Error ? err.message : String(err) }) }
+    }
+  }
+  if (!ctx) {
+    return { call, content: JSON.stringify({ error: `Unknown tool: ${name}` }) }
+  }
+  const r = await executeAgentToolCall(supabase, ctx, call, { conversationId: meta.conversationId })
+  return { call, content: r.content }
+}
+
 async function runAgenticLoop(
   supabase: SupabaseAdmin,
   initialMessages: ChatMessage[],
   tools: Parameters<typeof generateWithTools>[1],
-  ctx: AgentToolContext,
+  ctx: AgentToolContext | null,
+  builtins: BuiltinToolsBundle | null,
   modelConfig: ModelConfig,
   meta: { conversationId: string }
 ): Promise<string> {
@@ -657,21 +711,18 @@ async function runAgenticLoop(
       break
     }
 
-    // Execute tool calls in parallel — each one is independent.
+    // Execute tool calls in parallel — each one is independent. Dispatch
+    // based on name: built-in tools run directly, everything else goes
+    // through the Composio executor.
     const results = await Promise.all(
-      round.toolCalls.map((call) =>
-        executeAgentToolCall(supabase, ctx, call, { conversationId: meta.conversationId }).then((r) => ({
-          call,
-          result: r,
-        }))
-      )
+      round.toolCalls.map((call) => dispatchToolCall(supabase, call, ctx, builtins, meta))
     )
 
-    for (const { call, result } of results) {
+    for (const { call, content } of results) {
       working.push({
         role: 'tool',
         tool_call_id: call.id,
-        content: result.content,
+        content,
       })
     }
 
@@ -715,7 +766,8 @@ async function* runAgenticLoopStream(
   supabase: SupabaseAdmin,
   initialMessages: ChatMessage[],
   tools: Parameters<typeof generateWithTools>[1],
-  ctx: AgentToolContext,
+  ctx: AgentToolContext | null,
+  builtins: BuiltinToolsBundle | null,
   modelConfig: ModelConfig,
   meta: { conversationId: string }
 ): AsyncGenerator<ThoughtEvent> {
@@ -749,24 +801,19 @@ async function* runAgenticLoopStream(
     }
 
     const results = await Promise.all(
-      calls.map(({ call }) =>
-        executeAgentToolCall(supabase, ctx, call, { conversationId: meta.conversationId }).then((r) => ({
-          call,
-          result: r,
-        }))
-      )
+      calls.map(({ call }) => dispatchToolCall(supabase, call, ctx, builtins, meta))
     )
 
-    for (const { call, result } of results) {
+    for (const { call, content } of results) {
       // Compress the result for the preview — the full content goes to
       // the model as tool context, but the UI only needs a one-liner.
-      const preview = summarizeToolResult(result.content)
+      const preview = summarizeToolResult(content)
       yield { kind: 'tool_done', id: call.id, tool: call.function.name, resultPreview: preview }
 
       working.push({
         role: 'tool',
         tool_call_id: call.id,
-        content: result.content,
+        content,
       })
     }
 

@@ -827,6 +827,37 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                     </div>
                   </div>
                 </Field>
+
+                {/* Built-in tools section */}
+                <div className="pt-6">
+                  <div className="text-sm font-semibold text-[#2e2e2e]">Built-in tools</div>
+                  <p className="text-xs text-[#737373] mt-1">
+                    Give this agent access to the live web. Tool calls are logged alongside Composio integrations.
+                    {!process.env.NEXT_PUBLIC_TAVILY_CONFIGURED && (
+                      <> Requires <code className="text-[11px] font-mono">TAVILY_API_KEY</code> to be set on the server.</>
+                    )}
+                  </p>
+                </div>
+                <Field label="Web search" description="One-shot search via Tavily. Good for current events, stats, docs.">
+                  <Switch
+                    checked={((editData.settings as Record<string, unknown> | undefined)?.builtin_tools as { web_search?: boolean } | undefined)?.web_search === true}
+                    onCheckedChange={v => {
+                      const settings = (editData.settings as Record<string, unknown> | undefined) ?? {}
+                      const prev = (settings.builtin_tools as Record<string, unknown> | undefined) ?? {}
+                      setEditData({ ...editData, settings: { ...settings, builtin_tools: { ...prev, web_search: v } } })
+                    }}
+                  />
+                </Field>
+                <Field label="Deep research" description="Multi-query research pass with synthesis. Slower + more expensive; only enable when breadth matters.">
+                  <Switch
+                    checked={((editData.settings as Record<string, unknown> | undefined)?.builtin_tools as { deep_research?: boolean } | undefined)?.deep_research === true}
+                    onCheckedChange={v => {
+                      const settings = (editData.settings as Record<string, unknown> | undefined) ?? {}
+                      const prev = (settings.builtin_tools as Record<string, unknown> | undefined) ?? {}
+                      setEditData({ ...editData, settings: { ...settings, builtin_tools: { ...prev, deep_research: v } } })
+                    }}
+                  />
+                </Field>
               </div>
             )}
 
