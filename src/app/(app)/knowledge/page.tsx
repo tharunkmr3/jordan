@@ -596,7 +596,7 @@ export default function KnowledgePage() {
                   ref={fileInputRef}
                   type="file"
                   multiple
-                  accept=".txt,.md,.markdown,.csv,.pdf,.doc,.docx,.xls,.xlsx,.xlsm,.ppt,.pptx"
+                  accept=".txt,.md,.markdown,.log,.csv,.tsv,.json,.html,.htm,.rtf,.pdf,.doc,.docx,.odt,.xls,.xlsx,.xlsm,.ods,.ppt,.pptx,.odp,.eml,.msg,.epub,.png,.jpg,.jpeg,.tiff,.tif,.bmp"
                   className="hidden"
                   onChange={e => {
                     const files = e.target.files ? Array.from(e.target.files) : []
@@ -889,7 +889,7 @@ export default function KnowledgePage() {
           </div>
         )}
 
-        <p className="text-xs text-[#a3a3a3] mt-4 mb-6 px-6 text-center">Supports .txt, .md, .csv, .pdf, .doc/.docx, .xls/.xlsx, .ppt/.pptx · select multiple to upload in parallel</p>
+        <p className="text-xs text-[#a3a3a3] mt-4 mb-6 px-6 text-center">Supports docs (.txt, .md, .pdf, .doc/.docx, .odt, .rtf, .html, .epub), sheets (.csv, .tsv, .xls/.xlsx, .ods), slides (.ppt/.pptx, .odp), data (.json), email (.eml, .msg), and images (.png, .jpg, .tiff) · select multiple to upload in parallel</p>
 
         {/* Delete confirmation modal — covers both single and bulk.
             Rendered here (inside the detail view) so the state is co-located

@@ -20,6 +20,7 @@ import {
   type LlmTool,
 } from '@/lib/composio/tools'
 import { buildBuiltinTools, type BuiltinToolsBundle } from '@/lib/builtin-tools'
+import { buildKbAgenticTools, type KbAgenticTools } from '@/lib/builtin-tools/kb-tools'
 import { normalizeModelMarkdown } from './normalize-markdown'
 import {
   STRUCTURED_REPLY_SCHEMA,
@@ -106,6 +107,13 @@ export interface PipelineOutput {
 // ---------------------------------------------------------------------------
 
 import type { KbSource } from './knowledge-base'
+import {
+  queryMemories,
+  extractFromTurn,
+  formatMemoryContext,
+  type MemoryHit,
+  type MemoryOwner,
+} from './memory'
 
 let queryKnowledgeBase:
   | ((agentId: string, query: string, topK?: number) => Promise<KbSource[]>)
@@ -119,6 +127,29 @@ try {
   listKbDocuments = kb.listKbDocuments
 } catch {
   // Knowledge base module not available yet
+}
+
+/**
+ * Resolve the memory owner for this turn. Memory only applies to internal
+ * agents (agent.settings.is_customer_facing === false) chatting with an
+ * authenticated team member — customer-facing surfaces never read or
+ * write the memory store.
+ *
+ * Internal-agent contacts are created with channel_user_id = "test-{authUserId}"
+ * by /api/chat (see the teamUser branch there). Parse that back out to
+ * identify the owner. Anything that doesn't match the test- prefix (e.g.
+ * a WhatsApp contact routed to an internal agent by mistake) returns null
+ * and memory is skipped for this turn.
+ */
+function resolveMemoryOwner(agent: Agent, contact: Contact): MemoryOwner | null {
+  const settings = agent.settings as { is_customer_facing?: boolean } | null | undefined
+  if (settings?.is_customer_facing !== false) return null
+  const cid = contact.channel_user_id
+  if (!cid || !cid.startsWith('test-')) return null
+  const userId = cid.slice('test-'.length)
+  // Auth UUIDs are 36 chars. Quick shape check rules out malformed ids.
+  if (userId.length < 32) return null
+  return { userId, orgId: agent.org_id }
 }
 
 // ---------------------------------------------------------------------------
@@ -137,12 +168,14 @@ export async function processChatMessage(
   const contact = await findOrCreateContact(supabase, agent.org_id, input)
   const conversation = await findOrCreateConversation(supabase, agent, contact, input)
 
-  // 3. Save user message, load history, query KB, and list KB documents
-  // in parallel. The document list is cheap (a plain SELECT from
-  // kb_documents) but gives the agent a ground-truth inventory so it
-  // doesn't claim "I only see N files" when retrieval missed some — see
-  // listKbDocuments() for the full rationale.
-  const [, history, kbContext, kbDocumentNames] = await Promise.all([
+  // Memory owner — null for customer-facing agents or anonymous contacts.
+  // Memory retrieval and extraction are gated on this being non-null.
+  const memoryOwner = resolveMemoryOwner(agent, contact)
+
+  // 3. Save user message, load history, query KB, list KB docs, and
+  // fetch relevant memories in parallel. Memory retrieval is a pgvector
+  // lookup like KB search, so adding it to the fan-out is free.
+  const [, history, kbContext, kbDocumentNames, memoryHits] = await Promise.all([
     saveMessage(supabase, {
       conversation_id: conversation.id,
       org_id: agent.org_id,
@@ -162,6 +195,9 @@ export async function processChatMessage(
     listKbDocuments
       ? listKbDocuments(input.agentId).catch(() => [] as string[])
       : Promise.resolve([] as string[]),
+    memoryOwner
+      ? queryMemories(memoryOwner, input.message, 5).catch(() => [] as MemoryHit[])
+      : Promise.resolve([] as MemoryHit[]),
   ])
 
   // 4. Build prompt
@@ -173,6 +209,7 @@ export async function processChatMessage(
     ? kbContext.map((s) => `[Source: ${s.documentName}]\n${s.content}`).join('\n\n')
     : ''
   const kbSources = buildMessageSources(kbContext)
+  const memoryContext = formatMemoryContext(memoryHits)
 
   // Resolve effective model first so buildPrompt can inject a small
   // identity hint — without it, models refuse to reveal which LLM is
@@ -181,7 +218,7 @@ export async function processChatMessage(
   const effectiveModelName = input.modelOverride?.name ?? agent.model_name
 
   const messages = await buildPrompt(
-    agent, history, input.message, kbContextStr, kbDocumentNames, input.channel, input.attachments,
+    agent, history, input.message, kbContextStr, kbDocumentNames, memoryContext, input.channel, input.attachments,
     { provider: effectiveProvider, name: effectiveModelName },
   )
   const modelConfig: ModelConfig = {
@@ -191,18 +228,26 @@ export async function processChatMessage(
     maxTokens: agent.max_tokens,
   }
 
-  // 5a. Load tools — Composio integrations + built-in tools (web search,
-  // deep research) from agent.settings.builtin_tools. Merge into one
-  // list; executor dispatches by tool name.
+  // 5a. Load tools — three bundles that all merge into one tool list:
+  //   - Composio integrations (agent-configured OAuth apps)
+  //   - Built-in tools (web_search, deep_research) toggled in settings
+  //   - KB agentic tools (search_kb, fetch_document) — auto-enabled
+  //     whenever the agent has any ready documents. Agentic retrieval
+  //     lets the model recover when one-shot retrieval missed the
+  //     right chunks (see buildKbAgenticTools for rationale).
   const composioBundle = supportsTools(effectiveProvider)
     ? await buildAgentTools(supabase, agent.id)
     : null
   const builtinsBundle = supportsTools(effectiveProvider)
     ? buildBuiltinTools(agent.settings as Record<string, unknown> | null | undefined)
     : null
+  const kbAgenticBundle = supportsTools(effectiveProvider)
+    ? await buildKbAgenticTools(supabase, agent.id)
+    : null
   const mergedTools: LlmTool[] = [
     ...(composioBundle?.tools ?? []),
     ...(builtinsBundle?.tools ?? []),
+    ...(kbAgenticBundle?.tools ?? []),
   ]
 
   let response: string
@@ -214,6 +259,7 @@ export async function processChatMessage(
         mergedTools,
         composioBundle?.ctx ?? null,
         builtinsBundle,
+        kbAgenticBundle,
         modelConfig,
         { conversationId: conversation.id }
       )
@@ -290,6 +336,17 @@ export async function processChatMessage(
     },
   }).catch(err => console.error('[chat-pipeline] Usage log failed:', err))
 
+  // 8. Memory extraction — fire and forget. Gated on being an internal
+  // agent with an identified owner; customer-facing agents short-circuit.
+  if (memoryOwner) {
+    extractFromTurn({
+      owner: memoryOwner,
+      lastUserMessage: input.message,
+      lastAssistantMessage: response,
+      sourceMessageId: savedMsg?.id ?? null,
+    }).catch(err => console.error('[chat-pipeline] Memory extraction failed:', err))
+  }
+
   return {
     response,
     conversationId: conversation.id,
@@ -311,7 +368,9 @@ export async function* streamChatMessage(
   const contact = await findOrCreateContact(supabase, agent.org_id, input)
   const conversation = await findOrCreateConversation(supabase, agent, contact, input)
 
-  const [, history, kbContext, kbDocumentNames] = await Promise.all([
+  const memoryOwner = resolveMemoryOwner(agent, contact)
+
+  const [, history, kbContext, kbDocumentNames, memoryHits] = await Promise.all([
     saveMessage(supabase, {
       conversation_id: conversation.id,
       org_id: agent.org_id,
@@ -331,6 +390,9 @@ export async function* streamChatMessage(
     listKbDocuments
       ? listKbDocuments(input.agentId).catch(() => [] as string[])
       : Promise.resolve([] as string[]),
+    memoryOwner
+      ? queryMemories(memoryOwner, input.message, 5).catch(() => [] as MemoryHit[])
+      : Promise.resolve([] as MemoryHit[]),
   ])
 
   // Render retrieved chunks with their source filename inline so the
@@ -341,6 +403,7 @@ export async function* streamChatMessage(
     ? kbContext.map((s) => `[Source: ${s.documentName}]\n${s.content}`).join('\n\n')
     : ''
   const kbSources = buildMessageSources(kbContext)
+  const memoryContext = formatMemoryContext(memoryHits)
 
   // Per-turn override applies here too (internal chat composer sends
   // a modelOverride for the currently-selected model). Resolved first
@@ -349,7 +412,7 @@ export async function* streamChatMessage(
   const effectiveModelName = input.modelOverride?.name ?? agent.model_name
 
   const messages = await buildPrompt(
-    agent, history, input.message, kbContextStr, kbDocumentNames, input.channel, input.attachments,
+    agent, history, input.message, kbContextStr, kbDocumentNames, memoryContext, input.channel, input.attachments,
     { provider: effectiveProvider, name: effectiveModelName },
   )
   const modelConfig: ModelConfig = {
@@ -372,9 +435,13 @@ export async function* streamChatMessage(
   const builtinsBundle = supportsTools(effectiveProvider)
     ? buildBuiltinTools(agent.settings as Record<string, unknown> | null | undefined)
     : null
+  const kbAgenticBundle = supportsTools(effectiveProvider)
+    ? await buildKbAgenticTools(supabase, agent.id)
+    : null
   const mergedTools: LlmTool[] = [
     ...(composioBundle?.tools ?? []),
     ...(builtinsBundle?.tools ?? []),
+    ...(kbAgenticBundle?.tools ?? []),
   ]
 
   // Visibility into why the model says "I don't have web search" when the
@@ -388,8 +455,10 @@ export async function* streamChatMessage(
     model: effectiveModelName,
     builtinsEnabled: builtinsBundle?.tools.map(t => t.function.name) ?? [],
     composioEnabled: composioBundle?.tools.map(t => t.function.name) ?? [],
+    kbAgenticEnabled: kbAgenticBundle?.tools.map(t => t.function.name) ?? [],
     agentSettingsBuiltin: (agent.settings as { builtin_tools?: Record<string, boolean> } | null)?.builtin_tools ?? null,
     tavilyConfigured: Boolean(process.env.TAVILY_API_KEY),
+    voyageConfigured: Boolean(process.env.VOYAGE_API_KEY),
   })
 
   let fullResponse = ''
@@ -401,6 +470,7 @@ export async function* streamChatMessage(
         mergedTools,
         composioBundle?.ctx ?? null,
         builtinsBundle,
+        kbAgenticBundle,
         modelConfig,
         { conversationId: conversation.id },
       )) {
@@ -465,6 +535,18 @@ export async function* streamChatMessage(
         ...(messageSources.length > 0 ? { sources: messageSources } : {}),
         ...(structured ? { structured } : {}),
       },
+    }).then((res) => {
+      // Once the message has an id, fire off memory extraction for
+      // internal-agent turns. Kept inside .then() so sourceMessageId is
+      // accurate — running earlier would lose the FK link.
+      if (memoryOwner) {
+        extractFromTurn({
+          owner: memoryOwner,
+          lastUserMessage: input.message,
+          lastAssistantMessage: fullResponse,
+          sourceMessageId: res.data?.id ?? null,
+        }).catch(err => console.error('[chat-pipeline] Memory extraction failed:', err))
+      }
     }).catch(err => console.error('[chat-pipeline] Save response failed:', err))
 
     logUsage(supabase, {
@@ -523,6 +605,15 @@ export async function* streamChatMessage(
       ...(messageSources.length > 0 ? { sources: messageSources } : {}),
       ...(structured ? { structured } : {}),
     },
+  }).then((res) => {
+    if (memoryOwner) {
+      extractFromTurn({
+        owner: memoryOwner,
+        lastUserMessage: input.message,
+        lastAssistantMessage: fullResponse,
+        sourceMessageId: res.data?.id ?? null,
+      }).catch(err => console.error('[chat-pipeline] Memory extraction failed:', err))
+    }
   }).catch(err => console.error('[chat-pipeline] Save response failed:', err))
 
   logUsage(supabase, {
@@ -657,6 +748,7 @@ async function buildPrompt(
   currentMessage: string,
   kbContext: string,
   kbDocumentNames: string[],
+  memoryContext: string,
   channel: ChannelType | undefined,
   attachments: UploadedAttachment[] | undefined,
   modelIdentity?: { provider: string; name: string },
@@ -674,6 +766,14 @@ async function buildPrompt(
   // system_prompt still wins if it contradicts.
   if (modelIdentity) {
     systemPrompt += `\n\n--- Model Identity ---\nIf the user asks which model or LLM is powering this conversation, answer truthfully: you are running on "${modelIdentity.name}" from ${modelIdentity.provider}. Don't volunteer this unprompted, but don't deflect if asked.`
+  }
+
+  // Memories come before the KB block so durable user facts can inform
+  // how KB content is interpreted (e.g. "user prefers Hindi" lets the
+  // agent read English KB content and reply in Hindi). Only populated
+  // for internal agents — customer-facing agents pass "" here.
+  if (memoryContext) {
+    systemPrompt += `\n\n--- What you remember about this user ---\n${memoryContext}\n--- End memories ---\n\nThese are durable facts from prior conversations. Use them to personalize your reply, but don't announce them unprompted unless clearly relevant.`
   }
 
   if (kbContext) {
@@ -976,15 +1076,28 @@ async function dispatchToolCall(
   call: { id: string; type: 'function'; function: { name: string; arguments: string } },
   ctx: AgentToolContext | null,
   builtins: BuiltinToolsBundle | null,
+  kbAgentic: KbAgenticTools | null,
   meta: { conversationId: string },
 ): Promise<{ call: typeof call; content: string }> {
   const name = call.function.name
-  // Built-ins take priority — they can't collide with Composio tool
-  // slugs (which are UPPERCASE_SNAKE), but belt-and-suspenders.
+  const argsJson = call.function.arguments || '{}'
+  // Route priority: built-ins → KB agentic → Composio. No collisions
+  // possible (built-ins use snake_case names, KB tools are search_kb /
+  // fetch_document, Composio slugs are UPPERCASE_SNAKE) but we check
+  // in order anyway so future naming accidents stay deterministic.
   if (builtins && builtins.tools.some(t => t.function.name === name)) {
     try {
-      const args = JSON.parse(call.function.arguments || '{}') as Record<string, unknown>
+      const args = JSON.parse(argsJson) as Record<string, unknown>
       const content = await builtins.execute(name, args)
+      return { call, content }
+    } catch (err) {
+      return { call, content: JSON.stringify({ error: err instanceof Error ? err.message : String(err) }) }
+    }
+  }
+  if (kbAgentic && kbAgentic.tools.some(t => t.function.name === name)) {
+    try {
+      const args = JSON.parse(argsJson) as Record<string, unknown>
+      const content = await kbAgentic.execute(name, args)
       return { call, content }
     } catch (err) {
       return { call, content: JSON.stringify({ error: err instanceof Error ? err.message : String(err) }) }
@@ -1003,6 +1116,7 @@ async function runAgenticLoop(
   tools: Parameters<typeof generateWithTools>[1],
   ctx: AgentToolContext | null,
   builtins: BuiltinToolsBundle | null,
+  kbAgentic: KbAgenticTools | null,
   modelConfig: ModelConfig,
   meta: { conversationId: string }
 ): Promise<string> {
@@ -1025,7 +1139,7 @@ async function runAgenticLoop(
     // based on name: built-in tools run directly, everything else goes
     // through the Composio executor.
     const results = await Promise.all(
-      round.toolCalls.map((call) => dispatchToolCall(supabase, call, ctx, builtins, meta))
+      round.toolCalls.map((call) => dispatchToolCall(supabase, call, ctx, builtins, kbAgentic, meta))
     )
 
     for (const { call, content } of results) {
@@ -1079,6 +1193,7 @@ async function* runAgenticLoopStream(
   tools: Parameters<typeof generateWithTools>[1],
   ctx: AgentToolContext | null,
   builtins: BuiltinToolsBundle | null,
+  kbAgentic: KbAgenticTools | null,
   modelConfig: ModelConfig,
   meta: { conversationId: string }
 ): AsyncGenerator<ThoughtEvent> {
@@ -1117,7 +1232,7 @@ async function* runAgenticLoopStream(
     }
 
     const results = await Promise.all(
-      calls.map(({ call }) => dispatchToolCall(supabase, call, ctx, builtins, meta))
+      calls.map(({ call }) => dispatchToolCall(supabase, call, ctx, builtins, kbAgentic, meta))
     )
 
     for (const { call, content } of results) {

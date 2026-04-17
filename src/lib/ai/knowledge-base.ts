@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { generateEmbedding } from './embeddings'
+import { rerank } from './rerank'
 
 /**
  * A single KB chunk retrieved by hybrid search, with enough metadata
@@ -39,10 +40,16 @@ export async function queryKnowledgeBase(
   const embedding = await generateEmbedding(query)
   const supabase = createAdminClient()
 
+  // Pull a WIDER candidate pool than the final topK — the reranker below
+  // needs headroom to pick cleanly. A pool of ~30 is the standard RAG
+  // practice: large enough for the cross-encoder to find the right hit
+  // even when bi-encoder search misses it, small enough to stay under
+  // Voyage's 1s latency target for a reranker call.
+  const POOL = Math.max(topK * 4, 30)
   const { data, error } = await supabase.rpc('match_kb_chunks', {
     query_embedding: embedding,
     match_agent_id: agentId,
-    match_count: topK,
+    match_count: POOL,
     query_text: query,
   })
 
@@ -60,7 +67,7 @@ export async function queryKnowledgeBase(
     kb_id: string
   }
 
-  return (data as Row[] | null ?? []).map((row) => ({
+  const pool: KbSource[] = (data as Row[] | null ?? []).map((row) => ({
     id: row.id,
     content: row.content,
     similarity: row.similarity,
@@ -68,6 +75,44 @@ export async function queryKnowledgeBase(
     documentName: row.document_name,
     kbId: row.kb_id,
   }))
+
+  if (pool.length === 0) return []
+
+  // Cross-encoder rerank: scores (query, chunk) jointly via Voyage
+  // rerank-2.5 and returns a reordered top-K. When VOYAGE_API_KEY is
+  // unset this returns null and we fall back to the hybrid score order.
+  //
+  // We feed the reranker a "document-aware" content representation —
+  // prepending the filename so chunks from named files don't get
+  // outscored by purely-semantic matches. This is the text-level sibling
+  // of the name_boost arm in the SQL hybrid search.
+  const reranked = await rerank({
+    query,
+    documents: pool.map((s) => ({
+      id: s.id,
+      content: `[${s.documentName}]\n${s.content}`,
+    })),
+    topK,
+  })
+
+  if (!reranked) {
+    // Reranker unavailable or failed — use pre-rerank order, still
+    // honoring the requested topK.
+    return pool.slice(0, topK)
+  }
+
+  // Map reranked ids back to the full KbSource (with documentId/kbId).
+  // Replace similarity with the cross-encoder score so the downstream
+  // noise-filter (buildMessageSources) has the authoritative relevance
+  // number to work with.
+  const byId = new Map(pool.map((s) => [s.id, s]))
+  const hits: KbSource[] = []
+  for (const r of reranked) {
+    const base = byId.get(r.id)
+    if (!base) continue
+    hits.push({ ...base, similarity: r.score })
+  }
+  return hits
 }
 
 /**

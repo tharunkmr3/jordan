@@ -42,13 +42,22 @@ export async function POST(
     return NextResponse.json({ error: 'No file provided' }, { status: 400 })
   }
 
-  // Accept text, PDF, and every Office format we can preview natively.
-  // We check BOTH the browser-reported MIME and the filename extension
-  // because some browsers send an empty/generic MIME for .xlsx/.pptx.
+  // Accept text, PDF, every Office format, plus the broader set the new
+  // extraction layer can handle: HTML, RTF, JSON, TSV, EML, and images.
+  // When UNSTRUCTURED_API_KEY is set, Unstructured.io handles Office /
+  // PDF / HTML / RTF / images. The local fallback covers the rest.
+  //
+  // Check BOTH the browser-reported MIME and the filename extension —
+  // some browsers send an empty/generic MIME for .xlsx/.pptx/.rtf.
   const allowedTypes = [
     'text/plain',
     'text/csv',
+    'text/tab-separated-values',
     'text/markdown',
+    'text/html',
+    'text/rtf',
+    'application/rtf',
+    'application/json',
     'application/pdf',
     // Office Open XML
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',   // .docx
@@ -58,20 +67,38 @@ export async function POST(
     'application/msword',         // .doc
     'application/vnd.ms-excel',   // .xls
     'application/vnd.ms-powerpoint', // .ppt
+    // OpenDocument
+    'application/vnd.oasis.opendocument.text',          // .odt
+    'application/vnd.oasis.opendocument.spreadsheet',   // .ods
+    'application/vnd.oasis.opendocument.presentation',  // .odp
+    // Email
+    'message/rfc822',              // .eml
+    'application/vnd.ms-outlook',  // .msg
+    // EPUB
+    'application/epub+zip',
+    // Images — handled by Unstructured's OCR (strategy=hi_res); no local
+    // fallback for these, so they only land when UNSTRUCTURED_API_KEY is set.
+    'image/png', 'image/jpeg', 'image/tiff', 'image/bmp',
   ]
   const fileType = file.type || 'text/plain'
   const allowedExt = [
-    '.txt', '.csv', '.md', '.markdown',
+    '.txt', '.md', '.markdown', '.log',
+    '.csv', '.tsv',
+    '.json',
+    '.html', '.htm',
+    '.rtf',
     '.pdf',
-    '.doc', '.docx',
-    '.xls', '.xlsx', '.xlsm',
-    '.ppt', '.pptx',
+    '.doc', '.docx', '.odt',
+    '.xls', '.xlsx', '.xlsm', '.ods',
+    '.ppt', '.pptx', '.odp',
+    '.eml', '.msg', '.epub',
+    '.png', '.jpg', '.jpeg', '.tiff', '.tif', '.bmp',
   ]
   const nameLower = file.name.toLowerCase()
 
   if (!allowedTypes.includes(fileType) && !allowedExt.some(ext => nameLower.endsWith(ext))) {
     return NextResponse.json(
-      { error: 'Unsupported file type. Supported: .txt, .md, .csv, .pdf, .doc/.docx, .xls/.xlsx, .ppt/.pptx' },
+      { error: 'Unsupported file type. Supported: .txt, .md, .csv, .tsv, .json, .html, .rtf, .pdf, .doc/.docx/.odt, .xls/.xlsx/.ods, .ppt/.pptx/.odp, .eml/.msg, .epub, images (.png/.jpg/.tiff).' },
       { status: 400 }
     )
   }
