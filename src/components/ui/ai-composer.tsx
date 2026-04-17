@@ -93,6 +93,21 @@ function clientTempId(): string {
   return Math.random().toString(36).slice(2, 10)
 }
 
+/**
+ * Browsers disagree on supported MIME types for MediaRecorder — pick the
+ * best match. Chrome + Firefox back webm/opus; Safari backs mp4/aac.
+ * Returning undefined lets the recorder pick its own default (required
+ * on older iOS Safari).
+ */
+function pickSupportedMime(): string | undefined {
+  if (typeof MediaRecorder === 'undefined') return undefined
+  const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg']
+  for (const mime of candidates) {
+    if (MediaRecorder.isTypeSupported(mime)) return mime
+  }
+  return undefined
+}
+
 export const AiComposer = forwardRef<AiComposerHandle, AiComposerProps>(function AiComposer(
   {
     value,
@@ -117,6 +132,17 @@ export const AiComposer = forwardRef<AiComposerHandle, AiComposerProps>(function
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([])
   const [dragActive, setDragActive] = useState(false)
+  /**
+   * Voice input state:
+   *   idle        → mic button enabled, normal styling
+   *   recording   → recording in progress, mic button red+pulsing
+   *   transcribing→ upload+whisper round-trip underway
+   *   failed      → brief red flash if perms denied or transcription fails
+   */
+  const [voiceState, setVoiceState] = useState<'idle' | 'recording' | 'transcribing' | 'failed'>('idle')
+  const recorderRef = useRef<MediaRecorder | null>(null)
+  const recorderChunksRef = useRef<Blob[]>([])
+  const recorderStreamRef = useRef<MediaStream | null>(null)
 
   useImperativeHandle(ref, () => ({
     focus: () => textareaRef.current?.focus(),
@@ -216,6 +242,77 @@ export const AiComposer = forwardRef<AiComposerHandle, AiComposerProps>(function
     acceptFiles(e.dataTransfer.files)
   }
 
+  /**
+   * Toggle voice recording. First click prompts mic permission + starts
+   * recording. Second click stops, uploads the WebM blob to the upload
+   * endpoint (which transcribes via Whisper), and drops the transcript
+   * into the composer textarea — user can edit before sending. We
+   * intentionally don't auto-send so transcription errors are catchable.
+   */
+  async function handleVoiceToggle() {
+    onVoiceToggle?.()
+    if (disabled || sending) return
+
+    if (voiceState === 'recording') {
+      // Stop — onstop handler does the upload.
+      recorderRef.current?.stop()
+      return
+    }
+
+    if (voiceState === 'transcribing') return // no-op while uploading
+
+    // Start a new recording.
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      recorderStreamRef.current = stream
+      const mimeType = pickSupportedMime()
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
+      recorderRef.current = recorder
+      recorderChunksRef.current = []
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) recorderChunksRef.current.push(e.data)
+      }
+      recorder.onstop = async () => {
+        setVoiceState('transcribing')
+        try {
+          const blob = new Blob(recorderChunksRef.current, { type: recorder.mimeType || 'audio/webm' })
+          const ext = blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'webm'
+          const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: blob.type })
+          const fd = new FormData()
+          fd.append('file', file)
+          const res = await fetch(uploadEndpoint, { method: 'POST', body: fd })
+          if (!res.ok) throw new Error(`Transcribe failed (${res.status})`)
+          const uploaded = (await res.json()) as UploadedAttachment
+          if (uploaded.transcript) {
+            // Append transcript into the existing textarea content so
+            // partial drafts + dictation mix gracefully.
+            const next = value.trim().length > 0 ? `${value} ${uploaded.transcript}` : uploaded.transcript
+            onChange(next)
+          }
+          setVoiceState('idle')
+        } catch (err) {
+          console.error('[ai-composer] voice transcribe failed:', err)
+          setVoiceState('failed')
+          setTimeout(() => setVoiceState('idle'), 2000)
+        } finally {
+          // Release the mic.
+          recorderStreamRef.current?.getTracks().forEach(t => t.stop())
+          recorderStreamRef.current = null
+          recorderRef.current = null
+          recorderChunksRef.current = []
+        }
+      }
+
+      recorder.start()
+      setVoiceState('recording')
+    } catch (err) {
+      console.error('[ai-composer] getUserMedia failed:', err)
+      setVoiceState('failed')
+      setTimeout(() => setVoiceState('idle'), 2000)
+    }
+  }
+
   return (
     <div
       onDragOver={(e) => {
@@ -298,12 +395,24 @@ export const AiComposer = forwardRef<AiComposerHandle, AiComposerProps>(function
 
         {/* Voice */}
         <ComposerIconButton
-          onClick={() => onVoiceToggle?.()}
-          disabled={disabled}
-          title="Voice input"
+          onClick={handleVoiceToggle}
+          disabled={disabled || sending}
+          title={
+            voiceState === 'recording' ? 'Stop recording'
+            : voiceState === 'transcribing' ? 'Transcribing…'
+            : voiceState === 'failed' ? 'Voice input failed — try again'
+            : 'Voice input'
+          }
           aria-label="Voice input"
+          className={cn(
+            voiceState === 'recording' && 'bg-[#F4511E]/10 text-[#F4511E] hover:bg-[#F4511E]/15 animate-pulse',
+            voiceState === 'transcribing' && 'text-[#F4511E]',
+            voiceState === 'failed' && 'bg-red-50 text-red-600',
+          )}
         >
-          <Microphone size={14} weight="bold" />
+          {voiceState === 'transcribing'
+            ? <Loader variant="circular" size="sm" />
+            : <Microphone size={14} weight={voiceState === 'recording' ? 'fill' : 'bold'} />}
         </ComposerIconButton>
 
         {leadingSlot}

@@ -138,6 +138,7 @@ export interface KbDocument {
   content_text: string | null;
   status: KbDocumentStatus;
   char_count: number;
+  file_size: number | null;
   created_at: string;
 }
 

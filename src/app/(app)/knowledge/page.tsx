@@ -457,8 +457,10 @@ export default function KnowledgePage() {
                 <div className="text-xs text-[#737373]">
                   {capitalizeFirst(doc.file_type || 'text')}
                 </div>
-                <div className="text-xs text-[#737373]">
-                  {(doc.char_count / 1000).toFixed(1)}k chars
+                <div className="text-xs text-[#737373]" title={`${doc.char_count.toLocaleString()} chars`}>
+                  {doc.file_size != null
+                    ? formatBytes(doc.file_size)
+                    : `${(doc.char_count / 1000).toFixed(1)}k chars`}
                 </div>
                 <div className="text-xs text-[#737373]" title={new Date(doc.created_at).toLocaleString()}>
                   {formatRelative(doc.created_at)}

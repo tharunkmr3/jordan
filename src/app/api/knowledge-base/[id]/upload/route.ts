@@ -55,7 +55,9 @@ export async function POST(
   // Extract text content
   const text = await file.text()
 
-  // Create document record with processing status
+  // Create document record with processing status.
+  // file.size is the byte count of the original upload — we record it so
+  // the UI can show a real file-size column alongside char_count.
   const { data: doc, error: docError } = await admin
     .from('kb_documents')
     .insert({
@@ -66,6 +68,7 @@ export async function POST(
       content_text: text,
       status: 'processing' as const,
       char_count: text.length,
+      file_size: file.size,
     })
     .select()
     .single()
