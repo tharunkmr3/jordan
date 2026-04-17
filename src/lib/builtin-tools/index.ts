@@ -80,14 +80,26 @@ export function buildBuiltinTools(settings: Record<string, unknown> | null | und
         if (!topic) return JSON.stringify({ error: 'topic is required' })
         const depth = args.depth === 'quick' ? 'quick' : 'thorough'
         const result = await runDeepResearch(topic, depth)
-        // deep_research shape: { summary, sources?: [{title, url, snippet}] }
-        // Tolerant of either `sources` or `results` field names.
-        const hitsField = (result as unknown as { sources?: unknown; results?: unknown })
-        const hits = Array.isArray(hitsField.sources)
-          ? hitsField.sources as Array<{ url?: string; title?: string; snippet?: string }>
-          : Array.isArray(hitsField.results)
-          ? hitsField.results as Array<{ url?: string; title?: string; snippet?: string }>
-          : []
+        // Actual deep_research shape is { topic, subQueries, findings:
+        // [{ query, results: [{title, url, snippet}], summary? }] } — the
+        // URLs live under findings[].results, NOT at the top level. Earlier
+        // code tried top-level `sources` / `results` and silently captured
+        // nothing, which is why deep_research chips never rendered. Flatten
+        // findings here, fall back to the legacy shapes in case the tool
+        // author ever changes the return type.
+        const r = result as {
+          findings?: Array<{ results?: Array<{ url?: string; title?: string; snippet?: string }> }>
+          sources?: Array<{ url?: string; title?: string; snippet?: string }>
+          results?: Array<{ url?: string; title?: string; snippet?: string }>
+        }
+        const hits: Array<{ url?: string; title?: string; snippet?: string }> =
+          Array.isArray(r.findings)
+            ? r.findings.flatMap(f => Array.isArray(f.results) ? f.results : [])
+            : Array.isArray(r.sources)
+            ? r.sources
+            : Array.isArray(r.results)
+            ? r.results
+            : []
         captureHits(hits, 'deep_research')
         return JSON.stringify(result)
       }
