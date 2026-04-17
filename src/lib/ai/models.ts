@@ -200,6 +200,176 @@ export function supportsTools(provider: string): boolean {
   return provider === 'openai' || provider === 'anthropic' || provider === 'gemini'
 }
 
+// ---------------------------------------------------------------------------
+// Structured output
+//
+// Provider-agnostic entry point that returns a JSON string constrained to
+// a caller-provided JSON Schema. Each provider uses its native mechanism:
+//
+//  - OpenAI:   response_format: { type: 'json_schema', strict: true }.
+//              The strictest of the three — schema violations are rejected
+//              by the server, not the model.
+//  - Anthropic: forced tool use. We expose a single "respond_structured"
+//              tool whose input_schema IS the reply schema, and set
+//              tool_choice to force it. The tool's `input` arg is the
+//              structured reply — we serialize it back to JSON and return.
+//  - Gemini:   JSON mode (responseMimeType: 'application/json') with the
+//              schema described in the prompt. Gemini's responseSchema
+//              field doesn't handle our discriminated-union Block type
+//              reliably, so we rely on 2.5-pro's prompt compliance + the
+//              caller's runtime validator as the safety net.
+//  - Sarvam:   falls through to OpenAI — Sarvam's OpenAI-compatible
+//              endpoint doesn't implement response_format cleanly.
+//
+// The caller is responsible for runtime validation (parseStructuredReply
+// in structured-output.ts) because (a) Gemini isn't server-enforced and
+// (b) even "strict" OpenAI can return empty strings on edge cases.
+// ---------------------------------------------------------------------------
+
+export async function generateStructured(
+  messages: ChatMessage[],
+  schema: Record<string, unknown>,
+  config: ModelConfig,
+): Promise<string> {
+  switch (config.provider) {
+    case 'anthropic':
+      return generateStructuredAnthropic(messages, schema, config)
+    case 'gemini':
+      return generateStructuredGemini(messages, schema, config)
+    case 'sarvam':
+      // Sarvam's chat/completions endpoint advertises response_format
+      // support but doesn't honor strict json_schema mode. Route through
+      // OpenAI for this specific step so enterprise customers get the
+      // same guarantee no matter which chat model they picked.
+      return generateStructuredOpenAI(messages, schema, { ...config, provider: 'openai', model: 'gpt-5.4' })
+    case 'openai':
+    default:
+      return generateStructuredOpenAI(messages, schema, config)
+  }
+}
+
+async function generateStructuredOpenAI(
+  messages: ChatMessage[],
+  schema: Record<string, unknown>,
+  config: ModelConfig,
+): Promise<string> {
+  // The SDK's response_format type is a tagged union and the TypeScript
+  // definition for `json_schema` mode was tightened across OpenAI SDK
+  // releases. Cast once to keep compatibility without plastering `as any`
+  // across the codebase — the runtime shape is well defined.
+  type RF = NonNullable<Parameters<ReturnType<typeof getOpenAI>['chat']['completions']['create']>[0]['response_format']>
+  const responseFormat: RF = {
+    type: 'json_schema',
+    json_schema: {
+      name: 'structured_reply',
+      strict: true,
+      schema,
+    },
+  } as unknown as RF
+
+  const response = await getOpenAI().chat.completions.create({
+    model: config.model || 'gpt-5.4',
+    messages: messages.map(toOpenAiMessage),
+    response_format: responseFormat,
+    // Lower temperature on structured output: we want the model to pick
+    // the right blocks deterministically, not get creative with schema.
+    // Still respect the agent's override if set.
+    temperature: config.temperature ?? 0.3,
+    ...(config.maxTokens ? { max_completion_tokens: config.maxTokens } : {}),
+  })
+  return response.choices[0]?.message?.content || '{"blocks":[]}'
+}
+
+async function generateStructuredAnthropic(
+  messages: ChatMessage[],
+  schema: Record<string, unknown>,
+  config: ModelConfig,
+): Promise<string> {
+  const anthropic = getAnthropic()
+  const systemMsgRaw = messages.find((m) => m.role === 'system')?.content ?? ''
+  const systemMsg = typeof systemMsgRaw === 'string' ? systemMsgRaw : contentPartsToText(systemMsgRaw)
+  const chatMessages = messages
+    .filter((m) => m.role !== 'system')
+    .map((m) => toAnthropicMessage(m))
+
+  const modelName = config.model || 'claude-sonnet-4-6'
+  const respondTool = {
+    name: 'respond_structured',
+    description: 'Emit the final reply as a structured Block array. This is the ONLY way to reply; do not write prose.',
+    input_schema: schema,
+  }
+  const res = await anthropic.messages.create({
+    model: modelName,
+    max_tokens: config.maxTokens ?? 8192,
+    system: systemMsg,
+    messages: chatMessages as Parameters<typeof anthropic.messages.create>[0]['messages'],
+    tools: [respondTool] as unknown as Parameters<typeof anthropic.messages.create>[0]['tools'],
+    // Force this exact tool so we get structured output, not prose.
+    tool_choice: { type: 'tool', name: 'respond_structured' } as unknown as Parameters<typeof anthropic.messages.create>[0]['tool_choice'],
+    ...(anthropicAcceptsTemperature(modelName) ? { temperature: config.temperature ?? 0.3 } : {}),
+  })
+
+  const toolUse = res.content.find((b) => b.type === 'tool_use') as
+    | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
+    | undefined
+  if (!toolUse) return '{"blocks":[]}'
+  return JSON.stringify(toolUse.input ?? {})
+}
+
+async function generateStructuredGemini(
+  messages: ChatMessage[],
+  schema: Record<string, unknown>,
+  config: ModelConfig,
+): Promise<string> {
+  const apiKey = process.env.GOOGLE_AI_API_KEY
+  if (!apiKey) throw new Error('GOOGLE_AI_API_KEY is not set — add it to .env.local and restart the dev server')
+
+  const rawModel = config.model
+  const model = (!rawModel || rawModel === 'gemini-pro' || rawModel === 'gemini-2.5-flash')
+    ? 'gemini-2.5-pro'
+    : rawModel
+
+  const sysRaw = messages.find((m) => m.role === 'system')?.content
+  const baseSystem = sysRaw
+    ? (typeof sysRaw === 'string' ? sysRaw : contentPartsToText(sysRaw))
+    : ''
+  // Gemini's responseSchema doesn't handle discriminated-union array items
+  // reliably. Instead we pin the schema into the system prompt and rely on
+  // 2.5-pro's prompt compliance — the caller validates output at runtime.
+  const schemaRider = `\n\n--- Structured Reply Schema (MANDATORY) ---\nReturn ONLY a single JSON object that validates against this schema. Do NOT wrap it in code fences; do NOT emit prose around it.\n\n${JSON.stringify(schema)}\n--- End Schema ---`
+  const systemInstruction = baseSystem + schemaRider
+
+  const contents = toGeminiMessages(messages)
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents,
+        systemInstruction: { parts: [{ text: systemInstruction }] },
+        generationConfig: {
+          temperature: config.temperature ?? 0.3,
+          responseMimeType: 'application/json',
+          ...(config.maxTokens ? { maxOutputTokens: config.maxTokens } : {}),
+        },
+      }),
+    },
+  )
+  if (!response.ok) {
+    const body = await response.text().catch(() => '')
+    throw new Error(`Gemini API ${response.status}: ${body.slice(0, 400)}`)
+  }
+  const data = await response.json() as {
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>
+    error?: { message?: string }
+  }
+  if (data.error?.message) throw new Error(`Gemini API: ${data.error.message}`)
+  const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? ''
+  return text || '{"blocks":[]}'
+}
+
 async function generateWithToolsOpenAI(
   messages: ChatMessage[],
   tools: LlmToolDef[],

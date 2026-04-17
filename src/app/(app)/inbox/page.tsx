@@ -20,6 +20,8 @@ import { MODEL_CATALOG } from '@/lib/ai/catalog'
 import type { UploadedAttachment } from '@/lib/chat-attachments/constants'
 import { Source, SourceTrigger, SourceContent } from '@/components/ui/source'
 import { DocumentTypeIcon } from '@/components/ui/document-type-icon'
+import { StructuredReply } from '@/components/ui/structured-reply'
+import { parseStructuredReply } from '@/lib/ai/structured-output'
 import type { MessageSource } from '@/types/database'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -834,6 +836,24 @@ function InboxInner() {
                 )
                 return { ...prev, messages: nextMessages }
               })
+            } else if (chunk.type === 'structured') {
+              // Structured reply synthesis finished on the server. Merge the
+              // Block[] payload into the in-flight assistant message so the
+              // bubble swaps from streamed Markdown to the deterministic
+              // block renderer. Same row, no refetch — the metadata.structured
+              // field is what the inbox render checks.
+              try {
+                const structured = JSON.parse(chunk.data) as { blocks: unknown[] }
+                setDetail(prev => {
+                  if (!prev) return prev
+                  const nextMessages = prev.messages.map(m =>
+                    m.id === tempAsstId
+                      ? { ...m, metadata: { ...(m.metadata ?? {}), structured } }
+                      : m,
+                  )
+                  return { ...prev, messages: nextMessages }
+                })
+              } catch { /* malformed structured payload — keep streamed prose */ }
             }
             // 'thought' chunks (tool events) ignored in UI for now.
           } catch { /* malformed chunk — skip */ }
@@ -1476,6 +1496,38 @@ function InboxInner() {
                                       const raw = typeof msg.content === 'string' ? msg.content : ''
                                       const { thinking, visible } = splitThinking(raw)
                                       const renderedBody = typeof msg.content === 'string' ? capitalizeFirst(visible) : msg.content
+                                      // Structured-output path. When the pipeline
+                                      // saved metadata.structured (website channel,
+                                      // synthesis succeeded), render the typed
+                                      // Block[] via the deterministic renderer so
+                                      // format drift is impossible. The raw markdown
+                                      // in msg.content stays as a fallback for old
+                                      // rows, non-website channels, and synthesis
+                                      // failures — it's what drives this same
+                                      // Markdown block below.
+                                      const rawStructured = (msg.metadata as { structured?: unknown } | null | undefined)?.structured
+                                      const structuredReply = rawStructured
+                                        ? parseStructuredReply(JSON.stringify(rawStructured))
+                                        : null
+                                      if (structuredReply) {
+                                        return (
+                                          <div className="flex flex-col gap-2">
+                                            {thinking && (
+                                              <details className="group/think">
+                                                <summary className="cursor-pointer list-none select-none inline-flex items-center gap-1 text-[12px] font-medium text-[#737373] hover:text-[#2e2e2e] transition-colors">
+                                                  Thought for a moment
+                                                  <ChevronDown size={12} strokeWidth={2.25} className="transition-transform group-open/think:hidden" />
+                                                  <ChevronUp size={12} strokeWidth={2.25} className="hidden transition-transform group-open/think:inline" />
+                                                </summary>
+                                                <div className="mt-1.5 border-l-2 border-black/[0.06] pl-3 text-[13px] leading-[1.55] text-[#737373] whitespace-pre-wrap">
+                                                  {thinking}
+                                                </div>
+                                              </details>
+                                            )}
+                                            <StructuredReply reply={structuredReply} />
+                                          </div>
+                                        )
+                                      }
                                       return (
                                         <div className="flex flex-col gap-2">
                                           {thinking && (

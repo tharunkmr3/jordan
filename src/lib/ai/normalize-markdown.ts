@@ -1,20 +1,23 @@
 /**
- * normalizeModelMarkdown — fix the patterns models fall back to even after
- * being told not to, WITHOUT rewriting intentional markdown.
+ * normalizeModelMarkdown — clean up minor Markdown patterns that models
+ * emit even after being told not to, on channels where Markdown is still
+ * the authoritative format (phone voice-readout of the synthesized prose,
+ * WhatsApp / Messenger replies).
  *
- * The LLMs we support (Claude, GPT, Sarvam, Gemini) keep emitting:
- *   "**Label:** description text"          ← pseudo-heading as inline bold
- *   bare-text section titles               ← newline instead of ## heading
- *   consecutive plain lines under a heading ← instead of - bullets
- *   ---                                    ← unwanted dividers
- *   spray of inline **bold** on every noun phrase
+ * On the `website` channel this normalizer runs only when structured-
+ * output synthesis failed — structured output is the primary enforcement
+ * there, so flat-text rescue heuristics (the old `rescueFlatStructure`
+ * code path) were removed. Format drift on website is handled by the
+ * JSON schema, not by retrofitting Markdown after the fact.
  *
- * This module normalizes the first two and strips the third. It's
- * deliberately conservative: any real markdown (fenced code, real bullet
- * lists, tables, real headings) passes through untouched.
+ * What's still normalized:
+ *   - `**Label:** description` pseudo-headings → real `## Heading` +
+ *     body break (Anthropic in particular loves this pattern)
+ *   - Stray `---` horizontal rules on their own line → removed
+ *   - 3+ consecutive blank lines → collapsed to the canonical double-
+ *     newline
  *
- * Applied server-side BEFORE the message is saved/returned, so both the
- * initial render and any history replay see the clean version.
+ * Code fences and <think>…</think> traces are preserved verbatim.
  */
 
 export function normalizeModelMarkdown(text: string): string {
@@ -89,129 +92,9 @@ function applyTextTransforms(text: string): string {
     (_m, label: string) => `## ${label.trim()}`,
   )
 
-  // 4) Rescue flat-text sections that should have been ## heading + bullets.
-  //    When the system prompt's format rules lose attention weight (long
-  //    tool results in context, deep agent loops), models fall back to
-  //    emitting a "short line" followed by a run of bullet-shaped lines,
-  //    each on its own paragraph, with no markdown prefix at all:
-  //
-  //      Latest market moves
-  //      The S&P 500 rose 1.18% to 6,967.38
-  //      The Nasdaq Composite jumped 1.96% to 23,639.08
-  //      Recent CNBC coverage shows major U.S. indexes pushing higher
-  //
-  //    Renders as a wall of visually indistinguishable paragraphs. This
-  //    pass detects that shape and reformats it in place.
-  s = rescueFlatStructure(s)
-
-  // 5) Collapse 3+ consecutive blank lines that result from prior splits,
+  // 4) Collapse 3+ consecutive blank lines that result from prior splits,
   //    down to the standard double-newline.
   s = s.replace(/\n{3,}/g, '\n\n')
 
   return s
-}
-
-// ---------------------------------------------------------------------------
-// Flat-section rescue
-// ---------------------------------------------------------------------------
-
-/**
- * Models under heavy context load (long system prompt + bulky tool results)
- * sometimes abandon Markdown structure entirely and emit one paragraph per
- * line separated by blank lines:
- *
- *   Latest market moves
- *
- *   The S&P 500 rose 1.18% to 6,967.38
- *
- *   The Nasdaq Composite jumped 1.96% to 23,639.08
- *
- *   Recent CNBC coverage shows major U.S. indexes pushing higher
- *
- * Renders as a wall of visually identical paragraphs — no hierarchy, no
- * bullets. This pass scans for that shape (a short heading-like paragraph
- * followed by 2+ bullet-shaped paragraphs) and rewrites it into proper
- * `## heading` + `- bullet` form.
- *
- * ALSO handles the less-common variant where the heading + its items all
- * live inside a single block separated by single newlines (no blank line
- * between lines).
- *
- * Rules — conservative on purpose so genuine prose isn't mangled:
- *   - Heading paragraph: single line, 2–8 words, ≤ 60 chars, starts with
- *     a letter, no terminating `. ! ? :`, no existing Markdown prefix.
- *   - Bullet paragraph: single line, 5–240 chars, starts with capital/
- *     digit/quote, contains a space, no existing Markdown prefix.
- *   - Needs at least 2 consecutive bullet paragraphs after the heading
- *     (a heading + 1 item isn't a list).
- */
-const MARKDOWN_LINE_PREFIX = /^(#{1,6}\s|[-*]\s|\d+\.\s|>\s|\||\s*```)/
-
-function looksLikeHeadingLine(line: string): boolean {
-  if (!line || line.includes('\n')) return false
-  const words = line.split(/\s+/).filter(Boolean).length
-  return (
-    line.length <= 60 &&
-    words >= 2 &&
-    words <= 8 &&
-    !/[.!?:]$/.test(line) &&
-    /^[A-Za-z]/.test(line) &&
-    !MARKDOWN_LINE_PREFIX.test(line)
-  )
-}
-
-function looksLikeBulletLine(line: string): boolean {
-  if (!line || line.includes('\n')) return false
-  if (line.length < 5 || line.length > 240) return false
-  if (!/^[A-Z0-9"'\u201C\u2018]/.test(line)) return false  // capital, digit, or smart quote
-  if (!/\s/.test(line)) return false
-  if (MARKDOWN_LINE_PREFIX.test(line)) return false
-  return true
-}
-
-function rescueFlatStructure(text: string): string {
-  // First pass: single-block rescue (heading + bullets all in one paragraph
-  // separated only by single newlines).
-  const blocks = text.split(/\n{2,}/)
-  const afterBlockRescue = blocks.map(rescueBlock)
-
-  // Second pass: adjacent-paragraph rescue. Walk the paragraphs and when
-  // we see a heading-shaped paragraph followed by 2+ bullet-shaped ones,
-  // fuse them into a single `## heading\n\n- bullet…` block.
-  const paragraphs = afterBlockRescue.map(p => p.trim()).filter(Boolean)
-  const out: string[] = []
-  let i = 0
-  while (i < paragraphs.length) {
-    const p = paragraphs[i]
-    if (looksLikeHeadingLine(p)) {
-      const bullets: string[] = []
-      let j = i + 1
-      while (j < paragraphs.length && looksLikeBulletLine(paragraphs[j])) {
-        bullets.push(paragraphs[j])
-        j++
-      }
-      if (bullets.length >= 2) {
-        out.push(`## ${p}\n\n${bullets.map(b => `- ${b}`).join('\n')}`)
-        i = j
-        continue
-      }
-    }
-    out.push(p)
-    i++
-  }
-  return out.join('\n\n')
-}
-
-function rescueBlock(block: string): string {
-  const lines = block.split('\n').map(l => l.trim()).filter(Boolean)
-  if (lines.length < 3) return block
-  if (lines.some(l => MARKDOWN_LINE_PREFIX.test(l))) return block
-
-  const first = lines[0]
-  const rest = lines.slice(1)
-
-  if (!looksLikeHeadingLine(first)) return block
-  if (!rest.every(looksLikeBulletLine)) return block
-
-  return `## ${first}\n\n${rest.map(l => `- ${l}`).join('\n')}`
 }

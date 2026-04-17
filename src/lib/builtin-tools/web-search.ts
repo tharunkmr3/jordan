@@ -56,13 +56,25 @@ export async function runWebSearch(query: string, opts?: { maxResults?: number; 
       answer?: string
       results?: Array<{ title: string; url: string; content?: string; raw_content?: string }>
     }
+    // Compress snippets before sending back to the caller. Each Tavily
+    // result often carries 1–4KB of raw content; with max_results=10 that
+    // puts 10–40KB into the agent's context window, drowning out the
+    // system prompt and KB chunks. Trim hard (≈240 chars = ~60 tokens),
+    // strip whitespace noise, and keep only URL-bearing rows. The
+    // `answer` field is Tavily's own LLM-summarized digest and is
+    // usually all the agent needs to compose its reply — snippets are
+    // the backup + citation source.
+    const results: WebSearchResult[] = (data.results ?? [])
+      .filter(r => r.url && r.title)
+      .map(r => {
+        const raw = (r.content ?? r.raw_content ?? '').replace(/\s+/g, ' ').trim()
+        const snippet = raw.length > 240 ? raw.slice(0, 237).trim() + '…' : raw
+        return { title: r.title, url: r.url, snippet }
+      })
     return {
       query,
-      results: (data.results ?? []).map(r => ({
-        title: r.title,
-        url: r.url,
-        snippet: (r.content ?? r.raw_content ?? '').slice(0, 400),
-      })),
+      results,
+      // Tavily's `answer` is already compact (2–4 sentences); pass through.
       summary: data.answer,
     }
   } catch (err) {

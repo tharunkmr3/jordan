@@ -21,6 +21,14 @@ import {
 } from '@/lib/composio/tools'
 import { buildBuiltinTools, type BuiltinToolsBundle } from '@/lib/builtin-tools'
 import { normalizeModelMarkdown } from './normalize-markdown'
+import {
+  STRUCTURED_REPLY_SCHEMA,
+  STRUCTURED_REPLY_PROMPT_RIDER,
+  parseStructuredReply,
+  blocksToMarkdown,
+  type StructuredReply,
+} from './structured-output'
+import { generateStructured } from './models'
 import type {
   Agent,
   ChannelType,
@@ -220,12 +228,27 @@ export async function processChatMessage(
     response = '⚠️ Model returned an empty response. Check server logs.'
   }
 
-  // Normalize the model's markdown before saving — converts the persistent
-  // "**Label:** inline description" pseudo-heading pattern into real `##
-  // Heading` sections, strips stray `---` dividers, and collapses extra
-  // blank lines. Applied once here so both live rendering and history
-  // replay see the clean version.
-  response = normalizeModelMarkdown(response)
+  // Structured output synthesis — on the website channel, convert the
+  // freeform draft into a typed Block[] array the UI renders block-by-block.
+  // See synthesizeStructured() for the two-stage strategy (fast JSON parse
+  // path + API-based synthesis fallback).
+  let structured: StructuredReply | null = null
+  if (wantsStructuredOutput(input.channel)) {
+    structured = await synthesizeStructured(messages, response, modelConfig)
+    if (structured) {
+      // Use the canonical Markdown derived from blocks as the `content`
+      // column. Keeps history exports, KB indexing, and non-structured
+      // client fallbacks consistent with what the UI renders.
+      response = blocksToMarkdown(structured.blocks)
+    } else {
+      // Synthesis failed — fall through to the legacy normalizer so the
+      // prose at least gets its `**Label:**` pseudo-headings fixed up.
+      response = normalizeModelMarkdown(response)
+    }
+  } else {
+    // Non-website (phone/whatsapp/fb): prose is the canonical form.
+    response = normalizeModelMarkdown(response)
+  }
 
   // 6. Save assistant message
   const { data: savedMsg } = await saveMessage(supabase, {
@@ -241,6 +264,7 @@ export async function processChatMessage(
       model_overridden: Boolean(input.modelOverride),
       tools_available: mergedTools.length,
       ...(messageSources.length > 0 ? { sources: messageSources } : {}),
+      ...(structured ? { structured } : {}),
     },
   })
 
@@ -271,7 +295,7 @@ export async function processChatMessage(
  */
 export async function* streamChatMessage(
   input: PipelineInput
-): AsyncGenerator<{ type: 'token' | 'meta' | 'thought'; data: string }> {
+): AsyncGenerator<{ type: 'token' | 'meta' | 'thought' | 'structured'; data: string }> {
   const supabase = createAdminClient()
 
   const agent = await loadAgent(supabase, input.agentId)
@@ -369,31 +393,51 @@ export async function* streamChatMessage(
         { conversationId: conversation.id },
       )) {
         if (ev.kind === 'final_text') {
+          // Authoritative full text for DB save. Client already has
+          // the streamed version from token_delta events.
           fullResponse = ev.text
+        } else if (ev.kind === 'token_delta') {
+          // Forward incremental model text to the client in the same
+          // 'token' shape the no-tools path uses, so the client renders
+          // word-by-word without caring which path produced it.
+          yield { type: 'token', data: ev.text }
         } else {
-          // Forward every non-final event to the client as a 'thought'
-          // frame so the UI can render a chain-of-thought timeline.
+          // thinking / tool_call / tool_done → chain-of-thought timeline
           yield { type: 'thought', data: JSON.stringify(ev) }
         }
       }
     } catch (error) {
       console.error('[chat-pipeline] Tool loop error:', error)
       fullResponse = formatPipelineError(error, agent.fallback_message)
+      yield { type: 'token', data: fullResponse }
     }
     if (!fullResponse || !fullResponse.trim()) {
       fullResponse = '⚠️ Model returned an empty response. Check server logs.'
     }
-    // Normalize before yielding so the client renders the clean version
-    // on the first paint (tool path emits the entire response in one
-    // chunk — this is our only chance to transform).
-    fullResponse = normalizeModelMarkdown(fullResponse)
 
     // Merge web-captured sources with KB sources for the assistant message.
     // Built-in tools (web_search / deep_research) capture URLs during
     // execution; we stitch them after KB chunks so authoritative user
     // data comes first in the chip strip.
     const messageSources = [...kbSources, ...(builtinsBundle?.getCapturedSources() ?? [])]
-    yield { type: 'token', data: fullResponse }
+
+    // Structured synthesis: after tokens finish streaming, convert the
+    // freeform prose into a typed Block[]. Yield a 'structured' event so
+    // the client can swap from streamed-markdown rendering to the
+    // deterministic block renderer (same UX pattern as Linear AI / Notion
+    // AI — partial prose while generating, perfect structure on finish).
+    let structured: StructuredReply | null = null
+    if (wantsStructuredOutput(input.channel)) {
+      structured = await synthesizeStructured(messages, fullResponse, modelConfig)
+      if (structured) {
+        fullResponse = blocksToMarkdown(structured.blocks)
+        yield { type: 'structured', data: JSON.stringify(structured) }
+      } else {
+        fullResponse = normalizeModelMarkdown(fullResponse)
+      }
+    } else {
+      fullResponse = normalizeModelMarkdown(fullResponse)
+    }
 
     // Save + usage, then return (skip the streaming block below)
     saveMessage(supabase, {
@@ -407,6 +451,7 @@ export async function* streamChatMessage(
         model_overridden: Boolean(input.modelOverride),
         tools_available: mergedTools.length,
         ...(messageSources.length > 0 ? { sources: messageSources } : {}),
+        ...(structured ? { structured } : {}),
       },
     }).catch(err => console.error('[chat-pipeline] Save response failed:', err))
 
@@ -433,14 +478,25 @@ export async function* streamChatMessage(
     yield { type: 'token', data: fullResponse }
   }
 
-  // Normalize model markdown (converts "**Label:** desc" pseudo-headings
-  // into real ## headings, strips stray ---, collapses blank lines) so
-  // the persisted message + history replay use the clean version.
-  fullResponse = normalizeModelMarkdown(fullResponse)
-
   // No-tools path: only KB chunks can contribute sources (built-in
   // web_search / deep_research only run through the tool loop above).
   const messageSources = kbSources
+
+  // Structured synthesis on the website channel — same pattern as the
+  // tool path. Client sees tokens stream in, then the 'structured' event
+  // triggers a swap to the block renderer for the final rendering.
+  let structured: StructuredReply | null = null
+  if (wantsStructuredOutput(input.channel)) {
+    structured = await synthesizeStructured(messages, fullResponse, modelConfig)
+    if (structured) {
+      fullResponse = blocksToMarkdown(structured.blocks)
+      yield { type: 'structured', data: JSON.stringify(structured) }
+    } else {
+      fullResponse = normalizeModelMarkdown(fullResponse)
+    }
+  } else {
+    fullResponse = normalizeModelMarkdown(fullResponse)
+  }
 
   // Save response and log usage (fire and forget)
   saveMessage(supabase, {
@@ -453,6 +509,7 @@ export async function* streamChatMessage(
       model_used: `${effectiveProvider}/${effectiveModelName}`,
       model_overridden: Boolean(input.modelOverride),
       ...(messageSources.length > 0 ? { sources: messageSources } : {}),
+      ...(structured ? { structured } : {}),
     },
   }).catch(err => console.error('[chat-pipeline] Save response failed:', err))
 
@@ -594,62 +651,6 @@ async function buildPrompt(
   const messages: ChatMessage[] = []
   let systemPrompt = agent.system_prompt || 'You are a helpful assistant.'
 
-  // Hard anchor at the very top of the system prompt. Rules appended
-  // at the bottom lose attention weight in long prompts (KB context +
-  // tool results + history). Placing this banner immediately after the
-  // agent's own persona keeps it prominent across every turn, including
-  // the tool-result follow-ups.
-  if (channel !== 'phone' && channel !== 'whatsapp' && channel !== 'facebook') {
-    systemPrompt += `\n\n=== ALWAYS FORMAT REPLIES AS MARKDOWN — NON-NEGOTIABLE ===
-
-TITLE (mandatory for most replies)
-- Start EVERY reply longer than a single sentence with \`# Title\` on its own line. One per reply, not more. Short greetings or one-line answers can skip the title.
-
-SECTIONS
-- Use \`## Section heading\` on its own line. After a heading, put a blank line, THEN the description on a new line. NEVER \`**Label:** inline description\` — always break onto the next line.
-- NEVER number sections ("1. ", "2. "). Use \`## Heading\` instead.
-- NEVER use a bare line of plain text as a heading.
-- NEVER use \`---\` horizontal rules.
-
-LISTS
-- Every list of 2+ items: each item starts with "- " (dash + space). Consecutive lines without "- " prefixes are NOT a list.
-- Blank line before the list, blank line after.
-
-BOLDING (strict)
-- NO bolding of phrases inside paragraph text. Do not bold product names, company names, percentages, dollar amounts, or any noun phrase scattered inside a sentence.
-- The ONLY acceptable use of \`**bold**\` is for a short term-of-art at the start of a bullet, like a small glossary definition. Otherwise, no bold.
-
-EXAMPLE OF CORRECT STRUCTURE:
-
-# Latest AI agent news
-
-A quick roundup of what's shifting in the agent space right now.
-
-## Enterprise adoption
-
-Agents are moving from demos to production. Recent signals include measurable business value across customer support, financial analysis, and software engineering.
-
-- Startups focused on agent reliability are attracting funding
-- Enterprises are prioritizing infrastructure over model novelty
-- Governance and compliance are becoming central for autonomous workflows
-
-## Funding trends
-
-Investment is flowing to the picks-and-shovels layer. Trace raised 3 million around enterprise adoption, and Singulr AI reportedly raised 10 million for secure scaling.
-
-EXAMPLE OF WRONG STRUCTURE (do NOT do this):
-
-Latest AI agent news
-Here's a roundup.
-Enterprise Adoption
-Agents are moving from **demos** to **production**.
-**Funding Trends:** Investment is flowing to infrastructure...
----
-
-Bare line titles, inline bold spray, "**Label:** same-line desc" pseudo-headings, and \`---\` dividers are all forbidden.
-`
-  }
-
   // Inject a short model-identity hint so the assistant can answer
   // "which model are you?" truthfully. Providers train their models
   // NOT to self-identify in API contexts (protects white-label
@@ -681,69 +682,13 @@ Bare line titles, inline bold spray, "**Label:** same-line desc" pseudo-headings
   } else {
     // website channel covers the customer chat widget, the agent
     // settings Test Chat panel, and internal-agent chats in the
-    // inbox — all surfaces that can render our generative UI.
-    systemPrompt += `\n\n--- OUTPUT FORMATTING (STRICT) ---
-Your replies render as Markdown in a chat UI. Follow these rules EXACTLY:
-
-STRUCTURE
-- Open long answers (3+ sections) with a single top-level heading using \`# Title\` — a concise noun phrase (e.g. "# Recommended HR Policies"). One per reply, never more.
-- Use \`## Section Heading\` for each major section. Section headings are the semantic equivalent of "1. Remote Work Policy" — use \`## Remote Work Policy\` INSTEAD of numbered titles like "1. ...", "2. ...".
-- Use \`### Subheading\` for nested detail when you really need it. Usually ## is enough.
-- Put a BLANK LINE between every paragraph, before every heading, before every list, and after every list. A single newline renders as a soft break with no real separation.
-- NEVER insert \`---\` horizontal rules to separate sections. Headings already separate them; \`---\` just adds visual clutter.
-
-LISTS
-- Every list of 2+ related items uses real Markdown bullets: each line starts with "- " (dash + space).
-- For ordered steps where sequence matters, use "1. ", "2. ", "3. " — but only when the order is meaningful (steps in a process). Don't use numbered lists for unordered collections.
-- One blank line before the list, one blank line after.
-
-BOLDING
-- Use \`**bold**\` ONLY for a key term the reader needs to recognize (e.g. a product name, a specific policy name). Never bold 3+ words, never bold a full phrase, never bold "key takeaways" inline.
-- If every other word is bold, nothing stands out. Use bold sparingly — one or two per section at most.
-
-EXAMPLE OF CORRECT FORMATTING:
-
-# Recommended HR policies
-
-A starter pack tailored to a growing team. Each section is a policy area with the levers you can pull.
-
-## Remote and hybrid work
-
-- Define eligible roles for remote and hybrid work
-- Set expectations for availability and response time
-- Clarify equipment provisioning and home-office stipends
-- Outline data security requirements for remote setups
-
-## Mental health and wellness
-
-- Offer an Employee Assistance Program for counseling
-- Provide mental health days separate from sick leave
-- Encourage managers to check in on team wellbeing
-
-## Diversity, equity and inclusion
-
-- Set measurable DEI hiring targets
-- Require unconscious bias training for all employees
-- Create safe reporting channels for discrimination
-
-EXAMPLE OF WRONG FORMATTING (do NOT do this):
-
-1. Remote & Hybrid Work Policy
-Define eligible roles for remote/hybrid work
-Set expectations for **availability** and **communication**
----
-2. Mental Health & Wellness Policy
-Offer **Employee Assistance Programs (EAP)** for counseling
-
-(Missing bullets, numbered pseudo-headings instead of ## headings, \`---\` dividers, bold spray on random phrases.)`
-    systemPrompt += `\n\n--- Generative UI ---\nWhen you need structured input from the user, or a structured response would read better than prose (e.g. a disambiguation list, a confirmation before a destructive action, or tabular data), you MAY embed a single fenced code block tagged "ui" containing JSON of one of these shapes:
-- form: {"type":"form","title":"...","fields":[{"name":"","label":"","type":"text|email|url|number|textarea|select|boolean","required":true,"options":[{"value":"","label":""}]}],"submit":{"label":"Submit","action":"optional_hint"}}
-- confirm: {"type":"confirm","message":"...","confirm":{"label":"Yes","variant":"default|destructive"},"cancel":{"label":"Cancel"}}
-- choice: {"type":"choice","title":"...","options":[{"value":"","label":"","description":""}]}
-- card: {"type":"card","title":"...","subtitle":"","fields":[{"label":"","value":""}],"action":{"label":"","value":"","variant":"default|secondary|destructive"}}
-- table: {"type":"table","title":"...","columns":[{"key":"","label":""}],"rows":[{"col_key":"cell"}]}
-
-Prose is still the default. Only emit a widget when structured input or structured output is clearly better than text. Never wrap multiple widgets in one block.`
+    // inbox — all surfaces that render structured replies.
+    //
+    // On this channel the reply shape is enforced by the provider API
+    // (response_format on OpenAI, forced tool on Anthropic, JSON mode on
+    // Gemini). The rider is just semantic guidance for block selection;
+    // the schema is the real contract.
+    systemPrompt += STRUCTURED_REPLY_PROMPT_RIDER
   }
 
   messages.push({ role: 'system', content: systemPrompt })
@@ -864,6 +809,71 @@ function formatPipelineError(error: unknown, fallbackMessage: string | null): st
 async function logUsage(supabase: SupabaseAdmin, log: UsageLogInsert): Promise<void> {
   const { error } = await supabase.from('usage_logs').insert(log)
   if (error) console.error('[chat-pipeline] Failed to log usage:', error)
+}
+
+// ---------------------------------------------------------------------------
+// Structured reply synthesis
+//
+// On the website channel, the assistant's reply MUST be a typed Block[]
+// array — the UI renders each block deterministically, so format drift
+// stops being a runtime failure mode. This helper owns the "how do we
+// get blocks" step regardless of which provider or whether tools ran.
+//
+// Two-stage strategy:
+//
+//  1) Fast path. If `draft` is already valid JSON against the schema
+//     (happens when the model natively used response_format), parse
+//     and return — no extra API call, no extra latency.
+//
+//  2) Synthesis path. Otherwise, make one more call through
+//     generateStructured(): send the full conversation + the freeform
+//     draft + an instruction to "reformat as JSON". This is what makes
+//     structured output reliable across providers whose first call
+//     emitted prose (Anthropic-with-tools, Gemini, older OpenAI).
+//
+// When synthesis fails (network error, malformed JSON even after strict
+// mode), returns null. The caller then falls back to the freeform draft
+// as plain markdown — the chat never breaks, it just loses the block
+// renderer's visual hierarchy for that one reply.
+// ---------------------------------------------------------------------------
+
+async function synthesizeStructured(
+  conversation: ChatMessage[],
+  draft: string | null,
+  modelConfig: ModelConfig,
+): Promise<StructuredReply | null> {
+  // Fast path: the draft is already valid structured JSON.
+  if (draft) {
+    const direct = parseStructuredReply(draft)
+    if (direct) return direct
+  }
+
+  const synthMessages: ChatMessage[] = draft
+    ? [
+        ...conversation,
+        { role: 'assistant', content: draft },
+        {
+          role: 'user',
+          content: 'Reformat your previous reply into a single JSON object matching the required schema. Preserve ALL information verbatim — do not paraphrase, do not add content, do not drop content. Headings become heading blocks, list items become bullets, tables become table blocks. Return ONLY the JSON object, no prose, no code fences.',
+        },
+      ]
+    : conversation
+
+  try {
+    const jsonString = await generateStructured(synthMessages, STRUCTURED_REPLY_SCHEMA as Record<string, unknown>, modelConfig)
+    return parseStructuredReply(jsonString)
+  } catch (err) {
+    console.error('[chat-pipeline] Structured synthesis failed:', err)
+    return null
+  }
+}
+
+/**
+ * Website channel = structured output surface. Phone and messengers get
+ * prose (a TTS engine can't read a block-kit card, WhatsApp strips widgets).
+ */
+function wantsStructuredOutput(channel: ChannelType | undefined): boolean {
+  return channel === 'website' || channel == null
 }
 
 /**
@@ -1035,6 +1045,7 @@ export type ThoughtEvent =
   | { kind: 'thinking'; id: string; trigger: string; items: string[] }
   | { kind: 'tool_call'; id: string; tool: string; args: Record<string, unknown>; status: 'running' }
   | { kind: 'tool_done'; id: string; tool: string; resultPreview: string }
+  | { kind: 'token_delta'; text: string }
   | { kind: 'final_text'; text: string }
 
 async function* runAgenticLoopStream(
@@ -1047,8 +1058,12 @@ async function* runAgenticLoopStream(
   meta: { conversationId: string }
 ): AsyncGenerator<ThoughtEvent> {
   const working: ChatMessage[] = [...initialMessages]
-  let finalText = ''
 
+  // Tool-discovery phase: loop with tools available, executing any
+  // tool calls the model requests. When the model returns no tool
+  // calls, we break and stream the final answer. The text from this
+  // phase (round.text) is discarded — the final answer is re-generated
+  // as a stream below so the client can render it word-by-word.
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
     yield {
       kind: 'thinking',
@@ -1058,12 +1073,13 @@ async function* runAgenticLoopStream(
     }
 
     const round = await generateWithTools(working, tools, modelConfig)
-    working.push(round.assistantMessage)
 
     if (round.toolCalls.length === 0) {
-      finalText = round.text ?? ''
+      // Model is done with tools. Proceed to streaming phase.
       break
     }
+
+    working.push(round.assistantMessage)
 
     // Emit a tool_call event per call + execute them in parallel.
     const calls = round.toolCalls.map((call) => {
@@ -1091,19 +1107,24 @@ async function* runAgenticLoopStream(
         content,
       })
     }
-
-    if (i === MAX_TOOL_ITERATIONS - 1) {
-      finalText = round.text ?? ''
-    }
   }
 
-  if (!finalText) {
-    try {
-      const finalRound = await generateWithTools(working, [], modelConfig)
-      finalText = finalRound.text ?? 'I ran into an issue using my tools. Please try again.'
-    } catch {
-      finalText = 'I ran into an issue using my tools. Please try again.'
+  // Streaming phase: final answer with no tools, so the model streams
+  // tokens instead of bundling a text+tool_calls response. One extra
+  // API call vs. the old path, but the whole point is word-by-word UX.
+  let finalText = ''
+  try {
+    for await (const chunk of streamResponse(working, modelConfig)) {
+      finalText += chunk
+      yield { kind: 'token_delta', text: chunk }
     }
+  } catch (err) {
+    console.error('[chat-pipeline/tool-loop] Final stream error:', err)
+  }
+
+  if (!finalText.trim()) {
+    finalText = 'I ran into an issue using my tools. Please try again.'
+    yield { kind: 'token_delta', text: finalText }
   }
 
   yield { kind: 'final_text', text: finalText }

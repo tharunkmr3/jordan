@@ -413,6 +413,17 @@ export interface MessageMetadata {
   tokens_total?: number;
   /** KB citations used as context for this assistant reply. */
   sources?: MessageSource[];
+  /**
+   * Structured reply payload — a typed block list the UI renders
+   * deterministically. Populated on the website channel only (phone and
+   * messengers get prose). When present, the inbox renderer prefers it
+   * over `content` (markdown); content stays around as a fallback for
+   * history export, search index, and clients that can't render blocks.
+   *
+   * Shape: { blocks: Block[] } — see lib/ai/structured-output.ts.
+   * Typed as `unknown` here so this module doesn't import the AI layer.
+   */
+  structured?: { blocks: unknown[] };
   [key: string]: unknown;
 }
 
