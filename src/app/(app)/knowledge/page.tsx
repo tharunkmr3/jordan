@@ -27,6 +27,9 @@ import {
 } from '@/components/ui/select'
 import type { Agent, KnowledgeBase, KbDocument } from '@/types/database'
 import { Plus, Trash, Upload, Database, ArrowLeft, FileText, X, PencilSimple } from '@phosphor-icons/react'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Panel } from '@/components/ui/panel'
+import { KbFileViewer } from '@/components/app/kb-file-viewer'
 
 interface KnowledgeBaseWithDocs extends KnowledgeBase {
   kb_documents: KbDocument[]
@@ -121,6 +124,23 @@ export default function KnowledgePage() {
   }
   const [uploadQueue, setUploadQueue] = useState<UploadTask[]>([])
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  // Multi-select + delete confirmation
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [deleteTarget, setDeleteTarget] = useState<
+    | { kind: 'single'; id: string; name: string }
+    | { kind: 'bulk'; ids: string[] }
+    | null
+  >(null)
+  const [deleting, setDeleting] = useState(false)
+
+  // Clear selection when leaving / switching KB
+  useEffect(() => { setSelected(new Set()) }, [selectedKb])
+
+  // File viewer — opens to the right when a row is clicked. Reset when
+  // switching KBs so we don't try to load a doc from a different KB.
+  const [viewerDocId, setViewerDocId] = useState<string | null>(null)
+  useEffect(() => { setViewerDocId(null) }, [selectedKb])
 
   const fetchKbs = useCallback(async () => {
     try {
@@ -304,10 +324,49 @@ export default function KnowledgePage() {
     setUploadQueue(prev => prev.filter(t => t.clientId !== clientId))
   }
 
-  async function handleDeleteDoc(docId: string) {
-    if (!selectedKb) return
-    await fetch(`/api/knowledge-base/${selectedKb}/documents/${docId}`, { method: 'DELETE' })
+  /**
+   * Actually perform the delete(s). Runs in parallel for bulk so a large
+   * selection doesn't block the UI one-by-one. Only called after the user
+   * confirms in the modal.
+   */
+  async function executeDelete() {
+    if (!selectedKb || !deleteTarget) return
+    setDeleting(true)
+    const kbId = selectedKb
+    const ids = deleteTarget.kind === 'single' ? [deleteTarget.id] : deleteTarget.ids
+
+    // Optimistic: remove rows from the current KB's doc list immediately.
+    // If the request fails we'll refetch and they'll reappear.
+    setKbs(prev => prev.map(kb => kb.id === kbId
+      ? { ...kb, kb_documents: (kb.kb_documents || []).filter(d => !ids.includes(d.id)) }
+      : kb))
+    setSelected(prev => {
+      const next = new Set(prev)
+      for (const id of ids) next.delete(id)
+      return next
+    })
+
+    try {
+      await Promise.all(
+        ids.map(id =>
+          fetch(`/api/knowledge-base/${kbId}/documents/${id}`, { method: 'DELETE' })
+        )
+      )
+    } catch {
+      setError('Some deletes failed')
+    }
+    setDeleting(false)
+    setDeleteTarget(null)
     await fetchKbs()
+  }
+
+  function toggleDocSelected(docId: string) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(docId)) next.delete(docId)
+      else next.add(docId)
+      return next
+    })
   }
 
   // ---- Detail view ----
@@ -316,52 +375,60 @@ export default function KnowledgePage() {
     const agentName = agents.find(a => a.id === activeKb.agent_id)?.name
 
     return (
-      <div className="p-6">
-        <HeaderTitle>
-          <button
-            onClick={() => setSelectedKb(null)}
-            className="rounded-md p-1 text-[#737373] hover:bg-[#f5f5f5] hover:text-[#2e2e2e]"
-            aria-label="Back to knowledge bases"
-          >
-            <ArrowLeft size={16} />
-          </button>
-          <span className="text-base font-semibold text-[#2e2e2e] truncate">{activeKb.name}</span>
-          {agentName && <Badge variant="secondary" className="text-xs">{agentName}</Badge>}
-        </HeaderTitle>
-
-        <HeaderActions>
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept=".txt,.md,.markdown,.csv,.pdf,.docx"
-            className="hidden"
-            onChange={e => {
-              const files = e.target.files ? Array.from(e.target.files) : []
-              if (files.length > 0) handleUploadFiles(files)
-              e.target.value = ''
-            }}
-          />
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={uploadQueue.some(t => t.status === 'uploading')}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Upload size={14} className="mr-1.5" />
-            {uploadQueue.some(t => t.status === 'uploading') ? 'Uploading...' : 'Upload'}
-          </Button>
-          <Button variant="destructive" size="icon-sm" onClick={() => handleDeleteKb(activeKb.id)} aria-label="Delete knowledge base">
-            <Trash size={14} />
-          </Button>
-        </HeaderActions>
+      <div className="flex h-full bg-[#f5f5f5] overflow-hidden gap-3 p-3">
+        {/* Docs list panel — flex-fills when no viewer, shrinks when
+            viewer opens. The viewer is a sibling <Panel> in this same
+            flex row, matching the inbox's three-column layout. */}
+        <Panel
+          className="flex-1 min-w-0"
+          bodyClassName="overflow-auto"
+          header={
+            <>
+              <button
+                onClick={() => setSelectedKb(null)}
+                className="rounded-md p-1 text-[#737373] hover:bg-[#f5f5f5] hover:text-[#2e2e2e]"
+                aria-label="Back to knowledge bases"
+              >
+                <ArrowLeft size={16} />
+              </button>
+              <span className="text-sm font-semibold text-[#2e2e2e] truncate">{capitalizeFirst(activeKb.name)}</span>
+              {agentName && <Badge variant="secondary" className="text-xs">{agentName}</Badge>}
+              <div className="ml-auto flex items-center gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept=".txt,.md,.markdown,.csv,.pdf,.docx"
+                  className="hidden"
+                  onChange={e => {
+                    const files = e.target.files ? Array.from(e.target.files) : []
+                    if (files.length > 0) handleUploadFiles(files)
+                    e.target.value = ''
+                  }}
+                />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={uploadQueue.some(t => t.status === 'uploading')}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload size={14} className="mr-1.5" />
+                  {uploadQueue.some(t => t.status === 'uploading') ? 'Uploading...' : 'Upload'}
+                </Button>
+                <Button variant="destructive" size="icon-sm" onClick={() => handleDeleteKb(activeKb.id)} aria-label="Delete knowledge base">
+                  <Trash size={14} />
+                </Button>
+              </div>
+            </>
+          }
+        >
 
         {/* Unified documents list. In-flight upload tasks render as rows
             in the same layout so the experience feels continuous — the
             only difference is the Status column shows a progress bar
             instead of a badge while uploading. */}
         {docs.length === 0 && uploadQueue.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 border border-dashed border-[#d4d4d4] rounded-xl bg-[#fafafa]">
+          <div className="m-6 flex flex-col items-center justify-center py-20 border border-dashed border-[#d4d4d4] rounded-xl bg-[#fafafa]">
             <div className="h-12 w-12 rounded-full bg-[#f0f0f0] flex items-center justify-center mb-3">
               <FileText size={22} className="text-[#a3a3a3]" />
             </div>
@@ -376,23 +443,88 @@ export default function KnowledgePage() {
             </Button>
           </div>
         ) : (
-          <div className="rounded-xl border border-black/[0.04] overflow-hidden">
-            {/* Column headers. Grid widths match the row grid below. */}
-            <div className="grid grid-cols-[1fr_90px_110px_130px_160px_32px] items-center gap-3 px-4 py-2.5 bg-[#fafafa] text-[11px] font-medium tracking-wide text-[#737373] uppercase">
-              <div>Name</div>
-              <div>Type</div>
-              <div>Size</div>
-              <div>Uploaded</div>
-              <div>Status</div>
-              <div />
-            </div>
+          // min-w-[820px] ensures the docs table keeps enough width for
+          // all columns to be readable (name minmax(200px, 1fr) + 5 fixed
+          // cols + gaps + padding ≈ 820px). The Panel body has
+          // overflow-auto, so when the user shrinks the panel below this
+          // threshold the table scrolls horizontally instead of
+          // truncating filenames into uselessness.
+          <div className="min-w-[820px]">
+            {/* Bulk actions bar — appears above the header when anything
+                is selected. Replaces the static header row visually
+                without jumping the layout. */}
+            {selected.size > 0 && (
+              <div className="grid grid-cols-[minmax(200px,1fr)_90px_110px_130px_160px_32px] items-center gap-3 px-6 h-[46px] bg-[#f5f5f5] border-b border-black/[0.04]">
+                <div className="flex items-center gap-3">
+                  <Checkbox
+                    checked={docs.length > 0 && selected.size === docs.length}
+                    indeterminate={selected.size > 0 && selected.size < docs.length}
+                    onCheckedChange={() => {
+                      if (selected.size === docs.length) setSelected(new Set())
+                      else setSelected(new Set(docs.map(d => d.id)))
+                    }}
+                  />
+                  <span className="text-xs font-medium text-[#2e2e2e]">
+                    {selected.size} selected
+                  </span>
+                </div>
+                <div className="col-span-5 flex items-center justify-end gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs text-[#737373]"
+                    onClick={() => setSelected(new Set())}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => setDeleteTarget({ kind: 'bulk', ids: Array.from(selected) })}
+                  >
+                    <Trash size={12} className="mr-1" />
+                    Delete {selected.size}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Column headers. Grid widths match the row grid below.
+                Include a leading select-all checkbox column to match
+                the per-row select column. Header is hidden while the
+                bulk-actions bar is shown (it replaces the header).
+                Fixed height (46px) matches the bulk-actions bar so the
+                layout doesn't jump when selection state changes. */}
+            {selected.size === 0 && (
+              <div className="grid grid-cols-[minmax(200px,1fr)_90px_110px_130px_160px_32px] items-center gap-3 px-6 h-[46px] bg-[#fafafa] text-[11px] font-medium tracking-wide text-[#737373] uppercase">
+                <div className="flex items-center gap-3">
+                  <span className="flex size-[18px] items-center justify-center shrink-0">
+                    <Checkbox
+                      checked={docs.length > 0 && selected.size === docs.length}
+                      indeterminate={selected.size > 0 && selected.size < docs.length}
+                      onCheckedChange={() => {
+                        if (selected.size === docs.length) setSelected(new Set())
+                        else setSelected(new Set(docs.map(d => d.id)))
+                      }}
+                    />
+                  </span>
+                  <span>Name</span>
+                </div>
+                <div>Type</div>
+                <div>Size</div>
+                <div>Uploaded</div>
+                <div>Status</div>
+                <div />
+              </div>
+            )}
 
             {/* In-flight upload rows first — appear at top so user sees
                 their action reflected immediately. */}
             {uploadQueue.map(task => (
               <div
                 key={task.clientId}
-                className="grid grid-cols-[1fr_90px_110px_130px_160px_32px] items-center gap-3 px-4 py-3 border-t border-black/[0.04] bg-[#fafafa]/40"
+                className="grid grid-cols-[minmax(200px,1fr)_90px_110px_130px_160px_32px] items-center gap-3 px-6 py-3 border-t border-black/[0.04] bg-[#fafafa]/40"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <FileText size={18} className="text-[#737373] shrink-0" />
@@ -442,62 +574,178 @@ export default function KnowledgePage() {
               </div>
             ))}
 
-            {/* Real documents */}
-            {docs.map(doc => (
-              <div
-                key={doc.id}
-                className="grid grid-cols-[1fr_90px_110px_130px_160px_32px] items-center gap-3 px-4 py-3 border-t border-black/[0.04] hover:bg-[#fafafa] group transition-colors"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <FileText size={18} className="text-[#737373] shrink-0" />
-                  <span className="text-sm font-medium text-[#2e2e2e] truncate">
-                    {capitalizeFirst(doc.name)}
-                  </span>
+            {/* Real documents.
+                The leading cell shows either a file icon OR a checkbox
+                depending on state:
+                  - default:         file icon
+                  - hovered:         checkbox fades in over the file icon
+                  - selected:        checkbox only (no file icon)
+                The trash action fades in on hover and opens a confirm modal. */}
+            {docs.map(doc => {
+              const isSelected = selected.has(doc.id)
+              const isViewing = viewerDocId === doc.id
+              return (
+                <div
+                  key={doc.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setViewerDocId(doc.id)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') setViewerDocId(doc.id) }}
+                  className={`cursor-pointer grid grid-cols-[minmax(200px,1fr)_90px_110px_130px_160px_32px] items-center gap-3 px-6 py-3 border-t border-black/[0.04] group transition-colors ${
+                    isViewing ? 'bg-blue-50/60' : isSelected ? 'bg-[#fafafa]' : 'hover:bg-[#fafafa]'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    {/* Icon/checkbox swap slot. Container is a fixed-size
+                        relative positioning context; the two children are
+                        absolutely positioned so they perfectly overlap
+                        regardless of their own intrinsic dimensions. */}
+                    <div className="relative h-[18px] w-[18px] shrink-0">
+                      {/* File icon — default state */}
+                      <FileText
+                        size={18}
+                        className={`absolute inset-0 text-[#737373] pointer-events-none transition-opacity ${
+                          isSelected ? 'opacity-0' : 'opacity-100 group-hover:opacity-0'
+                        }`}
+                      />
+                      {/* Checkbox — fades in on hover OR when selected.
+                          Use pointer-events-none + auto-on-visible so the
+                          hidden state doesn't intercept clicks. */}
+                      <div
+                        className={`absolute inset-0 flex items-center justify-center transition-opacity ${
+                          isSelected
+                            ? 'opacity-100 pointer-events-auto'
+                            : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto'
+                        }`}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => toggleDocSelected(doc.id)}
+                          aria-label={`Select ${doc.name}`}
+                        />
+                      </div>
+                    </div>
+                    <span className="text-sm font-medium text-[#2e2e2e] truncate">
+                      {capitalizeFirst(doc.name)}
+                    </span>
+                  </div>
+                  <div className="text-xs text-[#737373]">
+                    {capitalizeFirst(doc.file_type || 'text')}
+                  </div>
+                  <div className="text-xs text-[#737373]" title={`${doc.char_count.toLocaleString()} chars`}>
+                    {doc.file_size != null
+                      ? formatBytes(doc.file_size)
+                      : `${(doc.char_count / 1000).toFixed(1)}k chars`}
+                  </div>
+                  <div className="text-xs text-[#737373]" title={new Date(doc.created_at).toLocaleString()}>
+                    {formatRelative(doc.created_at)}
+                  </div>
+                  <div>
+                    <Badge variant="secondary" className={`text-xs ${statusStyles[doc.status] || ''}`}>
+                      {capitalizeFirst(doc.status)}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setDeleteTarget({ kind: 'single', id: doc.id, name: doc.name })
+                      }}
+                      className="p-1 rounded text-[#a3a3a3] hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                      aria-label="Delete document"
+                    >
+                      <Trash size={14} />
+                    </button>
+                  </div>
                 </div>
-                <div className="text-xs text-[#737373]">
-                  {capitalizeFirst(doc.file_type || 'text')}
-                </div>
-                <div className="text-xs text-[#737373]" title={`${doc.char_count.toLocaleString()} chars`}>
-                  {doc.file_size != null
-                    ? formatBytes(doc.file_size)
-                    : `${(doc.char_count / 1000).toFixed(1)}k chars`}
-                </div>
-                <div className="text-xs text-[#737373]" title={new Date(doc.created_at).toLocaleString()}>
-                  {formatRelative(doc.created_at)}
-                </div>
-                <div>
-                  <Badge variant="secondary" className={`text-xs ${statusStyles[doc.status] || ''}`}>
-                    {capitalizeFirst(doc.status)}
-                  </Badge>
-                </div>
-                <div className="flex justify-end">
-                  <button
-                    onClick={() => handleDeleteDoc(doc.id)}
-                    className="p-1 rounded text-[#a3a3a3] hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
-                    aria-label="Delete document"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
 
-        <p className="text-xs text-[#a3a3a3] mt-4 text-center">Supports .txt, .md, .csv, .pdf, .docx · select multiple to upload in parallel</p>
+        <p className="text-xs text-[#a3a3a3] mt-4 mb-6 px-6 text-center">Supports .txt, .md, .csv, .pdf, .docx · select multiple to upload in parallel</p>
+
+        {/* Delete confirmation modal — covers both single and bulk.
+            Rendered here (inside the detail view) so the state is co-located
+            with the docs list that triggers it. */}
+        <Dialog
+          open={deleteTarget !== null}
+          onOpenChange={(open) => { if (!open && !deleting) setDeleteTarget(null) }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                {deleteTarget?.kind === 'bulk'
+                  ? `Delete ${deleteTarget.ids.length} document${deleteTarget.ids.length === 1 ? '' : 's'}?`
+                  : 'Delete this document?'}
+              </DialogTitle>
+              <DialogDescription>
+                {deleteTarget?.kind === 'single'
+                  ? <>This will permanently remove <span className="font-medium text-[#2e2e2e]">{deleteTarget.name}</span> and all of its embeddings from the knowledge base. This cannot be undone.</>
+                  : 'This will permanently remove the selected documents and their embeddings from the knowledge base. This cannot be undone.'}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="secondary" size="sm" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+                Cancel
+              </Button>
+              <Button variant="destructive" size="sm" onClick={executeDelete} disabled={deleting}>
+                <Trash size={14} className="mr-1.5" />
+                {deleting ? 'Deleting…' : (deleteTarget?.kind === 'bulk' ? `Delete ${deleteTarget.ids.length}` : 'Delete')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        </Panel>
+
+        {/* File viewer — a SIBLING Panel in the same flex row, exactly
+            like the inbox's Details panel. Resizable from its right
+            edge via the shared Panel primitive; width persists in
+            localStorage under the storageKey. */}
+        {viewerDocId && (
+          <Panel
+            resizable
+            resizeFrom="left"
+            defaultWidth={520}
+            minWidth={360}
+            maxWidth={960}
+            storageKey="kb:viewer-width"
+          >
+            <KbFileViewer
+              kbId={selectedKb}
+              docId={viewerDocId}
+              onClose={() => setViewerDocId(null)}
+              onSaved={() => { fetchKbs() }}
+            />
+          </Panel>
+        )}
       </div>
     )
   }
 
   // ---- Folder grid view ----
+  // Own its own page chrome now that the layout no longer wraps /knowledge
+  // in a white card + header. Matches the inbox/agents pattern:
+  // grey shell + a single Panel owning the page content with its own
+  // 48px header.
   return (
-    <div className="p-6">
-      <HeaderActions>
-        <Button size="sm" className="rounded-full" onClick={() => setCreateOpen(true)}>
-          <Plus size={14} />
-          New Knowledge Base
-        </Button>
-      </HeaderActions>
+    <div className="flex h-full bg-[#f5f5f5] overflow-hidden gap-3 p-3">
+      <Panel
+        className="flex-1"
+        bodyClassName="overflow-auto p-6"
+        header={
+          <>
+            <span className="text-sm font-semibold text-[#2e2e2e]">Knowledge</span>
+            <div className="ml-auto flex items-center gap-2">
+              <Button size="sm" className="rounded-full" onClick={() => setCreateOpen(true)}>
+                <Plus size={14} />
+                New Knowledge Base
+              </Button>
+            </div>
+          </>
+        }
+      >
       <div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogContent>
@@ -637,6 +885,80 @@ export default function KnowledgePage() {
           ))}
         </div>
       )}
+
+      {/* Recent files — flattens docs across every KB in the workspace
+          and shows the 10 most recently uploaded. Click a row to jump to
+          the owning KB. Uses the same table style as the KB detail view. */}
+      {!loading && kbs.length > 0 && (() => {
+        const recentFiles = kbs
+          .flatMap(kb => (kb.kb_documents || []).map(doc => ({ doc, kb })))
+          .sort((a, b) => new Date(b.doc.created_at).getTime() - new Date(a.doc.created_at).getTime())
+          .slice(0, 10)
+
+        if (recentFiles.length === 0) return null
+
+        return (
+          <div className="mt-8">
+            <h2 className="text-sm font-semibold text-[#2e2e2e] mb-3">Recent files</h2>
+            <div className="rounded-xl border border-black/[0.04] overflow-hidden">
+              {/* Column headers. Width template differs slightly from the
+                  KB detail table: no select column, plus a "Knowledge base"
+                  column to show where each file lives. */}
+              <div className="grid grid-cols-[1fr_140px_90px_110px_130px_140px] items-center gap-3 px-4 h-[46px] bg-[#fafafa] text-[11px] font-medium tracking-wide text-[#737373] uppercase">
+                <div>Name</div>
+                <div>Knowledge base</div>
+                <div>Type</div>
+                <div>Size</div>
+                <div>Uploaded</div>
+                <div>Status</div>
+              </div>
+
+              {recentFiles.map(({ doc, kb }) => (
+                <button
+                  key={doc.id}
+                  onClick={() => {
+                    // Navigate into the KB AND preselect the doc so the
+                    // viewer opens immediately. The detail view reads both
+                    // pieces of state — setSelectedKb would otherwise reset
+                    // viewerDocId via the useEffect that watches selectedKb,
+                    // so set selectedKb first and defer viewerDocId one tick.
+                    setSelectedKb(kb.id)
+                    queueMicrotask(() => setViewerDocId(doc.id))
+                  }}
+                  className="w-full text-left grid grid-cols-[1fr_140px_90px_110px_130px_140px] items-center gap-3 px-4 py-3 border-t border-black/[0.04] hover:bg-[#fafafa] transition-colors"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <FileText size={18} className="text-[#737373] shrink-0" />
+                    <span className="text-sm font-medium text-[#2e2e2e] truncate">
+                      {capitalizeFirst(doc.name)}
+                    </span>
+                  </div>
+                  <div className="text-xs text-[#525252] truncate">
+                    {kb.name}
+                  </div>
+                  <div className="text-xs text-[#737373]">
+                    {capitalizeFirst(doc.file_type || 'text')}
+                  </div>
+                  <div className="text-xs text-[#737373]" title={`${doc.char_count.toLocaleString()} chars`}>
+                    {doc.file_size != null
+                      ? formatBytes(doc.file_size)
+                      : `${(doc.char_count / 1000).toFixed(1)}k chars`}
+                  </div>
+                  <div className="text-xs text-[#737373]" title={new Date(doc.created_at).toLocaleString()}>
+                    {formatRelative(doc.created_at)}
+                  </div>
+                  <div>
+                    <Badge variant="secondary" className={`text-xs ${statusStyles[doc.status] || ''}`}>
+                      {capitalizeFirst(doc.status)}
+                    </Badge>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
+      </Panel>
     </div>
   )
 }

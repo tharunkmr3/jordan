@@ -107,7 +107,7 @@ export function FolderCard({ id, name, docCount, color, lastUpdated, onClick, co
       onClick={onClick}
       onContextMenu={handleContextMenu}
       className={cn(
-        "group relative w-full text-left rounded-2xl pt-5 px-3 pb-3 transition-all duration-200 hover:bg-[#f5f5f5] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "group relative w-full text-left rounded-2xl border border-black/[0.06] bg-white pt-5 px-3 pb-3 transition-all duration-200 hover:bg-[#fafafa] hover:border-black/[0.12] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         className
       )}
     >

@@ -438,8 +438,13 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main area */}
-      {pathname === "/inbox" || pathname.startsWith("/agents/") ? (
-        /* Inbox owns its own layout — no outer header/card */
+      {pathname === "/inbox"
+        || pathname.startsWith("/agents/")
+        || pathname === "/knowledge"
+        || pathname.startsWith("/knowledge/") ? (
+        /* These routes own their own layout — they render their own
+           panels on the grey shell and don't want the outer
+           card + header wrapper the default layout provides. */
         <div className="flex flex-1 flex-col overflow-hidden bg-[#f5f5f5]">
           <main className="flex-1 overflow-hidden">{children}</main>
         </div>

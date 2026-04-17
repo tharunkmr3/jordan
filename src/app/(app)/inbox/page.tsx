@@ -1062,7 +1062,7 @@ function InboxInner() {
       {/* RIGHT: Details — hidden for internal agents (no customer to show) */}
       {/* ============================================================= */}
       {detail?.contact && !isInternalAgent && (
-        <Panel resizable defaultWidth={320} minWidth={260} maxWidth={480} storageKey="inbox:details">
+        <Panel resizable resizeFrom="left" defaultWidth={320} minWidth={260} maxWidth={480} storageKey="inbox:details">
           {/* Tabs */}
           <div className="flex h-12 bg-white border-b border-black/[0.04] flex-shrink-0">
             {(['details', 'copilot'] as const).map((t) => (

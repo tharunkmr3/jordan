@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { generateEmbedding, chunkText } from '@/lib/ai/embeddings'
+import { extractTextFromFile } from '@/lib/ai/extract-text'
 
 export async function POST(
   request: Request,
@@ -52,8 +53,27 @@ export async function POST(
 
   const admin = createAdminClient()
 
-  // Extract text content
-  const text = await file.text()
+  // Extract text content. Branches by format: PDFs go through pdf-parse,
+  // DOCX through mammoth, everything else is read as plain text.
+  // Sanitizes out NUL bytes + control chars so Postgres (TEXT + JSONB)
+  // doesn't reject the insert with "unsupported Unicode escape sequence".
+  let extracted
+  try {
+    extracted = await extractTextFromFile(file)
+  } catch (err) {
+    return NextResponse.json(
+      { error: `Could not extract text from file: ${err instanceof Error ? err.message : 'unknown error'}` },
+      { status: 400 }
+    )
+  }
+  const text = extracted.text
+
+  if (!extracted.hasContent) {
+    return NextResponse.json(
+      { error: 'File appears to be empty or contains no extractable text.' },
+      { status: 400 }
+    )
+  }
 
   // Create document record with processing status.
   // file.size is the byte count of the original upload — we record it so

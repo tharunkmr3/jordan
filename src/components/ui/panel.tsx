@@ -25,11 +25,18 @@ interface PanelProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "childre
    */
   bodyClassName?: string
   /**
-   * If true, a drag handle appears on the right edge that lets the user
+   * If true, a drag handle appears on the panel edge that lets the user
    * resize the panel's width by click-dragging. Ignored if the panel
    * has `flex-1` (i.e. takes remaining space).
    */
   resizable?: boolean
+  /**
+   * Which edge the drag handle sits on. Use "left" when the panel is
+   * to the RIGHT of its flex siblings (e.g. an inbox details panel or
+   * KB file viewer) so the handle is the visible divider. Defaults to
+   * "right" for left-side panels (conversation list, etc.).
+   */
+  resizeFrom?: "left" | "right"
   /** Initial width in px when `resizable` is true. */
   defaultWidth?: number
   /** Minimum width in px. */
@@ -60,6 +67,7 @@ export function Panel({
   headerClassName,
   bodyClassName,
   resizable = false,
+  resizeFrom = "right",
   defaultWidth = 320,
   minWidth = 240,
   maxWidth = 640,
@@ -99,7 +107,11 @@ export function Panel({
   useEffect(() => {
     if (!isDragging) return
     const onMove = (e: MouseEvent) => {
-      const delta = e.clientX - startXRef.current
+      const rawDelta = e.clientX - startXRef.current
+      // Left-anchored handle: dragging RIGHT shrinks the panel (panel is
+      // to the right of its siblings, so its left edge moving right makes
+      // it narrower). Right-anchored handle: dragging RIGHT grows it.
+      const delta = resizeFrom === "left" ? -rawDelta : rawDelta
       const next = Math.max(
         minWidth,
         Math.min(maxWidth, startWidthRef.current + delta),
@@ -119,7 +131,7 @@ export function Panel({
       window.removeEventListener("mousemove", onMove)
       window.removeEventListener("mouseup", onUp)
     }
-  }, [isDragging, minWidth, maxWidth])
+  }, [isDragging, minWidth, maxWidth, resizeFrom])
 
   // Persist width on drag end
   useEffect(() => {
@@ -163,9 +175,16 @@ export function Panel({
           type="button"
           aria-label="Resize panel"
           onMouseDown={onHandleMouseDown}
+          // Handle extends slightly outside the panel edge so users can
+          // grab the visible gap between sibling panels (not just the
+          // 1px on the panel itself). z-10 puts it above neighbouring
+          // panel chrome so clicks land on the handle.
           className={cn(
-            "group absolute top-0 right-0 bottom-0 w-1.5 cursor-col-resize",
-            "before:absolute before:top-1/2 before:right-0 before:h-10 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-transparent before:transition-colors",
+            "group absolute top-0 bottom-0 z-10 w-3 cursor-col-resize",
+            resizeFrom === "left"
+              ? "-left-1.5 before:left-1/2 before:-translate-x-1/2"
+              : "-right-1.5 before:right-1/2 before:translate-x-1/2",
+            "before:absolute before:top-1/2 before:h-10 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-transparent before:transition-colors",
             "hover:before:bg-[#F4511E]/40",
             isDragging && "before:!bg-[#F4511E]",
           )}

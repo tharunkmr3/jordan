@@ -139,6 +139,12 @@ export interface KbDocument {
   status: KbDocumentStatus;
   char_count: number;
   file_size: number | null;
+  // Native-format preview cache. Populated on first open of the file
+  // viewer and invalidated when content_text is edited.
+  preview_html: string | null;
+  preview_pdf_path: string | null;
+  preview_generated_at: string | null;
+  preview_error: string | null;
   created_at: string;
 }
 

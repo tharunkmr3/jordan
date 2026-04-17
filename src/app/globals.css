@@ -160,4 +160,16 @@
   html {
     @apply font-sans;
   }
+
+  /* KB file viewer — CodeMirror renders its own inner `.cm-content`
+     element which ignores wrapper padding, so we target that element
+     directly for breathing room. Also drops the default gutter line
+     since we hide line numbers anyway. */
+  .cm-kb-viewer .cm-content {
+    padding: 20px 24px !important;
+  }
+  .cm-kb-viewer .cm-gutters {
+    background: transparent;
+    border-right: none;
+  }
 }
