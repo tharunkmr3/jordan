@@ -271,11 +271,22 @@ export async function processChatMessage(
     response = formatPipelineError(error, agent.fallback_message)
   }
 
-  // Merge web-search sources captured during the agentic loop with the
-  // KB sources we already have. KB chips come first (usually more
-  // authoritative for the user's data), web chips after.
+  // Collect citation sources from every surface that produced content:
+  //  - kbSources: chunks from the automatic first-turn retrieval
+  //  - kbAgenticBundle: chunks the agent pulled via search_kb / fetch_document
+  //  - builtinsBundle: URLs visited via web_search / deep_research
+  // KB sources come first (usually the user's own data, highest
+  // authority); web sources after. Dedupe across kbSources and the
+  // agentic set so a chunk retrieved both automatically and by tool
+  // call only produces one chip.
+  const agenticKbSources = kbAgenticBundle?.getCapturedSources() ?? []
   const webSources = builtinsBundle?.getCapturedSources() ?? []
-  const messageSources = [...kbSources, ...webSources]
+  const kbSourcesByDoc = new Set(kbSources.map((s) => s.document_id))
+  const mergedKbSources = [
+    ...kbSources,
+    ...agenticKbSources.filter((s) => !('document_id' in s) || !kbSourcesByDoc.has((s as { document_id: string }).document_id)),
+  ]
+  const messageSources = [...mergedKbSources, ...webSources]
   // Guard against models that return empty strings — empty content
   // would render as a blank bubble with no explanation. Surface a
   // visible notice instead.
@@ -497,11 +508,19 @@ export async function* streamChatMessage(
       fullResponse = '⚠️ Model returned an empty response. Check server logs.'
     }
 
-    // Merge web-captured sources with KB sources for the assistant message.
-    // Built-in tools (web_search / deep_research) capture URLs during
-    // execution; we stitch them after KB chunks so authoritative user
-    // data comes first in the chip strip.
-    const messageSources = [...kbSources, ...(builtinsBundle?.getCapturedSources() ?? [])]
+    // Merge citation sources from every surface that produced content
+    // during this turn: first-turn KB retrieval, agentic KB tool calls
+    // (search_kb / fetch_document), and web search. Dedup KB chunks by
+    // document_id so a file retrieved both automatically and by tool
+    // collapses to a single chip.
+    const agenticKbSources = kbAgenticBundle?.getCapturedSources() ?? []
+    const webSources = builtinsBundle?.getCapturedSources() ?? []
+    const kbSourcesByDoc = new Set(kbSources.map((s) => s.document_id))
+    const mergedKbSources = [
+      ...kbSources,
+      ...agenticKbSources.filter((s) => !('document_id' in s) || !kbSourcesByDoc.has((s as { document_id: string }).document_id)),
+    ]
+    const messageSources = [...mergedKbSources, ...webSources]
 
     // Structured synthesis: after tokens finish streaming, convert the
     // freeform prose into a typed Block[]. Yield a 'structured' event so
@@ -777,19 +796,30 @@ async function buildPrompt(
   }
 
   if (kbContext) {
-    systemPrompt += `\n\n--- Relevant Knowledge Base Context ---\n${kbContext}\n--- End Context ---\n\nUse the above context to answer the user's question when relevant. If the context doesn't help, answer from your general knowledge.`
+    systemPrompt += `\n\n--- Reference Material ---\n${kbContext}\n--- End Reference ---\n\nAnswer the user's question using the material above when relevant. If it doesn't help, use your general knowledge.`
   }
 
-  // Ground-truth inventory of the agent's KB. Without this the model
+  // Ground-truth inventory of the agent's files. Without this the model
   // treats "retrieved chunks" as equivalent to "everything I have access
-  // to" and will tell the user "I only see these four files" when the KB
-  // actually holds eight. With the list present, the agent can answer
+  // to" and will tell the user "I only see these four files" when the
+  // KB actually holds eight. With the list present, the agent can answer
   // "do you have my resume?" truthfully, and can reason about whether a
   // question is answerable from retrieved content vs. a file whose
   // chunks simply didn't surface for this query.
   if (kbDocumentNames.length > 0) {
     const fileList = kbDocumentNames.map((n) => `- ${n}`).join('\n')
-    systemPrompt += `\n\n--- Knowledge Base Inventory ---\nYou have ${kbDocumentNames.length} file${kbDocumentNames.length === 1 ? '' : 's'} available in your knowledge base:\n${fileList}\n\nThe passages above (if any) are the most relevant for the current query only — they do not represent your complete KB access. If the user asks about a specific file by name, you can confirm its presence from this inventory even if its content wasn't retrieved. Don't claim a file is missing unless it's not in the list above.`
+    systemPrompt += `\n\n--- Available Files ---\n${fileList}\n\nThe reference material above (if any) contains the most relevant passages for the current query only — it does not represent every file you have access to. If the user asks about a specific file by name, you can confirm it's available from this list even if its content wasn't included in the reference material. Don't claim a file is missing unless it's not in the list.`
+  }
+
+  // Persona / implementation-leak guard. The reference-material blocks
+  // above tell the model WHAT it has; this rule tells it HOW to TALK
+  // about that material when replying. Without the rule, models mirror
+  // whatever label we gave the block ("Knowledge Base", "reference
+  // material", "your files") and leak it into replies ("based on your
+  // knowledge base, your phone number is…"). The rule is short and
+  // imperative so it survives long-prompt attention drift.
+  if (kbContext || kbDocumentNames.length > 0) {
+    systemPrompt += `\n\n--- Voice ---\nAnswer naturally, as if the information came from your own memory. Don't mention "knowledge base", "reference material", "retrieved passages", "your files", "tools", "documents", "the system", or any other implementation-level vocabulary in your reply. Just answer the question.`
   }
 
   // Channel-aware output rules. Three tiers depending on what the

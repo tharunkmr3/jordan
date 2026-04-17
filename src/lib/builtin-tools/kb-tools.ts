@@ -27,6 +27,7 @@
 // ============================================================================
 
 import type { LlmTool } from '@/lib/composio/tools'
+import type { MessageSource } from '@/types/database'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { queryKnowledgeBase } from '@/lib/ai/knowledge-base'
 
@@ -95,6 +96,22 @@ export const KB_FETCH_TOOL_DEF: LlmTool = {
 type Supabase = ReturnType<typeof createAdminClient>
 
 /**
+ * A KB source captured during a single agentic turn. Used internally to
+ * build the bundle's getCapturedSources() output. Chunk id is the stable
+ * dedupe key when we have it (search_kb hits); for fetch_document we
+ * synthesize one from the document id so the same file retrieved twice
+ * still collapses to a single chip.
+ */
+type CapturedKbHit = {
+  chunkId: string
+  documentId: string
+  documentName: string
+  kbId: string
+  snippet: string
+  similarity: number
+}
+
+/**
  * search_kb executor.
  *
  * Reuses the pipeline's canonical retrieval path (queryKnowledgeBase →
@@ -103,10 +120,14 @@ type Supabase = ReturnType<typeof createAdminClient>
  * supplied, we over-fetch and post-filter by document name — pushing the
  * filter into the RPC would require another migration and the result set
  * is always small enough to filter in-memory.
+ *
+ * Captured hits flow through onCapture so the bundle can expose them to
+ * the pipeline after the agentic loop completes.
  */
-export async function runKbSearch(
+async function runKbSearch(
   agentId: string,
   args: { query: string; filename_filter?: string; max_results?: number },
+  onCapture: (hits: CapturedKbHit[]) => void,
 ): Promise<string> {
   const query = args.query?.trim()
   if (!query) return JSON.stringify({ error: 'query is required' })
@@ -131,10 +152,20 @@ export async function runKbSearch(
         filename_filter: filter || null,
         results: [],
         note: filter
-          ? `No passages found. If you believe the file "${filter}" exists in the KB, call fetch_document instead to read the whole file.`
-          : 'No relevant passages found in the knowledge base for this query.',
+          ? `No passages found. If you believe the file "${filter}" exists, call fetch_document instead to read the whole file.`
+          : 'No relevant passages found for this query.',
       })
     }
+
+    // Capture for the citation-chip pipeline.
+    onCapture(top.map((h) => ({
+      chunkId: h.id,
+      documentId: h.documentId,
+      documentName: h.documentName,
+      kbId: h.kbId,
+      snippet: h.content.length > 220 ? h.content.slice(0, 220).trim() + '…' : h.content,
+      similarity: h.similarity,
+    })))
 
     return JSON.stringify({
       query,
@@ -157,11 +188,17 @@ export async function runKbSearch(
  * to the agent's KBs. Reassembles the full text by concatenating chunks
  * in index order. Truncates to max_chars to protect the model's context
  * window on very large files.
+ *
+ * Captures a single synthetic source hit for the document so the
+ * citation chip pipeline can attribute the answer to this file. The
+ * snippet is the first ~220 chars of the returned content — the same
+ * shape the regular KB-chunk path emits.
  */
-export async function runKbFetch(
+async function runKbFetch(
   supabase: Supabase,
   agentId: string,
   args: { filename: string; max_chars?: number },
+  onCapture: (hits: CapturedKbHit[]) => void,
 ): Promise<string> {
   const filename = args.filename?.trim()
   if (!filename) return JSON.stringify({ error: 'filename is required' })
@@ -171,7 +208,7 @@ export async function runKbFetch(
     // 1. Find the document id(s) whose name matches.
     const { data: docs, error: docErr } = await supabase
       .from('kb_documents')
-      .select('id, name, knowledge_bases!inner(agent_id)')
+      .select('id, name, kb_id, knowledge_bases!inner(agent_id)')
       .eq('knowledge_bases.agent_id', agentId)
       .eq('status', 'ready')
       .ilike('name', `%${filename}%`)
@@ -184,7 +221,7 @@ export async function runKbFetch(
       return JSON.stringify({
         error: 'document_not_found',
         filename,
-        note: "No document with a matching filename. Use search_kb to discover available content, or check the KB Inventory in your system context for the list of files available.",
+        note: "No document with a matching filename. Check the file inventory in your context for the list of files available.",
       })
     }
     if (docs.length > 1) {
@@ -197,12 +234,12 @@ export async function runKbFetch(
       })
     }
 
-    const doc = docs[0] as { id: string; name: string }
+    const doc = docs[0] as { id: string; name: string; kb_id: string }
 
     // 2. Concatenate chunks for the matching document.
     const { data: chunks, error: chunksErr } = await supabase
       .from('kb_chunks')
-      .select('content, chunk_index')
+      .select('id, content, chunk_index')
       .eq('document_id', doc.id)
       .order('chunk_index', { ascending: true })
 
@@ -213,6 +250,22 @@ export async function runKbFetch(
     const full = (chunks ?? []).map((c: { content: string }) => c.content).join('\n\n')
     const truncated = full.length > maxChars
     const content = truncated ? full.slice(0, maxChars) + `\n\n…[truncated; ${full.length - maxChars} chars omitted]` : full
+
+    // Capture the document as a source so the chip pipeline picks it up.
+    // Use the first chunk's id as the chunkId if present so dedupe across
+    // multiple fetch_document calls against the same file works cleanly.
+    const firstChunkId = (chunks?.[0] as { id?: string } | undefined)?.id ?? `doc-${doc.id}`
+    onCapture([{
+      chunkId: firstChunkId,
+      documentId: doc.id,
+      documentName: doc.name,
+      kbId: doc.kb_id,
+      snippet: full.length > 220 ? full.slice(0, 220).trim() + '…' : full,
+      // fetch_document doesn't have a relevance score — it's a deterministic
+      // lookup by filename. Use 1.0 so the downstream noise-filter never
+      // drops the chip for an intentional fetch.
+      similarity: 1.0,
+    }])
 
     return JSON.stringify({
       filename: doc.name,
@@ -233,6 +286,19 @@ export async function runKbFetch(
 export interface KbAgenticTools {
   tools: LlmTool[]
   execute: (name: string, args: Record<string, unknown>) => Promise<string>
+  /**
+   * KB chunks surfaced through tool calls during this turn. The pipeline
+   * reads this after the agentic loop finishes and merges into the
+   * assistant message's metadata.sources so tool-answered queries still
+   * get the clickable citation chip — without this, an agent that
+   * answers via `fetch_document` or `search_kb` produces a correct
+   * reply with zero visible source attribution.
+   *
+   * De-duplicated by chunk id (when available) or document id + kb id
+   * so multiple agentic calls against the same document only produce
+   * one chip per document.
+   */
+  getCapturedSources: () => MessageSource[]
 }
 
 /**
@@ -261,16 +327,59 @@ export async function buildKbAgenticTools(
   }
   if (!count || count === 0) return null
 
+  // Per-turn capture map. Keyed by chunkId so duplicate hits across
+  // multiple tool calls collapse to one chip. We keep the highest-
+  // similarity hit per key, matching the KB retrieval filter semantics.
+  const captured = new Map<string, CapturedKbHit>()
+  const onCapture = (hits: CapturedKbHit[]) => {
+    for (const h of hits) {
+      const prev = captured.get(h.chunkId)
+      if (!prev || h.similarity > prev.similarity) {
+        captured.set(h.chunkId, h)
+      }
+    }
+  }
+
   return {
     tools: [KB_SEARCH_TOOL_DEF, KB_FETCH_TOOL_DEF],
     execute: async (name, args) => {
       if (name === 'search_kb') {
-        return runKbSearch(agentId, args as { query: string; filename_filter?: string; max_results?: number })
+        return runKbSearch(
+          agentId,
+          args as { query: string; filename_filter?: string; max_results?: number },
+          onCapture,
+        )
       }
       if (name === 'fetch_document') {
-        return runKbFetch(supabase, agentId, args as { filename: string; max_chars?: number })
+        return runKbFetch(
+          supabase,
+          agentId,
+          args as { filename: string; max_chars?: number },
+          onCapture,
+        )
       }
       return JSON.stringify({ error: `Unknown KB tool: ${name}` })
+    },
+    getCapturedSources: () => {
+      // De-dupe by documentId — if the model ran search_kb and then
+      // fetch_document on the same file, we still only want one chip.
+      // Within a document, keep the highest-similarity hit (which is
+      // also the one with the richest snippet after the filter).
+      const byDoc = new Map<string, CapturedKbHit>()
+      for (const h of captured.values()) {
+        const prev = byDoc.get(h.documentId)
+        if (!prev || h.similarity > prev.similarity) {
+          byDoc.set(h.documentId, h)
+        }
+      }
+      return [...byDoc.values()].map((h) => ({
+        chunk_id: h.chunkId,
+        document_id: h.documentId,
+        document_name: h.documentName,
+        kb_id: h.kbId,
+        snippet: h.snippet,
+        similarity: h.similarity,
+      }))
     },
   }
 }
