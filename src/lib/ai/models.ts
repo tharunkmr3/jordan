@@ -188,6 +188,8 @@ export async function generateWithTools(
   switch (config.provider) {
     case 'anthropic':
       return generateWithToolsAnthropic(messages, tools, config)
+    case 'gemini':
+      return generateWithToolsGemini(messages, tools, config)
     case 'openai':
     default:
       return generateWithToolsOpenAI(messages, tools, config)
@@ -195,7 +197,7 @@ export async function generateWithTools(
 }
 
 export function supportsTools(provider: string): boolean {
-  return provider === 'openai' || provider === 'anthropic'
+  return provider === 'openai' || provider === 'anthropic' || provider === 'gemini'
 }
 
 async function generateWithToolsOpenAI(
@@ -300,6 +302,129 @@ async function generateWithToolsAnthropic(
   }
 }
 
+/**
+ * Gemini tool calling.
+ *
+ * Gemini's v1beta `generateContent` has native function-calling support
+ * but a meaningfully different schema from OpenAI/Anthropic:
+ *
+ *  - Tools are declared as a single `tools: [{ functionDeclarations }]`
+ *    wrapper rather than a flat list.
+ *  - Calls arrive as `parts[i].functionCall = { name, args }` inside a
+ *    model-role message; there is NO per-call `id`, so we synthesize
+ *    one and thread it through the pipeline's `tool_call_id` field.
+ *  - Results go back as `parts[i].functionResponse = { name, response }`
+ *    inside a user-role message, and `response` MUST be an object
+ *    (not a string, not an array, not null).
+ *  - Consecutive same-role messages are rejected, so parallel tool
+ *    calls must collapse into ONE user message with multiple
+ *    functionResponse parts.
+ *  - Parameter JSON Schema uses UPPERCASE type enums ("STRING",
+ *    "OBJECT", …) and rejects `additionalProperties`, `$schema`,
+ *    `$ref`, `default`, `examples` — Composio tool schemas include
+ *    these, so we sanitize before sending.
+ */
+async function generateWithToolsGemini(
+  messages: ChatMessage[],
+  tools: LlmToolDef[],
+  config: ModelConfig
+): Promise<GenerateWithToolsResult> {
+  const apiKey = process.env.GOOGLE_AI_API_KEY
+  if (!apiKey) throw new Error('GOOGLE_AI_API_KEY is not set — add it to .env.local and restart the dev server')
+
+  const rawModel = config.model
+  const model = (!rawModel || rawModel === 'gemini-pro' || rawModel === 'gemini-2.5-flash')
+    ? 'gemini-2.5-pro'
+    : rawModel
+
+  const sysRaw = messages.find((m) => m.role === 'system')?.content
+  const systemInstruction = sysRaw
+    ? (typeof sysRaw === 'string' ? sysRaw : contentPartsToText(sysRaw))
+    : null
+
+  const contents = toGeminiMessages(messages)
+
+  const functionDeclarations = tools.map((t) => ({
+    name: t.function.name,
+    description: t.function.description ?? '',
+    parameters: sanitizeSchemaForGemini(
+      t.function.parameters ?? { type: 'object', properties: {} }
+    ),
+  }))
+
+  const body: Record<string, unknown> = {
+    contents,
+    systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
+    generationConfig: {
+      temperature: config.temperature ?? 0.7,
+      ...(config.maxTokens ? { maxOutputTokens: config.maxTokens } : {}),
+    },
+  }
+  if (functionDeclarations.length > 0) {
+    body.tools = [{ functionDeclarations }]
+    // `AUTO` is the Gemini default; set it explicitly so future upgrades
+    // can't flip the baseline behaviour silently.
+    body.toolConfig = { functionCallingConfig: { mode: 'AUTO' } }
+  }
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }
+  )
+  if (!response.ok) {
+    const errBody = await response.text().catch(() => '')
+    throw new Error(`Gemini API ${response.status}: ${errBody.slice(0, 400)}`)
+  }
+  const data = await response.json() as {
+    candidates?: Array<{
+      content?: {
+        role?: string
+        parts?: Array<{
+          text?: string
+          functionCall?: { name: string; args?: Record<string, unknown> }
+        }>
+      }
+    }>
+    error?: { message?: string }
+  }
+  if (data.error?.message) throw new Error(`Gemini API: ${data.error.message}`)
+
+  const parts = data.candidates?.[0]?.content?.parts ?? []
+  const text = parts
+    .filter((p) => typeof p.text === 'string')
+    .map((p) => p.text ?? '')
+    .join('')
+
+  const toolCalls: ToolCallChoice[] = parts
+    .filter((p) => p.functionCall?.name)
+    .map((p, i) => ({
+      // Gemini doesn't return per-call IDs; synthesize a stable one per
+      // call position so our tool-response messages can echo it back.
+      // The id is opaque to Gemini — we only use it on our side to
+      // correlate assistant.tool_calls[i] ↔ role:'tool'.tool_call_id.
+      id: `gem-${Date.now()}-${i}`,
+      type: 'function' as const,
+      function: {
+        name: p.functionCall!.name,
+        arguments: JSON.stringify(p.functionCall!.args ?? {}),
+      },
+    }))
+
+  return {
+    text: text || null,
+    toolCalls,
+    assistantMessage: {
+      role: 'assistant',
+      content: text,
+      tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
+    },
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Message format adapters
 // ---------------------------------------------------------------------------
@@ -388,6 +513,129 @@ function toAnthropicMessage(m: ChatMessage): AnthropicMsg {
     return { role: m.role as 'user' | 'assistant', content: blocks }
   }
   return { role: m.role as 'user' | 'assistant', content: m.content }
+}
+
+// ---------------------------------------------------------------------------
+// Gemini message + schema adapters
+// ---------------------------------------------------------------------------
+
+/**
+ * Every `part` in a Gemini message is one of these shapes. We never
+ * send `inline_data` (image) parts today — image attachments get
+ * flattened to their extracted text upstream.
+ */
+type GeminiPart =
+  | { text: string }
+  | { functionCall: { name: string; args: Record<string, unknown> } }
+  | { functionResponse: { name: string; response: Record<string, unknown> } }
+
+interface GeminiMessage {
+  role: 'user' | 'model'
+  parts: GeminiPart[]
+}
+
+/**
+ * Translate the pipeline's ChatMessage[] into the user/model-role,
+ * parts-based shape Gemini expects. Handles three twists:
+ *
+ *  1. Tool results lose their `id` in transit — Gemini keys
+ *     functionResponse by name. We rebuild the id→name map from the
+ *     assistant tool_calls we've seen and use it to label responses.
+ *  2. Gemini rejects consecutive same-role messages. A round with
+ *     parallel tool calls produces N role:'tool' messages in our
+ *     format, which would become N consecutive user messages — we
+ *     merge them into a single user message with N functionResponse
+ *     parts.
+ *  3. `functionResponse.response` must be an object. Tool results
+ *     arrive as stringified JSON; we parse back to an object, or
+ *     wrap primitives in `{ result: … }` so the shape stays valid.
+ */
+function toGeminiMessages(messages: ChatMessage[]): GeminiMessage[] {
+  const idToName = new Map<string, string>()
+  for (const m of messages) {
+    if (m.role === 'assistant' && m.tool_calls) {
+      for (const tc of m.tool_calls) idToName.set(tc.id, tc.function.name)
+    }
+  }
+
+  const out: GeminiMessage[] = []
+  for (const m of messages) {
+    if (m.role === 'system') continue  // handled via systemInstruction
+
+    if (m.role === 'tool') {
+      const toolName = idToName.get(m.tool_call_id ?? '') ?? 'unknown_tool'
+      const text = typeof m.content === 'string' ? m.content : contentPartsToText(m.content)
+      let parsed: unknown
+      try { parsed = JSON.parse(text) } catch { parsed = { content: text } }
+      // Gemini requires `response` to be an object — wrap primitives,
+      // arrays, and null so the schema stays valid.
+      const response: Record<string, unknown> =
+        parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+          ? (parsed as Record<string, unknown>)
+          : { result: parsed }
+      out.push({ role: 'user', parts: [{ functionResponse: { name: toolName, response } }] })
+      continue
+    }
+
+    if (m.role === 'assistant') {
+      const parts: GeminiPart[] = []
+      const text = typeof m.content === 'string' ? m.content : contentPartsToText(m.content)
+      if (text) parts.push({ text })
+      if (m.tool_calls) {
+        for (const tc of m.tool_calls) {
+          let args: Record<string, unknown> = {}
+          try { args = JSON.parse(tc.function.arguments) as Record<string, unknown> } catch { /* leave empty */ }
+          parts.push({ functionCall: { name: tc.function.name, args } })
+        }
+      }
+      // An assistant turn with no parts at all would be rejected — skip
+      // (rare: model returned purely whitespace and no tool calls).
+      if (parts.length === 0) continue
+      out.push({ role: 'model', parts })
+      continue
+    }
+
+    // user
+    const text = typeof m.content === 'string' ? m.content : contentPartsToText(m.content)
+    out.push({ role: 'user', parts: [{ text }] })
+  }
+
+  // Collapse consecutive same-role messages so parallel tool results
+  // end up as one user-role turn with many functionResponse parts.
+  const merged: GeminiMessage[] = []
+  for (const msg of out) {
+    const last = merged[merged.length - 1]
+    if (last && last.role === msg.role) {
+      last.parts.push(...msg.parts)
+    } else {
+      merged.push({ role: msg.role, parts: [...msg.parts] })
+    }
+  }
+  return merged
+}
+
+/**
+ * Strip JSON Schema fields Gemini rejects and normalize `type` enums
+ * to uppercase. Composio tool schemas routinely carry
+ * `additionalProperties`, `$schema`, `$ref`, `default`, `examples` and
+ * lowercase type names — Gemini 400s on all of them.
+ */
+function sanitizeSchemaForGemini(schema: unknown): unknown {
+  if (schema === null || schema === undefined) return schema
+  if (Array.isArray(schema)) return schema.map(sanitizeSchemaForGemini)
+  if (typeof schema !== 'object') return schema
+
+  const STRIP = new Set(['additionalProperties', '$schema', '$ref', 'default', 'examples', 'definitions', '$defs'])
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(schema as Record<string, unknown>)) {
+    if (STRIP.has(k)) continue
+    if (k === 'type' && typeof v === 'string') {
+      out[k] = v.toUpperCase()
+      continue
+    }
+    out[k] = sanitizeSchemaForGemini(v)
+  }
+  return out
 }
 
 async function* streamOpenAI(
@@ -523,11 +771,17 @@ async function callGemini(
   if (!apiKey) throw new Error('GOOGLE_AI_API_KEY is not set — add it to .env.local and restart the dev server')
 
   // Default to a stable, current model. `gemini-pro` (legacy v1 alias)
-  // has been retired; v1beta stable is gemini-2.5-flash / 2.5-pro.
-  // Map existing agents.model_name rows that still hold the legacy alias
-  // onto 2.5-flash so they don't 404 until a human edits the agent.
+  // has been retired; v1beta stable is gemini-2.5-pro / 2.5-flash, and
+  // Pro is our picked default (better long-spec adherence).
   const rawModel = config.model
-  const model = (!rawModel || rawModel === 'gemini-pro') ? 'gemini-2.5-flash' : rawModel
+  // Auto-upgrade the retired `gemini-pro` alias AND existing
+  // `gemini-2.5-flash` agent rows onto 2.5-pro. Pro is both our new
+  // catalog default (better format-rule adherence) and the model we
+  // test tool-calling against; a stale Flash row would otherwise
+  // silently keep using the old, less-compliant model.
+  const model = (!rawModel || rawModel === 'gemini-pro' || rawModel === 'gemini-2.5-flash')
+    ? 'gemini-2.5-pro'
+    : rawModel
 
   // Flatten ContentPart[] → plain text. Gemini's generateContent DOES
   // support image parts (inline_data with base64), but our pipeline ships
@@ -656,7 +910,14 @@ async function* streamGemini(
   if (!apiKey) throw new Error('GOOGLE_AI_API_KEY is not set — add it to .env.local and restart the dev server')
 
   const rawModel = config.model
-  const model = (!rawModel || rawModel === 'gemini-pro') ? 'gemini-2.5-flash' : rawModel
+  // Auto-upgrade the retired `gemini-pro` alias AND existing
+  // `gemini-2.5-flash` agent rows onto 2.5-pro. Pro is both our new
+  // catalog default (better format-rule adherence) and the model we
+  // test tool-calling against; a stale Flash row would otherwise
+  // silently keep using the old, less-compliant model.
+  const model = (!rawModel || rawModel === 'gemini-pro' || rawModel === 'gemini-2.5-flash')
+    ? 'gemini-2.5-pro'
+    : rawModel
 
   const contents = messages
     .filter((m) => m.role !== 'system')
