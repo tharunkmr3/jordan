@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "composio:bootstrap": "tsx scripts/composio-bootstrap.ts",
-    "composio:reconcile": "tsx scripts/composio-reconcile.ts"
+    "composio:reconcile": "tsx scripts/composio-reconcile.ts",
+    "copy-pdf-worker": "node scripts/copy-pdf-worker.mjs",
+    "postinstall": "npm run copy-pdf-worker"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.88.0",
@@ -40,6 +42,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
+    "exceljs": "^4.4.0",
     "framer-motion": "^12.38.0",
     "libreoffice-convert": "^1.8.1",
     "lucide-react": "^1.8.0",
@@ -55,6 +58,7 @@
     "react-dom": "19.2.4",
     "react-hook-form": "^7.72.1",
     "react-markdown": "^10.1.0",
+    "react-pdf": "^10.4.1",
     "react-use-measure": "^2.1.7",
     "recharts": "^3.8.0",
     "remark-breaks": "^4.0.0",

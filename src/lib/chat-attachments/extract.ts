@@ -39,16 +39,53 @@ export async function extractDocumentText(
   const buffer = Buffer.from(bytes)
 
   try {
-    if (kind === 'pdf' || kind === 'pptx' || kind === 'xlsx') {
-      // officeparser handles PDF, PPTX, XLSX, ODT, ODP, ODS, DOCX. We
-      // use it for PDF/PPTX/XLSX and mammoth for docx (cleaner
-      // plain-text output on docx).
+    if (kind === 'pdf') {
+      // pdf-parse v2 is the dedicated, reliable PDF text extractor.
+      // officeparser technically supports PDF but its output is flaky
+      // (returns empty text on valid PDFs we've tested). Keep officeparser
+      // for Office Open XML formats where it works; use pdf-parse for
+      // PDFs specifically.
+      //
+      // Dynamic import — deferred to runtime so pdfjs-dist's browser
+      // build (referenced by pdf-parse's default entry) doesn't load
+      // during SSR. At runtime inside a route handler we're already in
+      // Node, so DOMMatrix issues don't apply. `pdf-parse/node` only
+      // exports HTTP helpers (getHeader) — PDFParse lives on the main
+      // export.
+      const { PDFParse } = await import('pdf-parse')
+      const parser = new PDFParse({ data: buffer })
+      try {
+        const result = await parser.getText()
+        // pdf-parse v2 returns { text: string, pages: [...] } where `text`
+        // is the full concatenated document body.
+        const text = (result as { text?: string }).text ?? ''
+        return trimExtracted(text)
+      } finally {
+        await parser.destroy().catch(() => {})
+      }
+    }
+    if (kind === 'pptx' || kind === 'xlsx') {
+      // officeparser handles PPTX, XLSX, ODT, ODP, ODS. It exposes an AST
+      // with a `.toText()` method as the authoritative plain-text
+      // serializer; we fall back to walking `.content` only if `toText()`
+      // returns nothing (some payload shapes don't populate it fully).
       const { parseOffice } = await import('officeparser')
       const ast = await parseOffice(buffer)
-      // Walk the content node tree and collect text from every node
-      // that exposes it. officeparser nests some structured types
-      // (tables, headings) but nearly all have a .text field.
-      const text = collectOfficeText(ast.content ?? [])
+      const astAny = ast as unknown as {
+        toText?: () => string
+        content?: unknown[]
+      }
+      let text = ''
+      if (typeof astAny.toText === 'function') {
+        try {
+          text = astAny.toText() || ''
+        } catch (err) {
+          console.warn(`[extract] ast.toText() threw for ${filename}:`, err)
+        }
+      }
+      if (!text || text.trim().length === 0) {
+        text = collectOfficeText(astAny.content ?? [])
+      }
       return trimExtracted(text)
     }
     if (kind === 'docx') {

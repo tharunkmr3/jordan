@@ -12,6 +12,7 @@
  */
 
 import type { LlmTool } from '@/lib/composio/tools'
+import type { WebMessageSource } from '@/types/database'
 import { WEB_SEARCH_TOOL_DEF, DEEP_RESEARCH_TOOL_DEF, runWebSearch } from './web-search'
 import { runDeepResearch } from './deep-research'
 
@@ -23,6 +24,15 @@ export interface BuiltinToolsSettings {
 export interface BuiltinToolsBundle {
   tools: LlmTool[]
   execute: (name: string, args: Record<string, unknown>) => Promise<string>
+  /**
+   * Web / research URLs captured during this agent turn. Populated by
+   * the executor on each web_search / deep_research tool call; the
+   * pipeline reads it after the agentic loop finishes and merges into
+   * the assistant message's metadata.sources. De-duplicated by URL so
+   * the same link doesn't produce multiple chips even if the agent
+   * searched twice.
+   */
+  getCapturedSources: () => WebMessageSource[]
 }
 
 /**
@@ -36,6 +46,24 @@ export function buildBuiltinTools(settings: Record<string, unknown> | null | und
   if (flags.deep_research) tools.push(DEEP_RESEARCH_TOOL_DEF)
   if (tools.length === 0) return null
 
+  // URL → WebMessageSource so we collapse duplicate links across a
+  // multi-tool-call turn into a single chip.
+  const captured = new Map<string, WebMessageSource>()
+
+  const captureHits = (hits: Array<{ url?: string; title?: string; snippet?: string }>, tool: 'web_search' | 'deep_research') => {
+    for (const h of hits ?? []) {
+      if (!h?.url) continue
+      if (captured.has(h.url)) continue
+      captured.set(h.url, {
+        kind: 'web',
+        url: h.url,
+        title: h.title || hostOf(h.url) || h.url,
+        snippet: (h.snippet ?? '').slice(0, 300),
+        tool,
+      })
+    }
+  }
+
   return {
     tools,
     execute: async (name, args) => {
@@ -44,6 +72,7 @@ export function buildBuiltinTools(settings: Record<string, unknown> | null | und
         if (!q) return JSON.stringify({ error: 'query is required' })
         const max = typeof args.max_results === 'number' ? args.max_results : undefined
         const result = await runWebSearch(q, { maxResults: max })
+        if ('results' in result) captureHits(result.results, 'web_search')
         return JSON.stringify(result)
       }
       if (name === 'deep_research') {
@@ -51,9 +80,27 @@ export function buildBuiltinTools(settings: Record<string, unknown> | null | und
         if (!topic) return JSON.stringify({ error: 'topic is required' })
         const depth = args.depth === 'quick' ? 'quick' : 'thorough'
         const result = await runDeepResearch(topic, depth)
+        // deep_research shape: { summary, sources?: [{title, url, snippet}] }
+        // Tolerant of either `sources` or `results` field names.
+        const hitsField = (result as unknown as { sources?: unknown; results?: unknown })
+        const hits = Array.isArray(hitsField.sources)
+          ? hitsField.sources as Array<{ url?: string; title?: string; snippet?: string }>
+          : Array.isArray(hitsField.results)
+          ? hitsField.results as Array<{ url?: string; title?: string; snippet?: string }>
+          : []
+        captureHits(hits, 'deep_research')
         return JSON.stringify(result)
       }
       return JSON.stringify({ error: `Unknown built-in tool: ${name}` })
     },
+    getCapturedSources: () => Array.from(captured.values()),
+  }
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host
+  } catch {
+    return ''
   }
 }

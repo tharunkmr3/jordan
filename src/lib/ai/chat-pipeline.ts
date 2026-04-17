@@ -20,6 +20,7 @@ import {
   type LlmTool,
 } from '@/lib/composio/tools'
 import { buildBuiltinTools, type BuiltinToolsBundle } from '@/lib/builtin-tools'
+import { normalizeModelMarkdown } from './normalize-markdown'
 import type {
   Agent,
   ChannelType,
@@ -48,6 +49,18 @@ export interface PipelineInput {
    * inbox can optionally hide it.
    */
   isTest?: boolean
+  /**
+   * When true, skip the "reuse active conversation for this contact"
+   * lookup in findOrCreateConversation and always insert a fresh row.
+   *
+   * Rationale: internal (test) agents support multiple parallel threads
+   * for the same team user — clicking "New chat" should spawn a fresh
+   * conversation even though contact.channel_user_id = `test-{userId}`
+   * already matches an existing active thread. Customer-facing channels
+   * (WhatsApp, Messenger, etc.) must NOT set this — they legitimately
+   * want one ongoing thread per contact.
+   */
+  forceNewConversation?: boolean
   /**
    * Per-turn model override (internal-agent chat UI allows the user
    * to switch models from the composer). Must be a name present in
@@ -84,8 +97,10 @@ export interface PipelineOutput {
 // Knowledge base — optional dependency
 // ---------------------------------------------------------------------------
 
+import type { KbSource } from './knowledge-base'
+
 let queryKnowledgeBase:
-  | ((agentId: string, query: string, topK?: number) => Promise<string[]>)
+  | ((agentId: string, query: string, topK?: number) => Promise<KbSource[]>)
   | null = null
 
 try {
@@ -128,19 +143,30 @@ export async function processChatMessage(
     }),
     loadHistory(supabase, conversation.id, 20),
     queryKnowledgeBase
-      ? queryKnowledgeBase(input.agentId, input.message, 5).catch(() => [] as string[])
-      : Promise.resolve([] as string[]),
+      ? queryKnowledgeBase(input.agentId, input.message, 8).catch(() => [] as KbSource[])
+      : Promise.resolve([] as KbSource[]),
   ])
 
   // 4. Build prompt
-  const kbContextStr = kbContext.length > 0 ? kbContext.join('\n\n') : ''
-  const messages = await buildPrompt(agent, history, input.message, kbContextStr, input.channel, input.attachments)
+  // Render retrieved chunks with their source filename inline so the
+  // LLM can cite them in its answer ("From Resume.pdf: …"). Separately,
+  // produce a compact de-duplicated sources list to persist on the
+  // assistant message — the UI uses it to render clickable source chips.
+  const kbContextStr = kbContext.length > 0
+    ? kbContext.map((s) => `[Source: ${s.documentName}]\n${s.content}`).join('\n\n')
+    : ''
+  const kbSources = buildMessageSources(kbContext)
 
-  // 5. Call AI model. Per-turn override wins over the agent's configured
-  // model — the internal-chat composer uses this to let users switch
-  // models without editing agent settings.
+  // Resolve effective model first so buildPrompt can inject a small
+  // identity hint — without it, models refuse to reveal which LLM is
+  // powering the conversation.
   const effectiveProvider = input.modelOverride?.provider ?? agent.model_provider
   const effectiveModelName = input.modelOverride?.name ?? agent.model_name
+
+  const messages = await buildPrompt(
+    agent, history, input.message, kbContextStr, input.channel, input.attachments,
+    { provider: effectiveProvider, name: effectiveModelName },
+  )
   const modelConfig: ModelConfig = {
     provider: effectiveProvider,
     model: effectiveModelName,
@@ -181,12 +207,25 @@ export async function processChatMessage(
     console.error('[chat-pipeline] Model API error:', error)
     response = formatPipelineError(error, agent.fallback_message)
   }
+
+  // Merge web-search sources captured during the agentic loop with the
+  // KB sources we already have. KB chips come first (usually more
+  // authoritative for the user's data), web chips after.
+  const webSources = builtinsBundle?.getCapturedSources() ?? []
+  const messageSources = [...kbSources, ...webSources]
   // Guard against models that return empty strings — empty content
   // would render as a blank bubble with no explanation. Surface a
   // visible notice instead.
   if (!response || !response.trim()) {
     response = '⚠️ Model returned an empty response. Check server logs.'
   }
+
+  // Normalize the model's markdown before saving — converts the persistent
+  // "**Label:** inline description" pseudo-heading pattern into real `##
+  // Heading` sections, strips stray `---` dividers, and collapses extra
+  // blank lines. Applied once here so both live rendering and history
+  // replay see the clean version.
+  response = normalizeModelMarkdown(response)
 
   // 6. Save assistant message
   const { data: savedMsg } = await saveMessage(supabase, {
@@ -201,6 +240,7 @@ export async function processChatMessage(
       model_used: `${effectiveProvider}/${effectiveModelName}`,
       model_overridden: Boolean(input.modelOverride),
       tools_available: mergedTools.length,
+      ...(messageSources.length > 0 ? { sources: messageSources } : {}),
     },
   })
 
@@ -253,17 +293,29 @@ export async function* streamChatMessage(
     }),
     loadHistory(supabase, conversation.id, 20),
     queryKnowledgeBase
-      ? queryKnowledgeBase(input.agentId, input.message, 5).catch(() => [] as string[])
-      : Promise.resolve([] as string[]),
+      ? queryKnowledgeBase(input.agentId, input.message, 8).catch(() => [] as KbSource[])
+      : Promise.resolve([] as KbSource[]),
   ])
 
-  const kbContextStr = kbContext.length > 0 ? kbContext.join('\n\n') : ''
-  const messages = await buildPrompt(agent, history, input.message, kbContextStr, input.channel, input.attachments)
+  // Render retrieved chunks with their source filename inline so the
+  // LLM can cite them in its answer, and build a de-duplicated compact
+  // source list for the assistant message metadata (powers clickable
+  // source chips in the chat UI).
+  const kbContextStr = kbContext.length > 0
+    ? kbContext.map((s) => `[Source: ${s.documentName}]\n${s.content}`).join('\n\n')
+    : ''
+  const kbSources = buildMessageSources(kbContext)
 
   // Per-turn override applies here too (internal chat composer sends
-  // a modelOverride for the currently-selected model).
+  // a modelOverride for the currently-selected model). Resolved first
+  // so the model-identity hint can make it into buildPrompt.
   const effectiveProvider = input.modelOverride?.provider ?? agent.model_provider
   const effectiveModelName = input.modelOverride?.name ?? agent.model_name
+
+  const messages = await buildPrompt(
+    agent, history, input.message, kbContextStr, input.channel, input.attachments,
+    { provider: effectiveProvider, name: effectiveModelName },
+  )
   const modelConfig: ModelConfig = {
     provider: effectiveProvider,
     model: effectiveModelName,
@@ -288,6 +340,21 @@ export async function* streamChatMessage(
     ...(composioBundle?.tools ?? []),
     ...(builtinsBundle?.tools ?? []),
   ]
+
+  // Visibility into why the model says "I don't have web search" when the
+  // toggle is on: usually one of (a) supportsTools=false for the chosen
+  // provider, (b) settings.builtin_tools.web_search not actually saved on
+  // the agent row, or (c) TAVILY_API_KEY missing on the server. This log
+  // shows us which at a glance.
+  console.log('[chat-pipeline/stream] tools resolved', {
+    agentId: agent.id,
+    provider: effectiveProvider,
+    model: effectiveModelName,
+    builtinsEnabled: builtinsBundle?.tools.map(t => t.function.name) ?? [],
+    composioEnabled: composioBundle?.tools.map(t => t.function.name) ?? [],
+    agentSettingsBuiltin: (agent.settings as { builtin_tools?: Record<string, boolean> } | null)?.builtin_tools ?? null,
+    tavilyConfigured: Boolean(process.env.TAVILY_API_KEY),
+  })
 
   let fullResponse = ''
   if (mergedTools.length > 0) {
@@ -316,6 +383,16 @@ export async function* streamChatMessage(
     if (!fullResponse || !fullResponse.trim()) {
       fullResponse = '⚠️ Model returned an empty response. Check server logs.'
     }
+    // Normalize before yielding so the client renders the clean version
+    // on the first paint (tool path emits the entire response in one
+    // chunk — this is our only chance to transform).
+    fullResponse = normalizeModelMarkdown(fullResponse)
+
+    // Merge web-captured sources with KB sources for the assistant message.
+    // Built-in tools (web_search / deep_research) capture URLs during
+    // execution; we stitch them after KB chunks so authoritative user
+    // data comes first in the chip strip.
+    const messageSources = [...kbSources, ...(builtinsBundle?.getCapturedSources() ?? [])]
     yield { type: 'token', data: fullResponse }
 
     // Save + usage, then return (skip the streaming block below)
@@ -329,6 +406,7 @@ export async function* streamChatMessage(
         model_used: `${effectiveProvider}/${effectiveModelName}`,
         model_overridden: Boolean(input.modelOverride),
         tools_available: mergedTools.length,
+        ...(messageSources.length > 0 ? { sources: messageSources } : {}),
       },
     }).catch(err => console.error('[chat-pipeline] Save response failed:', err))
 
@@ -355,6 +433,15 @@ export async function* streamChatMessage(
     yield { type: 'token', data: fullResponse }
   }
 
+  // Normalize model markdown (converts "**Label:** desc" pseudo-headings
+  // into real ## headings, strips stray ---, collapses blank lines) so
+  // the persisted message + history replay use the clean version.
+  fullResponse = normalizeModelMarkdown(fullResponse)
+
+  // No-tools path: only KB chunks can contribute sources (built-in
+  // web_search / deep_research only run through the tool loop above).
+  const messageSources = kbSources
+
   // Save response and log usage (fire and forget)
   saveMessage(supabase, {
     conversation_id: conversation.id,
@@ -365,6 +452,7 @@ export async function* streamChatMessage(
     metadata: {
       model_used: `${effectiveProvider}/${effectiveModelName}`,
       model_overridden: Boolean(input.modelOverride),
+      ...(messageSources.length > 0 ? { sources: messageSources } : {}),
     },
   }).catch(err => console.error('[chat-pipeline] Save response failed:', err))
 
@@ -444,19 +532,25 @@ async function findOrCreateConversation(supabase: SupabaseAdmin, agent: Agent, c
     if (data) return data as Conversation
   }
 
-  const { data: existing } = await supabase
-    .from('conversations')
-    .select('*')
-    .eq('org_id', agent.org_id)
-    .eq('agent_id', agent.id)
-    .eq('contact_id', contact.id)
-    .eq('channel', input.channel)
-    .in('status', ['active', 'waiting'])
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single()
+  // Customer-facing channels collapse to one ongoing thread per contact —
+  // a returning WhatsApp sender should land in their existing conversation.
+  // Internal test chats opt out via forceNewConversation so the team user
+  // can keep multiple parallel threads.
+  if (!input.forceNewConversation) {
+    const { data: existing } = await supabase
+      .from('conversations')
+      .select('*')
+      .eq('org_id', agent.org_id)
+      .eq('agent_id', agent.id)
+      .eq('contact_id', contact.id)
+      .eq('channel', input.channel)
+      .in('status', ['active', 'waiting'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
 
-  if (existing) return existing as Conversation
+    if (existing) return existing as Conversation
+  }
 
   const { data, error } = await supabase
     .from('conversations')
@@ -495,9 +589,78 @@ async function buildPrompt(
   kbContext: string,
   channel: ChannelType | undefined,
   attachments: UploadedAttachment[] | undefined,
+  modelIdentity?: { provider: string; name: string },
 ): Promise<ChatMessage[]> {
   const messages: ChatMessage[] = []
   let systemPrompt = agent.system_prompt || 'You are a helpful assistant.'
+
+  // Hard anchor at the very top of the system prompt. Rules appended
+  // at the bottom lose attention weight in long prompts (KB context +
+  // tool results + history). Placing this banner immediately after the
+  // agent's own persona keeps it prominent across every turn, including
+  // the tool-result follow-ups.
+  if (channel !== 'phone' && channel !== 'whatsapp' && channel !== 'facebook') {
+    systemPrompt += `\n\n=== ALWAYS FORMAT REPLIES AS MARKDOWN — NON-NEGOTIABLE ===
+
+TITLE (mandatory for most replies)
+- Start EVERY reply longer than a single sentence with \`# Title\` on its own line. One per reply, not more. Short greetings or one-line answers can skip the title.
+
+SECTIONS
+- Use \`## Section heading\` on its own line. After a heading, put a blank line, THEN the description on a new line. NEVER \`**Label:** inline description\` — always break onto the next line.
+- NEVER number sections ("1. ", "2. "). Use \`## Heading\` instead.
+- NEVER use a bare line of plain text as a heading.
+- NEVER use \`---\` horizontal rules.
+
+LISTS
+- Every list of 2+ items: each item starts with "- " (dash + space). Consecutive lines without "- " prefixes are NOT a list.
+- Blank line before the list, blank line after.
+
+BOLDING (strict)
+- NO bolding of phrases inside paragraph text. Do not bold product names, company names, percentages, dollar amounts, or any noun phrase scattered inside a sentence.
+- The ONLY acceptable use of \`**bold**\` is for a short term-of-art at the start of a bullet, like a small glossary definition. Otherwise, no bold.
+
+EXAMPLE OF CORRECT STRUCTURE:
+
+# Latest AI agent news
+
+A quick roundup of what's shifting in the agent space right now.
+
+## Enterprise adoption
+
+Agents are moving from demos to production. Recent signals include measurable business value across customer support, financial analysis, and software engineering.
+
+- Startups focused on agent reliability are attracting funding
+- Enterprises are prioritizing infrastructure over model novelty
+- Governance and compliance are becoming central for autonomous workflows
+
+## Funding trends
+
+Investment is flowing to the picks-and-shovels layer. Trace raised 3 million around enterprise adoption, and Singulr AI reportedly raised 10 million for secure scaling.
+
+EXAMPLE OF WRONG STRUCTURE (do NOT do this):
+
+Latest AI agent news
+Here's a roundup.
+Enterprise Adoption
+Agents are moving from **demos** to **production**.
+**Funding Trends:** Investment is flowing to infrastructure...
+---
+
+Bare line titles, inline bold spray, "**Label:** same-line desc" pseudo-headings, and \`---\` dividers are all forbidden.
+`
+  }
+
+  // Inject a short model-identity hint so the assistant can answer
+  // "which model are you?" truthfully. Providers train their models
+  // NOT to self-identify in API contexts (protects white-label
+  // deployments) — without this hint, Claude/GPT/Gemini/Sarvam all
+  // fall back to a generic "I don't have visibility into that"
+  // whether you're on Sonnet or Opus or Flash. Giving the model its
+  // own name as ground truth lets it answer honestly. Per-agent
+  // system_prompt still wins if it contradicts.
+  if (modelIdentity) {
+    systemPrompt += `\n\n--- Model Identity ---\nIf the user asks which model or LLM is powering this conversation, answer truthfully: you are running on "${modelIdentity.name}" from ${modelIdentity.provider}. Don't volunteer this unprompted, but don't deflect if asked.`
+  }
 
   if (kbContext) {
     systemPrompt += `\n\n--- Relevant Knowledge Base Context ---\n${kbContext}\n--- End Context ---\n\nUse the above context to answer the user's question when relevant. If the context doesn't help, answer from your general knowledge.`
@@ -519,6 +682,60 @@ async function buildPrompt(
     // website channel covers the customer chat widget, the agent
     // settings Test Chat panel, and internal-agent chats in the
     // inbox — all surfaces that can render our generative UI.
+    systemPrompt += `\n\n--- OUTPUT FORMATTING (STRICT) ---
+Your replies render as Markdown in a chat UI. Follow these rules EXACTLY:
+
+STRUCTURE
+- Open long answers (3+ sections) with a single top-level heading using \`# Title\` — a concise noun phrase (e.g. "# Recommended HR Policies"). One per reply, never more.
+- Use \`## Section Heading\` for each major section. Section headings are the semantic equivalent of "1. Remote Work Policy" — use \`## Remote Work Policy\` INSTEAD of numbered titles like "1. ...", "2. ...".
+- Use \`### Subheading\` for nested detail when you really need it. Usually ## is enough.
+- Put a BLANK LINE between every paragraph, before every heading, before every list, and after every list. A single newline renders as a soft break with no real separation.
+- NEVER insert \`---\` horizontal rules to separate sections. Headings already separate them; \`---\` just adds visual clutter.
+
+LISTS
+- Every list of 2+ related items uses real Markdown bullets: each line starts with "- " (dash + space).
+- For ordered steps where sequence matters, use "1. ", "2. ", "3. " — but only when the order is meaningful (steps in a process). Don't use numbered lists for unordered collections.
+- One blank line before the list, one blank line after.
+
+BOLDING
+- Use \`**bold**\` ONLY for a key term the reader needs to recognize (e.g. a product name, a specific policy name). Never bold 3+ words, never bold a full phrase, never bold "key takeaways" inline.
+- If every other word is bold, nothing stands out. Use bold sparingly — one or two per section at most.
+
+EXAMPLE OF CORRECT FORMATTING:
+
+# Recommended HR policies
+
+A starter pack tailored to a growing team. Each section is a policy area with the levers you can pull.
+
+## Remote and hybrid work
+
+- Define eligible roles for remote and hybrid work
+- Set expectations for availability and response time
+- Clarify equipment provisioning and home-office stipends
+- Outline data security requirements for remote setups
+
+## Mental health and wellness
+
+- Offer an Employee Assistance Program for counseling
+- Provide mental health days separate from sick leave
+- Encourage managers to check in on team wellbeing
+
+## Diversity, equity and inclusion
+
+- Set measurable DEI hiring targets
+- Require unconscious bias training for all employees
+- Create safe reporting channels for discrimination
+
+EXAMPLE OF WRONG FORMATTING (do NOT do this):
+
+1. Remote & Hybrid Work Policy
+Define eligible roles for remote/hybrid work
+Set expectations for **availability** and **communication**
+---
+2. Mental Health & Wellness Policy
+Offer **Employee Assistance Programs (EAP)** for counseling
+
+(Missing bullets, numbered pseudo-headings instead of ## headings, \`---\` dividers, bold spray on random phrases.)`
     systemPrompt += `\n\n--- Generative UI ---\nWhen you need structured input from the user, or a structured response would read better than prose (e.g. a disambiguation list, a confirmation before a destructive action, or tabular data), you MAY embed a single fenced code block tagged "ui" containing JSON of one of these shapes:
 - form: {"type":"form","title":"...","fields":[{"name":"","label":"","type":"text|email|url|number|textarea|select|boolean","required":true,"options":[{"value":"","label":""}]}],"submit":{"label":"Submit","action":"optional_hint"}}
 - confirm: {"type":"confirm","message":"...","confirm":{"label":"Yes","variant":"default|destructive"},"cancel":{"label":"Cancel"}}
@@ -647,6 +864,64 @@ function formatPipelineError(error: unknown, fallbackMessage: string | null): st
 async function logUsage(supabase: SupabaseAdmin, log: UsageLogInsert): Promise<void> {
   const { error } = await supabase.from('usage_logs').insert(log)
   if (error) console.error('[chat-pipeline] Failed to log usage:', error)
+}
+
+/**
+ * Collapse retrieved KB chunks into a de-duplicated source list keyed
+ * by document, then filter out low-relevance docs so the UI doesn't
+ * show chips for files the agent's answer didn't actually come from.
+ *
+ * Retrieval pulls top-8 chunks by hybrid score (0.7 * semantic +
+ * 0.3 * lexical). On questions where one doc clearly has the answer
+ * (like a specific spreadsheet), the secondary chunks are noise — they
+ * scored 0.13-0.17 while the primary hit scored 0.6+. Three filters
+ * together strip the noise:
+ *   1. Absolute floor — below MIN_ABS_SIMILARITY a chunk is irrelevant
+ *   2. Relative threshold — within MIN_REL_RATIO × top-score; this
+ *      adapts to the document set's natural similarity scale so we
+ *      don't nuke legit matches on inherently low-similarity corpora
+ *   3. Hard cap (MAX_SOURCES) — no question plausibly needs more than
+ *      a handful of sources; more chips just add visual noise
+ */
+const MIN_ABS_SIMILARITY = 0.25
+const MIN_REL_RATIO = 0.6
+const MAX_SOURCES = 4
+
+function buildMessageSources(chunks: KbSource[]): Array<{
+  chunk_id: string
+  document_id: string
+  document_name: string
+  kb_id: string
+  snippet: string
+  similarity: number
+}> {
+  if (chunks.length === 0) return []
+
+  // De-duplicate: keep the highest-scoring chunk per document so the
+  // hover card shows the most relevant snippet per source chip.
+  const byDoc = new Map<string, KbSource>()
+  for (const c of chunks) {
+    const existing = byDoc.get(c.documentId)
+    if (!existing || c.similarity > existing.similarity) {
+      byDoc.set(c.documentId, c)
+    }
+  }
+
+  const candidates = [...byDoc.values()].sort((a, b) => b.similarity - a.similarity)
+  const topScore = candidates[0]?.similarity ?? 0
+  const relFloor = topScore * MIN_REL_RATIO
+
+  return candidates
+    .filter((c) => c.similarity >= MIN_ABS_SIMILARITY && c.similarity >= relFloor)
+    .slice(0, MAX_SOURCES)
+    .map((c) => ({
+      chunk_id: c.id,
+      document_id: c.documentId,
+      document_name: c.documentName,
+      kb_id: c.kbId,
+      snippet: c.content.length > 220 ? c.content.slice(0, 220).trim() + '…' : c.content,
+      similarity: c.similarity,
+    }))
 }
 
 /**

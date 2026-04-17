@@ -360,6 +360,50 @@ export interface IntegrationToolCall {
 // Metadata shapes
 // ---------------------------------------------------------------------------
 
+/**
+ * Compact representation of something the agent consulted while
+ * composing its reply. Rendered as clickable citation chips below the
+ * assistant bubble. Persisted on Message.metadata.sources.
+ *
+ * Two flavours:
+ *  - 'kb'  — a chunk retrieved from the knowledge base; chip deep-links
+ *            to the owning document in the KB viewer
+ *  - 'web' — a URL returned by web_search / deep_research; chip opens
+ *            the external page in a new tab
+ *
+ * `kind` is optional for backward-compat with messages saved before
+ * this union existed: readers should default to 'kb' when absent.
+ */
+export type MessageSource = KbMessageSource | WebMessageSource;
+
+export interface KbMessageSource {
+  kind?: 'kb';  // optional: pre-union history may omit it, default to 'kb'
+  /** kb_chunks.id — unique id of the retrieved passage */
+  chunk_id: string;
+  /** kb_documents.id — used by the UI to deep-link to the viewer */
+  document_id: string;
+  /** kb_documents.name — displayed on the chip */
+  document_name: string;
+  /** knowledge_bases.id — routing to the KB detail view */
+  kb_id: string;
+  /** first ~200 chars of the chunk, shown in the hover card */
+  snippet: string;
+  /** 0..1 combined similarity score at retrieval time */
+  similarity: number;
+}
+
+export interface WebMessageSource {
+  kind: 'web';
+  /** Absolute URL the chip opens in a new tab */
+  url: string;
+  /** Page title returned by the search tool */
+  title: string;
+  /** Short excerpt for the hover card */
+  snippet: string;
+  /** Which tool produced this hit — 'web_search' or 'deep_research' */
+  tool?: 'web_search' | 'deep_research';
+}
+
 export interface MessageMetadata {
   language_detected?: string;
   model_used?: string;
@@ -367,6 +411,8 @@ export interface MessageMetadata {
   tokens_prompt?: number;
   tokens_completion?: number;
   tokens_total?: number;
+  /** KB citations used as context for this assistant reply. */
+  sources?: MessageSource[];
   [key: string]: unknown;
 }
 

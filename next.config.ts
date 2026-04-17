@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
   //
   // `mammoth` is listed too — it bundles fonts / XML helpers that
   // occasionally trip Turbopack's bundler for similar reasons.
-  serverExternalPackages: ["pdf-parse", "pdfjs-dist", "mammoth"],
+  serverExternalPackages: ["pdf-parse", "pdfjs-dist", "mammoth", "xlsx", "exceljs", "libreoffice-convert", "officeparser"],
 };
 
 export default nextConfig;

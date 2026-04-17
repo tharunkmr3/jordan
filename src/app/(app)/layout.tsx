@@ -6,7 +6,6 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import {
   House,
   Robot,
-  ChatCircleDots,
   UsersThree,
   BookOpenText,
   ChartBar,
@@ -30,7 +29,9 @@ const navGroup1 = [
   { label: "Home", href: "/dashboard", icon: House },
 ]
 const navGroup2 = [
-  { label: "All conversations", href: "/inbox", icon: ChatCircleDots },
+  // "All conversations" removed — the inbox is always scoped to a specific
+  // agent via /inbox?agentId=... on the sidebar agent entries. A global
+  // cross-agent view added visual clutter without a clear use case.
   { label: "Contacts", href: "/contacts", icon: UsersThree },
   { label: "Knowledge", href: "/knowledge", icon: BookOpenText },
   { label: "Analytics", href: "/analytics", icon: ChartBar },
@@ -107,6 +108,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   }, [])
   const [userName, setUserName] = useState("")
   const [userEmail, setUserEmail] = useState("")
+  const [orgId, setOrgId] = useState<string | null>(null)
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [agents, setAgents] = useState<SidebarAgent[]>([])
   const [agentMenuOpen, setAgentMenuOpen] = useState<string | null>(null)
@@ -140,6 +142,13 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
       if (user) {
         setUserName(user.user_metadata?.full_name || user.email?.split("@")[0] || "User")
         setUserEmail(user.email || "")
+        // Org id is needed to filter realtime subscriptions below.
+        const { data: membership } = await supabase
+          .from("org_members")
+          .select("org_id")
+          .eq("user_id", user.id)
+          .single()
+        if (membership?.org_id) setOrgId(membership.org_id as string)
       }
     }
     loadUser()
@@ -174,6 +183,42 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
       window.removeEventListener("agent-updated", updateHandler)
     }
   }, [pathname])
+
+  // Realtime: agent CRUD from other tabs/devices. INSERT / UPDATE / DELETE
+  // on the agents table for this org reflects immediately in the sidebar
+  // list without relying on a refresh or the intra-tab CustomEvent bridge.
+  useEffect(() => {
+    if (!orgId) return
+    const channel = supabase
+      .channel(`sidebar-agents-${orgId}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "agents", filter: `org_id=eq.${orgId}` }, (payload) => {
+        const a = payload.new as SidebarAgent & { org_id: string }
+        setAgents(prev => prev.some(x => x.id === a.id) ? prev : [...prev, {
+          id: a.id,
+          name: a.name,
+          status: a.status,
+          avatar_url: a.avatar_url,
+          settings: a.settings,
+        }])
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "agents", filter: `org_id=eq.${orgId}` }, (payload) => {
+        const a = payload.new as SidebarAgent & { org_id: string }
+        setAgents(prev => prev.map(x => x.id === a.id ? {
+          ...x,
+          name: a.name ?? x.name,
+          status: a.status ?? x.status,
+          avatar_url: a.avatar_url ?? x.avatar_url,
+          settings: a.settings ?? x.settings,
+        } : x))
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "agents", filter: `org_id=eq.${orgId}` }, (payload) => {
+        const id = (payload.old as { id?: string })?.id
+        if (!id) return
+        setAgents(prev => prev.filter(x => x.id !== id))
+      })
+      .subscribe()
+    return () => { void supabase.removeChannel(channel) }
+  }, [orgId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSignOut() {
     await supabase.auth.signOut()
@@ -248,8 +293,11 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
             </button>
           </div>
 
-          {/* Divider */}
-          <div className={cn("my-3 border-t border-black/[0.04]", collapsed ? "mx-2" : "mx-1")} />
+          {/* Divider — the canonical sidebar divider: `my-3 mx-1`, hairline
+              at `black/[0.04]`. All other sidebar dividers match this
+              exactly so the vertical rhythm is identical section-to-section,
+              whether the sidebar is expanded or collapsed. */}
+          <div className="my-3 mx-1 border-t border-black/[0.04]" />
 
           {/* Group 2: main entities */}
           <div className="space-y-0.5">
@@ -260,11 +308,15 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
             })}
           </div>
 
-          {/* Divider */}
-          {!collapsed && <div className="my-3 mx-1 border-t border-black/[0.04]" />}
+          {/* Divider — same shape as above; also present when collapsed
+              so the agents section is separated from the nav group even
+              in the slim sidebar. */}
+          <div className="my-3 mx-1 border-t border-black/[0.04]" />
 
-          {/* Group 3: Agents — split by customer-facing vs internal */}
-          {!collapsed && (() => {
+          {/* Group 3: Agents — split by customer-facing vs internal.
+              Also rendered when the sidebar is collapsed, but as a
+              plain avatar column (no labels, no section headers). */}
+          {(() => {
             const customerAgents = agents.filter(a => a.settings?.is_customer_facing !== false)
             const internalAgents = agents.filter(a => a.settings?.is_customer_facing === false)
 
@@ -339,6 +391,58 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
               </div>
             )
 
+            // Collapsed sidebar: just the avatar column. Customer and
+            // internal agents are rendered back-to-back in the same list
+            // (no section headers, no "New agent" button — that lives in
+            // the expanded sidebar to stay out of the avatar stack).
+            if (collapsed) {
+              const all = [...customerAgents, ...internalAgents]
+              return (
+                <div className="space-y-1 px-1">
+                  <Link
+                    href="/agents/new"
+                    title="New Agent"
+                    className={cn(
+                      "flex items-center justify-center rounded-md p-2 transition-colors",
+                      pathname === "/agents/new"
+                        ? "bg-white text-[#2e2e2e] shadow-[0_2px_4px_-1px_rgba(0,0,0,0.08),0_1px_2px_-1px_rgba(0,0,0,0.04)]"
+                        : "text-[#737373] hover:bg-[#ebebeb] hover:text-[#2e2e2e]"
+                    )}
+                  >
+                    <PlusCircle size={18} weight="bold" />
+                  </Link>
+                  {all.map((a) => {
+                    const href = `/inbox?agentId=${a.id}`
+                    const isActive = currentAgentId === a.id || pathname === `/agents/${a.id}`
+                    return (
+                      <Link
+                        key={a.id}
+                        href={href}
+                        title={a.name}
+                        className={cn(
+                          "relative flex items-center justify-center rounded-md p-1.5 transition-colors",
+                          isActive
+                            ? "bg-white shadow-[0_2px_4px_-1px_rgba(0,0,0,0.08),0_1px_2px_-1px_rgba(0,0,0,0.04)]"
+                            : "hover:bg-[#ebebeb]"
+                        )}
+                      >
+                        <ContactAvatar
+                          src={a.avatar_url}
+                          name={a.name}
+                          seed={a.id}
+                          size={24}
+                          className="flex-shrink-0"
+                        />
+                        {a.status === "active" && (
+                          <span className="absolute -right-0 -top-0 h-1.5 w-1.5 rounded-full bg-emerald-500 ring-2 ring-[#f5f5f5]" />
+                        )}
+                      </Link>
+                    )
+                  })}
+                </div>
+              )
+            }
+
             return (
               <div className="space-y-3">
                 {/* New agent always visible at the top */}
@@ -374,8 +478,15 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
           })()}
         </nav>
 
+        {/* Divider — canonical sidebar divider. `mx-3` here (not `mx-1`)
+            because this div sits directly on <aside> which has no
+            horizontal padding, while the dividers inside <nav> inherit
+            nav's `px-2`. mx-3 → 12px left/right inset, matching the
+            visual position of the inner dividers (nav.px-2 + mx-1). */}
+        <div className="my-3 mx-3 border-t border-black/[0.04]" />
+
         {/* Bottom nav */}
-        <div className="space-y-0.5 border-t border-black/[0.04] px-2 py-2">
+        <div className="space-y-0.5 px-2">
           {bottomNav.map((item) => (
             <NavItem
               key={item.href}
@@ -386,8 +497,11 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
           ))}
         </div>
 
+        {/* Divider (before user) — same mx-3 reasoning as above. */}
+        <div className="my-3 mx-3 border-t border-black/[0.04]" />
+
         {/* User */}
-        <div className="relative border-t border-black/[0.04] px-2 py-2">
+        <div className="relative px-2 pb-2">
           <div className={cn("flex items-center gap-1", collapsed && "flex-col")}>
             <button
               onClick={() => setShowUserMenu(!showUserMenu)}

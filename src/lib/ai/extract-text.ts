@@ -31,9 +31,25 @@ export async function extractTextFromFile(file: File): Promise<ExtractResult> {
   } else if (
     type.includes('wordprocessingml') ||
     type.includes('msword') ||
-    name.endsWith('.docx')
+    name.endsWith('.docx') ||
+    name.endsWith('.doc')
   ) {
     raw = await extractDocx(file)
+  } else if (
+    type.includes('spreadsheetml') ||
+    type.includes('ms-excel') ||
+    name.endsWith('.xlsx') ||
+    name.endsWith('.xls') ||
+    name.endsWith('.xlsm')
+  ) {
+    raw = await extractXlsx(file)
+  } else if (
+    type.includes('presentationml') ||
+    type.includes('ms-powerpoint') ||
+    name.endsWith('.pptx') ||
+    name.endsWith('.ppt')
+  ) {
+    raw = await extractPptx(file)
   } else {
     // Plain-text formats: txt, md, markdown, csv, json, log, etc.
     raw = await file.text()
@@ -80,10 +96,112 @@ async function extractPdf(file: File): Promise<string> {
 async function extractDocx(file: File): Promise<string> {
   const arrayBuf = await file.arrayBuffer()
   // mammoth.extractRawText gives plain text with no formatting — exactly
-  // what we want for embedding. convertToHtml exists if we later want to
-  // render .docx in the viewer with styling.
+  // what we want for embedding. The viewer's Preview tab does high-
+  // fidelity rendering via LibreOffice → PDF; here we only care about
+  // the text for RAG indexing.
   const { value } = await mammoth.extractRawText({ buffer: Buffer.from(arrayBuf) })
   return value ?? ''
+}
+
+// ---------------------------------------------------------------------------
+// XLSX / XLS  → SheetJS
+// ---------------------------------------------------------------------------
+
+async function extractXlsx(file: File): Promise<string> {
+  const arrayBuf = await file.arrayBuffer()
+  // SheetJS is loaded dynamically (it's ~300KB) so we only pay the cost
+  // on an actual spreadsheet upload. `serverExternalPackages` in
+  // next.config.ts keeps its runtime loader intact.
+  const XLSX = await import('xlsx')
+  const wb = XLSX.read(Buffer.from(arrayBuf), { type: 'buffer' })
+
+  // Structured row extraction: each data row becomes a self-describing
+  // line that pairs every cell with its column header and prefixes the
+  // sheet name. This dramatically improves RAG retrieval quality on
+  // tabular data — the column label ("Sq. Ft") and the value ("2,005")
+  // now live in the SAME embedding chunk, so semantic search can match
+  // "apartment square footage" against the row containing both.
+  //
+  // Format per row:
+  //   Row | Sheet: "Tellapur Apartment" | Date: 31/3/2023 | Item: Sq. Ft | Cost: 2,005.00
+  //
+  // Header detection: the first non-empty row of each sheet is treated
+  // as the column headers. If a header cell is blank, we fall back to
+  // the column letter (A, B, C…) so every cell still gets a label.
+  const lines: string[] = []
+  for (const sheetName of wb.SheetNames) {
+    const sheet = wb.Sheets[sheetName]
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+      header: 1,
+      defval: '',
+      blankrows: false,
+      raw: false,  // strings formatted as displayed (dates, numbers respect cell format)
+    })
+    if (rows.length === 0) continue
+
+    // First non-empty row = headers. If the sheet has no discernible
+    // header row (all data rows look identical), fall back to A/B/C.
+    const headerRow = rows.find((r) => r.some((c) => String(c ?? '').trim())) ?? []
+    const headers = headerRow.map((h, i) =>
+      String(h ?? '').trim() || columnLetter(i)
+    )
+
+    const headerIdx = rows.indexOf(headerRow)
+    const dataRows = rows.slice(headerIdx + 1)
+
+    lines.push(`=== Sheet: "${sheetName}" ===`)
+    // Emit a columns reference for the model to anchor on, then each row.
+    lines.push(`Columns: ${headers.join(' | ')}`)
+
+    for (const row of dataRows) {
+      const cells = row
+        .map((cell, i) => {
+          const value = String(cell ?? '').trim()
+          if (!value) return null
+          const header = headers[i] ?? columnLetter(i)
+          return `${header}: ${value}`
+        })
+        .filter(Boolean)
+      if (cells.length === 0) continue
+      lines.push(`Row | Sheet: "${sheetName}" | ${cells.join(' | ')}`)
+    }
+    lines.push('')  // blank line between sheets
+  }
+  return lines.join('\n')
+}
+
+/** 0 → "A", 1 → "B", …, 26 → "AA". Used for header fallbacks. */
+function columnLetter(i: number): string {
+  let n = i
+  let s = ''
+  while (n >= 0) {
+    s = String.fromCharCode(65 + (n % 26)) + s
+    n = Math.floor(n / 26) - 1
+  }
+  return s
+}
+
+// ---------------------------------------------------------------------------
+// PPTX / PPT  → officeparser (XML scan across slides)
+// ---------------------------------------------------------------------------
+
+async function extractPptx(file: File): Promise<string> {
+  // We already install `officeparser` for its PPTX text extraction —
+  // it's small (~15KB) and pure-JS (no native deps). For the Preview
+  // tab we convert to PDF via LibreOffice for visual fidelity; here
+  // we just need the text for embeddings.
+  const arrayBuf = await file.arrayBuffer()
+  const officeparser = await import('officeparser')
+  const parse = (officeparser as unknown as {
+    parseOfficeAsync?: (data: Buffer) => Promise<string>
+    default?: { parseOfficeAsync?: (data: Buffer) => Promise<string> }
+  }).parseOfficeAsync
+    ?? (officeparser as unknown as { default?: { parseOfficeAsync?: (data: Buffer) => Promise<string> } }).default?.parseOfficeAsync
+
+  if (typeof parse !== 'function') {
+    throw new Error('officeparser.parseOfficeAsync not available')
+  }
+  return (await parse(Buffer.from(arrayBuf))) ?? ''
 }
 
 // ---------------------------------------------------------------------------

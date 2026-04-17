@@ -22,7 +22,7 @@ export async function OPTIONS() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { agentId, message, conversationId, visitorId, visitorName, stream, isTest, modelName, attachments } = body
+    const { agentId, message, conversationId, visitorId, visitorName, stream, isTest, modelName, attachments, forceNewConversation } = body
 
     if (!agentId || typeof agentId !== 'string') {
       return NextResponse.json({ error: 'agentId is required' }, { status: 400, headers: corsHeaders })
@@ -97,6 +97,9 @@ export async function POST(request: NextRequest) {
       conversationId: conversationId || undefined,
       channel: 'website' as const,
       isTest: effectiveIsTest,
+      // Only honor forceNewConversation for authenticated team members —
+      // a public widget caller must never be able to spam new threads.
+      forceNewConversation: Boolean(teamUser && forceNewConversation && !conversationId),
       modelOverride,
       attachments: effectiveAttachments,
       contactInfo: effectiveVisitorId

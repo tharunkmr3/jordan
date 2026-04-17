@@ -72,11 +72,25 @@ export async function GET(request: NextRequest) {
     .in('conversation_id', conversationIds)
     .order('created_at', { ascending: false })
 
-  // Map: conversation_id → latest message
+  // Map: conversation_id → latest message. We iterate the desc-sorted list
+  // once and remember the first hit (newest) AND the last hit (oldest) per
+  // conversation — the oldest USER message doubles as the thread title on
+  // the internal-agent sidebar (ChatGPT-style "name on start").
   const lastMsgMap = new Map<string, { content: string; role: string; created_at: string }>()
+  const firstUserMsgMap = new Map<string, { content: string; role: string; created_at: string }>()
   for (const msg of lastMessages || []) {
     if (!lastMsgMap.has(msg.conversation_id)) {
       lastMsgMap.set(msg.conversation_id, {
+        content: msg.content,
+        role: msg.role,
+        created_at: msg.created_at,
+      })
+    }
+    // Walk every msg; by the time we've seen all of them, the final
+    // overwrite for this conversation is the OLDEST user message (since
+    // the list is desc-sorted and the oldest row is last).
+    if (msg.role === 'user') {
+      firstUserMsgMap.set(msg.conversation_id, {
         content: msg.content,
         role: msg.role,
         created_at: msg.created_at,
@@ -105,6 +119,7 @@ export async function GET(request: NextRequest) {
   const enriched = visibleConversations.map((conv) => ({
     ...conv,
     last_message: lastMsgMap.get(conv.id) || null,
+    first_user_message: firstUserMsgMap.get(conv.id) || null,
     message_count: 0, // Computed on-demand in detail view
   }))
 

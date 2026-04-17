@@ -588,7 +588,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
   }
 
   if (loading) return (
-    <div className="flex h-full gap-3 p-3 bg-[#f5f5f5] overflow-hidden">
+    <div className="flex h-full gap-3 p-3 pl-0 bg-[#f5f5f5] overflow-hidden">
       <Panel className="flex-1 min-w-0" bodyClassName="overflow-y-auto p-6">
         <div className="max-w-xl mx-auto space-y-5">
           <div className="flex items-start gap-4">
@@ -635,7 +635,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
     : (agent?.name ?? '')
 
   return (
-    <div className="flex h-full gap-3 p-3 bg-[#f5f5f5] overflow-hidden">
+    <div className="flex h-full gap-3 p-3 pl-0 bg-[#f5f5f5] overflow-hidden">
       {/* Left: Agent details */}
       <Panel className="flex-1 min-w-0">
         {/* Header with avatar + name + save */}

@@ -89,6 +89,21 @@ function getAnthropic() {
 }
 
 /**
+ * Whether an Anthropic model still accepts the `temperature` parameter.
+ *
+ * Claude Opus 4.7 and other extended-thinking-family models from the 4.7
+ * generation dropped `temperature` support (the API rejects the request
+ * with `temperature is deprecated for this model`). We detect by model
+ * name prefix and omit the param for those; everything else keeps the
+ * standard 0.7 default so bump-a-knob tuning still works.
+ */
+function anthropicAcceptsTemperature(model: string): boolean {
+  // Opus 4.7 — confirmed rejection from prod logs.
+  if (model.startsWith('claude-opus-4-7')) return false
+  return true
+}
+
+/**
  * Route a chat completion request to the appropriate AI provider.
  */
 export async function generateResponse(
@@ -124,8 +139,15 @@ export async function* streamResponse(
     case 'anthropic':
       yield* streamAnthropic(messages, config)
       break
+    case 'sarvam':
+      yield* streamSarvam(messages, config)
+      break
+    case 'gemini':
+      yield* streamGemini(messages, config)
+      break
     default: {
-      // Fallback: generate full response and yield at once
+      // Unknown provider — fall through to non-streaming so the caller
+      // still gets a response.
       const response = await generateResponse(messages, config)
       yield response
     }
@@ -145,8 +167,10 @@ async function callOpenAI(
     messages: messages.map(toOpenAiMessage),
     temperature: config.temperature ?? 0.7,
     // GPT-5+ rejects the legacy `max_tokens` param; use the new
-    // `max_completion_tokens` which is supported on all current models.
-    max_completion_tokens: config.maxTokens ?? 1024,
+    // `max_completion_tokens`. Only cap when the agent has explicitly
+    // set a value — otherwise let the model choose its natural length
+    // within the context window.
+    ...(config.maxTokens ? { max_completion_tokens: config.maxTokens } : {}),
   })
   return response.choices[0]?.message?.content || ''
 }
@@ -185,7 +209,7 @@ async function generateWithToolsOpenAI(
     tools: tools.length > 0 ? tools : undefined,
     tool_choice: tools.length > 0 ? 'auto' : undefined,
     temperature: config.temperature ?? 0.7,
-    max_completion_tokens: config.maxTokens ?? 1024,
+    ...(config.maxTokens ? { max_completion_tokens: config.maxTokens } : {}),
   })
   const choice = response.choices[0]?.message
   const rawCalls = (choice?.tool_calls ?? []) as Array<{
@@ -233,12 +257,17 @@ async function generateWithToolsAnthropic(
     .filter((m) => m.role !== 'system')
     .map((m) => toAnthropicMessage(m))
 
+  const modelName = config.model || 'claude-sonnet-4-6'
   const res = await anthropic.messages.create({
-    model: config.model || 'claude-sonnet-4-6',
-    max_tokens: config.maxTokens ?? 1024,
+    model: modelName,
+    // Anthropic's API REQUIRES max_tokens (unlike OpenAI/Gemini/Sarvam
+    // where it's optional). Default to 8192 — the current Sonnet/Opus
+    // generation supports up to that natively — so we don't artificially
+    // truncate thorough answers. Agent.max_tokens still overrides.
+    max_tokens: config.maxTokens ?? 8192,
     system: systemMsg,
     messages: chatMessages as Parameters<typeof anthropic.messages.create>[0]['messages'],
-    temperature: config.temperature ?? 0.7,
+    ...(anthropicAcceptsTemperature(modelName) ? { temperature: config.temperature ?? 0.7 } : {}),
     tools: anthTools.length > 0 ? (anthTools as unknown as Parameters<typeof anthropic.messages.create>[0]['tools']) : undefined,
   })
 
@@ -369,7 +398,7 @@ async function* streamOpenAI(
     model: config.model || 'gpt-5.4',
     messages: messages.map(toOpenAiMessage),
     temperature: config.temperature ?? 0.7,
-    max_completion_tokens: config.maxTokens ?? 1024,
+    ...(config.maxTokens ? { max_completion_tokens: config.maxTokens } : {}),
     stream: true,
   })
   for await (const chunk of stream) {
@@ -395,12 +424,15 @@ async function callAnthropic(
     .filter((m) => m.role !== 'system')
     .map(toAnthropicMessage)
 
+  const modelName = config.model || 'claude-sonnet-4-6'
   const response = await anthropic.messages.create({
-    model: config.model || 'claude-sonnet-4-6',
-    max_tokens: config.maxTokens ?? 1024,
+    model: modelName,
+    // Anthropic requires max_tokens. Default 8192 so thorough answers
+    // aren't artificially truncated; agent.max_tokens overrides.
+    max_tokens: config.maxTokens ?? 8192,
     system: systemMsg,
     messages: chatMessages as Parameters<typeof anthropic.messages.create>[0]['messages'],
-    temperature: config.temperature ?? 0.7,
+    ...(anthropicAcceptsTemperature(modelName) ? { temperature: config.temperature ?? 0.7 } : {}),
   })
   return response.content[0].type === 'text' ? response.content[0].text : ''
 }
@@ -416,12 +448,15 @@ async function* streamAnthropic(
     .filter((m) => m.role !== 'system')
     .map(toAnthropicMessage)
 
+  const modelName = config.model || 'claude-sonnet-4-6'
   const stream = anthropic.messages.stream({
-    model: config.model || 'claude-sonnet-4-6',
-    max_tokens: config.maxTokens ?? 1024,
+    model: modelName,
+    // Anthropic requires max_tokens. Default 8192 so thorough answers
+    // aren't artificially truncated; agent.max_tokens overrides.
+    max_tokens: config.maxTokens ?? 8192,
     system: systemMsg,
     messages: chatMessages as Parameters<typeof anthropic.messages.stream>[0]['messages'],
-    temperature: config.temperature ?? 0.7,
+    ...(anthropicAcceptsTemperature(modelName) ? { temperature: config.temperature ?? 0.7 } : {}),
   })
   for await (const event of stream) {
     if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
@@ -438,20 +473,41 @@ async function callSarvam(
   messages: ChatMessage[],
   config: ModelConfig
 ): Promise<string> {
+  const apiKey = process.env.SARVAM_API_KEY
+  if (!apiKey) throw new Error('SARVAM_API_KEY is not set — add it to .env.local and restart the dev server')
+
+  // Sarvam's OpenAI-compatible API only accepts string content. Multimodal
+  // ContentPart[] (image_url parts from attachments) gets flattened to the
+  // text portion only — images are silently dropped for text-only models.
+  const flattened = messages.map(m => ({
+    role: m.role,
+    content: typeof m.content === 'string' ? m.content : contentPartsToText(m.content),
+  }))
+
   const response = await fetch('https://api.sarvam.ai/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${process.env.SARVAM_API_KEY}`,
+      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
       model: config.model || 'sarvam-m',
-      messages,
+      messages: flattened,
       temperature: config.temperature ?? 0.7,
-      max_tokens: config.maxTokens ?? 1024,
+      // Only pass max_tokens when the agent has explicitly configured
+      // one. Sarvam treats omission as "use the model's natural ceiling,"
+      // which is what we want — the model's own stopping behaviour
+      // (including room after <think> for the visible answer) is better
+      // than any floor we'd hard-code.
+      ...(config.maxTokens ? { max_tokens: config.maxTokens } : {}),
     }),
   })
-  const data = await response.json()
+  if (!response.ok) {
+    const body = await response.text().catch(() => '')
+    throw new Error(`Sarvam API ${response.status}: ${body.slice(0, 300)}`)
+  }
+  const data = await response.json() as { choices?: Array<{ message?: { content?: string } }>; error?: { message?: string } }
+  if (data.error?.message) throw new Error(`Sarvam API: ${data.error.message}`)
   return data.choices?.[0]?.message?.content || ''
 }
 
@@ -464,14 +520,31 @@ async function callGemini(
   config: ModelConfig
 ): Promise<string> {
   const apiKey = process.env.GOOGLE_AI_API_KEY
-  const model = config.model || 'gemini-pro'
+  if (!apiKey) throw new Error('GOOGLE_AI_API_KEY is not set — add it to .env.local and restart the dev server')
+
+  // Default to a stable, current model. `gemini-pro` (legacy v1 alias)
+  // has been retired; v1beta stable is gemini-2.5-flash / 2.5-pro.
+  // Map existing agents.model_name rows that still hold the legacy alias
+  // onto 2.5-flash so they don't 404 until a human edits the agent.
+  const rawModel = config.model
+  const model = (!rawModel || rawModel === 'gemini-pro') ? 'gemini-2.5-flash' : rawModel
+
+  // Flatten ContentPart[] → plain text. Gemini's generateContent DOES
+  // support image parts (inline_data with base64), but our pipeline ships
+  // signed HTTPS URLs which Gemini won't fetch — and implementing the
+  // b64 fetch-and-forward here is out of scope for this hotfix. Drop the
+  // images for now; the extracted text from attachments is already folded
+  // into the user message by buildUserMessage upstream.
   const contents = messages
     .filter((m) => m.role !== 'system')
     .map((m) => ({
       role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }],
+      parts: [{ text: typeof m.content === 'string' ? m.content : contentPartsToText(m.content) }],
     }))
-  const systemInstruction = messages.find((m) => m.role === 'system')?.content
+  const sysRaw = messages.find((m) => m.role === 'system')?.content
+  const systemInstruction = sysRaw
+    ? (typeof sysRaw === 'string' ? sysRaw : contentPartsToText(sysRaw))
+    : null
 
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
@@ -483,11 +556,166 @@ async function callGemini(
         systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
         generationConfig: {
           temperature: config.temperature ?? 0.7,
-          maxOutputTokens: config.maxTokens ?? 1024,
+          // Only cap when the agent has explicitly set a limit; otherwise
+          // let Gemini use its natural max output size.
+          ...(config.maxTokens ? { maxOutputTokens: config.maxTokens } : {}),
         },
       }),
     }
   )
-  const data = await response.json()
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  if (!response.ok) {
+    const body = await response.text().catch(() => '')
+    throw new Error(`Gemini API ${response.status}: ${body.slice(0, 300)}`)
+  }
+  const data = await response.json() as {
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>
+    error?: { message?: string }
+  }
+  if (data.error?.message) throw new Error(`Gemini API: ${data.error.message}`)
+  const text = data.candidates?.[0]?.content?.parts?.map(p => p.text ?? '').join('') ?? ''
+  return text
+}
+
+/**
+ * Stream tokens from Sarvam via its OpenAI-compatible chat/completions
+ * endpoint with `stream: true`. Frame format is standard SSE: each event
+ * is `data: {json}` and a terminating `data: [DONE]`. We yield whatever
+ * text the delta carries, one chunk per frame.
+ */
+async function* streamSarvam(
+  messages: ChatMessage[],
+  config: ModelConfig,
+): AsyncGenerator<string> {
+  const apiKey = process.env.SARVAM_API_KEY
+  if (!apiKey) throw new Error('SARVAM_API_KEY is not set — add it to .env.local and restart the dev server')
+
+  const flattened = messages.map(m => ({
+    role: m.role,
+    content: typeof m.content === 'string' ? m.content : contentPartsToText(m.content),
+  }))
+
+  const response = await fetch('https://api.sarvam.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: config.model || 'sarvam-m',
+      messages: flattened,
+      temperature: config.temperature ?? 0.7,
+      // Only pass max_tokens when the agent has explicitly set one.
+      ...(config.maxTokens ? { max_tokens: config.maxTokens } : {}),
+      stream: true,
+    }),
+  })
+  if (!response.ok || !response.body) {
+    const body = await response.text().catch(() => '')
+    throw new Error(`Sarvam API ${response.status}: ${body.slice(0, 300)}`)
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    // SSE frames are separated by blank lines (\n\n). Split on newline,
+    // keep the last partial in the buffer, parse complete `data:` lines.
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+    for (const raw of lines) {
+      const line = raw.trim()
+      if (!line.startsWith('data:')) continue
+      const payload = line.slice(5).trim()
+      if (!payload || payload === '[DONE]') continue
+      try {
+        const chunk = JSON.parse(payload) as {
+          choices?: Array<{ delta?: { content?: string } }>
+        }
+        const delta = chunk.choices?.[0]?.delta?.content
+        if (delta) yield delta
+      } catch { /* malformed — skip */ }
+    }
+  }
+}
+
+/**
+ * Stream tokens from Gemini via `streamGenerateContent`. Google emits
+ * a JSON stream where each element is a full `GenerateContentResponse`
+ * object (NOT standard SSE) — the body is a concatenation of JSON objects
+ * separated by newlines when `?alt=sse` is set. We use `?alt=sse` so the
+ * frames arrive as standard `data: {json}` events.
+ */
+async function* streamGemini(
+  messages: ChatMessage[],
+  config: ModelConfig,
+): AsyncGenerator<string> {
+  const apiKey = process.env.GOOGLE_AI_API_KEY
+  if (!apiKey) throw new Error('GOOGLE_AI_API_KEY is not set — add it to .env.local and restart the dev server')
+
+  const rawModel = config.model
+  const model = (!rawModel || rawModel === 'gemini-pro') ? 'gemini-2.5-flash' : rawModel
+
+  const contents = messages
+    .filter((m) => m.role !== 'system')
+    .map((m) => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: typeof m.content === 'string' ? m.content : contentPartsToText(m.content) }],
+    }))
+  const sysRaw = messages.find((m) => m.role === 'system')?.content
+  const systemInstruction = sysRaw
+    ? (typeof sysRaw === 'string' ? sysRaw : contentPartsToText(sysRaw))
+    : null
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents,
+        systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
+        generationConfig: {
+          temperature: config.temperature ?? 0.7,
+          // Only cap when the agent has explicitly set a limit; otherwise
+          // let Gemini use its natural max output size.
+          ...(config.maxTokens ? { maxOutputTokens: config.maxTokens } : {}),
+        },
+      }),
+    },
+  )
+  if (!response.ok || !response.body) {
+    const body = await response.text().catch(() => '')
+    throw new Error(`Gemini API ${response.status}: ${body.slice(0, 300)}`)
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+    for (const raw of lines) {
+      const line = raw.trim()
+      if (!line.startsWith('data:')) continue
+      const payload = line.slice(5).trim()
+      if (!payload) continue
+      try {
+        const chunk = JSON.parse(payload) as {
+          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>
+        }
+        const parts = chunk.candidates?.[0]?.content?.parts
+        if (parts) {
+          for (const p of parts) {
+            if (p.text) yield p.text
+          }
+        }
+      } catch { /* malformed — skip */ }
+    }
+  }
 }

@@ -24,7 +24,9 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
   { name: 'gpt-5.4',           label: 'OpenAI GPT-5.4',       short: 'GPT-5.4',     provider: 'openai' },
   { name: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6',    short: 'Sonnet 4.6',  provider: 'anthropic' },
   { name: 'claude-opus-4-7',   label: 'Claude Opus 4.7',      short: 'Opus 4.7',    provider: 'anthropic' },
-  { name: 'gemini-pro',        label: 'Gemini Pro',           short: 'Gemini Pro',  provider: 'gemini' },
+  // `gemini-pro` (v1 text-bison legacy alias) has been retired. Use the
+  // current v1beta stable model names.
+  { name: 'gemini-2.5-flash',  label: 'Gemini 2.5 Flash',     short: 'Gemini Flash',provider: 'gemini' },
 ]
 
 export function providerForModelName(name: string): ModelCatalogEntry['provider'] | null {

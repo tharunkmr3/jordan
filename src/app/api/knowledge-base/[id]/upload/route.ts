@@ -42,13 +42,38 @@ export async function POST(
     return NextResponse.json({ error: 'No file provided' }, { status: 400 })
   }
 
-  const allowedTypes = ['text/plain', 'text/csv', 'text/markdown', 'application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+  // Accept text, PDF, and every Office format we can preview natively.
+  // We check BOTH the browser-reported MIME and the filename extension
+  // because some browsers send an empty/generic MIME for .xlsx/.pptx.
+  const allowedTypes = [
+    'text/plain',
+    'text/csv',
+    'text/markdown',
+    'application/pdf',
+    // Office Open XML
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',   // .docx
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',         // .xlsx
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
+    // Legacy binary Office
+    'application/msword',         // .doc
+    'application/vnd.ms-excel',   // .xls
+    'application/vnd.ms-powerpoint', // .ppt
+  ]
   const fileType = file.type || 'text/plain'
-  const allowedExt = ['.txt', '.csv', '.md', '.markdown']
+  const allowedExt = [
+    '.txt', '.csv', '.md', '.markdown',
+    '.pdf',
+    '.doc', '.docx',
+    '.xls', '.xlsx', '.xlsm',
+    '.ppt', '.pptx',
+  ]
   const nameLower = file.name.toLowerCase()
 
   if (!allowedTypes.includes(fileType) && !allowedExt.some(ext => nameLower.endsWith(ext))) {
-    return NextResponse.json({ error: 'Unsupported file type. Supported: .txt, .md, .csv, .pdf, .docx' }, { status: 400 })
+    return NextResponse.json(
+      { error: 'Unsupported file type. Supported: .txt, .md, .csv, .pdf, .doc/.docx, .xls/.xlsx, .ppt/.pptx' },
+      { status: 400 }
+    )
   }
 
   const admin = createAdminClient()
@@ -95,6 +120,36 @@ export async function POST(
 
   if (docError || !doc) {
     return NextResponse.json({ error: docError?.message || 'Failed to create document' }, { status: 500 })
+  }
+
+  // Store the original binary in the kb-documents storage bucket so the
+  // file viewer can render the file in its native format (PDF iframe,
+  // DOCX/XLSX via server-side conversion, etc.). Path is namespaced by
+  // org for easy RLS / cleanup on org deletion.
+  //
+  // Best-effort: if storage upload fails (bucket missing, disk full), we
+  // still keep the document row — RAG on the extracted text continues to
+  // work, and the viewer will surface a "preview unavailable" hint.
+  try {
+    const arrayBuf = await file.arrayBuffer()
+    const objectPath = `${membership.org_id}/${doc.id}/${file.name}`
+    const { error: upErr } = await admin.storage
+      .from('kb-documents')
+      .upload(objectPath, Buffer.from(arrayBuf), {
+        contentType: fileType,
+        upsert: true,
+      })
+    if (upErr) {
+      console.error('[kb/upload] storage upload failed:', upErr)
+    } else {
+      await admin
+        .from('kb_documents')
+        .update({ file_url: objectPath })
+        .eq('id', doc.id)
+      doc.file_url = objectPath
+    }
+  } catch (err) {
+    console.error('[kb/upload] storage upload exception:', err)
   }
 
   // Process in background: chunk and embed

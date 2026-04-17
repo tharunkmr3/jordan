@@ -359,8 +359,8 @@ export const AiComposer = forwardRef<AiComposerHandle, AiComposerProps>(function
         className={cn(
           'resize-none border-0 bg-transparent focus-visible:ring-0 focus-visible:border-0 shadow-none',
           variant === 'hero'
-            ? 'min-h-[88px] px-4 pt-3.5 pb-2 text-[14px] leading-relaxed'
-            : 'min-h-[44px] px-3.5 pt-2.5 pb-1 text-[13px] leading-relaxed',
+            ? 'min-h-[120px] px-4 pt-3.5 pb-2 text-[17px] leading-relaxed'
+            : 'min-h-[64px] px-3.5 pt-3 pb-1.5 text-[16px] leading-relaxed',
         )}
       />
 
@@ -388,7 +388,7 @@ export const AiComposer = forwardRef<AiComposerHandle, AiComposerProps>(function
               title="Attach file"
               aria-label="Attach file"
             >
-              <Plus size={14} weight="bold" />
+              <Plus size={18} weight="bold" />
             </ComposerIconButton>
           </>
         )}
@@ -412,23 +412,19 @@ export const AiComposer = forwardRef<AiComposerHandle, AiComposerProps>(function
         >
           {voiceState === 'transcribing'
             ? <Loader variant="circular" size="sm" />
-            : <Microphone size={14} weight={voiceState === 'recording' ? 'fill' : 'bold'} />}
+            : <Microphone size={18} weight={voiceState === 'recording' ? 'fill' : 'bold'} />}
         </ComposerIconButton>
 
-        {leadingSlot}
-
-        <div className="flex-1" />
-
-        {trailingSlot}
-
-        {/* Model picker (internal only) */}
+        {/* Model picker (internal only) — sits on the LEFT next to attach
+            and voice, so the model choice reads as part of the "input
+            mode" controls, not as a trailing send-adjacent action. */}
         {model && model.options.length > 0 && (
           <Select
             value={model.value}
             onValueChange={(v) => v && model.onChange(String(v))}
             disabled={disabled}
           >
-            <SelectTrigger className="h-7 min-w-[140px] rounded-full border-black/[0.06] bg-white text-[12px]">
+            <SelectTrigger className="h-9 min-w-[160px] rounded-full border-black/[0.06] bg-white text-[14px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -439,13 +435,19 @@ export const AiComposer = forwardRef<AiComposerHandle, AiComposerProps>(function
           </Select>
         )}
 
+        {leadingSlot}
+
+        <div className="flex-1" />
+
+        {trailingSlot}
+
         {/* Send */}
         <button
           type="button"
           onClick={doSubmit}
           disabled={!canSubmit}
           className={cn(
-            'flex h-8 w-8 items-center justify-center rounded-full transition-colors',
+            'flex h-10 w-10 items-center justify-center rounded-full transition-colors',
             canSubmit
               ? 'bg-[#2e2e2e] text-white hover:bg-black'
               : 'bg-[#ebebeb] text-[#a3a3a3]',
@@ -453,7 +455,7 @@ export const AiComposer = forwardRef<AiComposerHandle, AiComposerProps>(function
           title="Send"
           aria-label="Send message"
         >
-          <PaperPlaneTilt size={13} weight="fill" />
+          <PaperPlaneTilt size={16} weight="fill" />
         </button>
       </div>
     </div>
@@ -469,7 +471,7 @@ function ComposerIconButton({
       type="button"
       {...rest}
       className={cn(
-        'flex h-7 w-7 items-center justify-center rounded-full text-[#737373] transition-colors',
+        'flex h-9 w-9 items-center justify-center rounded-full text-[#737373] transition-colors',
         'hover:bg-[#f5f5f5] disabled:opacity-50 disabled:hover:bg-transparent',
         rest.className,
       )}

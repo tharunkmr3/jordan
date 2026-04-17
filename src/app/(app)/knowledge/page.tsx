@@ -26,10 +26,13 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import type { Agent, KnowledgeBase, KbDocument } from '@/types/database'
-import { Plus, Trash, Upload, Database, ArrowLeft, FileText, X, PencilSimple } from '@phosphor-icons/react'
+import { Plus, Trash, Upload, Database, ArrowLeft, FileText, X, PencilSimple, Check, Warning, ArrowClockwise } from '@phosphor-icons/react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Panel } from '@/components/ui/panel'
 import { KbFileViewer } from '@/components/app/kb-file-viewer'
+import { RowActions, RowActionButton } from '@/components/ui/row-actions'
+import { DocumentTypeIcon } from '@/components/ui/document-type-icon'
+import { createClient } from '@/lib/supabase/client'
 
 interface KnowledgeBaseWithDocs extends KnowledgeBase {
   kb_documents: KbDocument[]
@@ -55,6 +58,77 @@ function safeXhrMessage(xhr: XMLHttpRequest): string | null {
 function capitalizeFirst(s: string): string {
   if (!s) return s
   return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+// ---------------------------------------------------------------------------
+// UploadStatusIcon
+// ---------------------------------------------------------------------------
+
+/**
+ * 18×18 icon that replaces the static file icon on in-flight upload rows.
+ * Renders one of:
+ *   - uploading: circular SVG progress arc, filling as bytes upload
+ *   - done:      green check inside a filled green circle (~2s visible
+ *                before the task clears and the real doc row takes over)
+ *   - error:     red alert triangle
+ * When `progress < 5` we show an indeterminate spinning arc so the user
+ * sees motion even before byte-level progress kicks in.
+ */
+function UploadStatusIcon({
+  status,
+  progress,
+}: {
+  status: 'uploading' | 'processing' | 'done' | 'error'
+  progress: number
+}) {
+  if (status === 'done') {
+    return (
+      <div className="h-[18px] w-[18px] shrink-0 rounded-full bg-emerald-500 flex items-center justify-center">
+        <Check size={11} weight="bold" className="text-white" />
+      </div>
+    )
+  }
+  if (status === 'error') {
+    return (
+      <div className="h-[18px] w-[18px] shrink-0 rounded-full bg-red-500 flex items-center justify-center">
+        <Warning size={11} weight="bold" className="text-white" />
+      </div>
+    )
+  }
+
+  // Uploading: determinate progress ring (track + growing arc, 0-100%).
+  // Processing: indeterminate spinning arc — upload is complete but the
+  // server is chunking + embedding and we have no % to report.
+  // Below 5% during "uploading" we also spin so the user sees motion
+  // before the first progress event arrives.
+  const RADIUS = 7
+  const CIRC = 2 * Math.PI * RADIUS
+  const displayProgress = Math.max(3, Math.min(100, progress))
+  const offset = CIRC * (1 - displayProgress / 100)
+  const indeterminate = status === 'processing' || progress < 5
+
+  return (
+    <div className="h-[18px] w-[18px] shrink-0">
+      <svg viewBox="0 0 18 18" className={indeterminate ? 'animate-spin' : ''}>
+        {/* Track */}
+        <circle cx="9" cy="9" r={RADIUS} fill="none" stroke="rgba(0,0,0,0.08)" strokeWidth="2" />
+        {/* Progress arc, starts at 12 o'clock */}
+        <circle
+          cx="9"
+          cy="9"
+          r={RADIUS}
+          fill="none"
+          stroke="#2e2e2e"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeDasharray={CIRC}
+          strokeDashoffset={indeterminate ? CIRC * 0.75 : offset}
+          transform="rotate(-90 9 9)"
+          className="transition-[stroke-dashoffset] duration-200 ease-out"
+        />
+      </svg>
+    </div>
+  )
 }
 
 function fileExtension(name: string): string {
@@ -142,6 +216,33 @@ export default function KnowledgePage() {
   const [viewerDocId, setViewerDocId] = useState<string | null>(null)
   useEffect(() => { setViewerDocId(null) }, [selectedKb])
 
+  // Deep-link support: when the page loads (or the URL changes via
+  // client nav) with `?kb=…&doc=…`, open that KB and select that doc in
+  // the viewer. Used by KB source chips in chat messages — clicking a
+  // chip opens a new tab directly to the referenced doc.
+  //
+  // A single ref gate prevents re-triggering on every re-render, so the
+  // user's subsequent in-app navigation (picking a different doc in the
+  // list, closing the viewer) isn't overridden by the stale query
+  // params.
+  const deepLinkAppliedRef = useRef(false)
+  useEffect(() => {
+    if (deepLinkAppliedRef.current) return
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const kbParam = params.get('kb')
+    const docParam = params.get('doc')
+    if (!kbParam) return
+    deepLinkAppliedRef.current = true
+    setSelectedKb(kbParam)
+    if (docParam) {
+      // setSelectedKb() triggers the above useEffect that nulls
+      // viewerDocId; queueMicrotask defers setting viewerDocId until
+      // after that reset so our value wins.
+      queueMicrotask(() => setViewerDocId(docParam))
+    }
+  }, [])
+
   const fetchKbs = useCallback(async () => {
     try {
       const res = await fetch('/api/knowledge-base')
@@ -162,6 +263,48 @@ export default function KnowledgePage() {
   }, [])
 
   useEffect(() => { fetchKbs(); fetchAgents() }, [fetchKbs, fetchAgents])
+
+  // Realtime: keep this page in sync across tabs / devices. If another
+  // client creates, edits, renames, deletes, uploads, or finishes
+  // processing a KB or its documents, we refetch the list instead of
+  // trying to merge partial payloads — the list endpoint already joins
+  // kb_documents and honors org scoping, so a refetch is the simplest
+  // authoritative reconciliation path (cheap; the list is small).
+  useEffect(() => {
+    const supabase = createClient()
+    let cleanup: (() => void) | null = null
+    let cancelled = false
+    void (async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user || cancelled) return
+      const { data: membership } = await supabase
+        .from('org_members')
+        .select('org_id')
+        .eq('user_id', user.id)
+        .single()
+      const orgId = membership?.org_id as string | undefined
+      if (!orgId || cancelled) return
+      const channel = supabase
+        .channel(`kb-sync-${orgId}`)
+        // knowledge_bases: create / rename / color-change / delete in
+        // another tab reflects here.
+        .on('postgres_changes',
+            { event: '*', schema: 'public', table: 'knowledge_bases', filter: `org_id=eq.${orgId}` },
+            () => { void fetchKbs() })
+        // kb_documents: upload / status transitions (processing → ready /
+        // error) / delete. Filter by org_id so we don't get noise from
+        // other orgs even though RLS already scopes reads.
+        .on('postgres_changes',
+            { event: '*', schema: 'public', table: 'kb_documents', filter: `org_id=eq.${orgId}` },
+            () => { void fetchKbs() })
+        .subscribe()
+      cleanup = () => { void supabase.removeChannel(channel) }
+    })()
+    return () => {
+      cancelled = true
+      if (cleanup) cleanup()
+    }
+  }, [fetchKbs])
 
 
   const activeKb = kbs.find(kb => kb.id === selectedKb)
@@ -255,10 +398,20 @@ export default function KnowledgePage() {
 
       xhr.upload.onprogress = (e) => {
         if (!e.lengthComputable) return
-        // Leave 5% at the top for server-side processing (chunk + embed).
-        const pct = Math.min(95, Math.round((e.loaded / e.total) * 95))
+        // Real upload goes 0 → 100 %. Once the body is fully sent, we
+        // flip to a "processing" state that shows an indeterminate
+        // spinner until the server returns — chunking + OpenAI
+        // embeddings take several seconds on larger files, and pretending
+        // those are "part of the upload" is misleading.
+        const pct = Math.round((e.loaded / e.total) * 100)
         setUploadQueue(prev => prev.map(t => t.clientId === task.clientId
-          ? { ...t, progress: pct }
+          ? {
+              ...t,
+              progress: pct,
+              // When the byte-level upload hits 100 we switch status
+              // immediately; the server response arrives a moment later.
+              status: pct >= 100 ? 'processing' : 'uploading',
+            }
           : t))
       }
 
@@ -369,13 +522,58 @@ export default function KnowledgePage() {
     })
   }
 
+  // Reindex: re-run extraction + chunking + embedding against the
+  // already-stored binary. Used after a chunker/extractor upgrade to
+  // refresh existing docs without the user having to re-upload. The
+  // per-row set keeps the button's spinner state isolated so multiple
+  // reindexes can run in parallel without stomping each other.
+  const [reindexing, setReindexing] = useState<Set<string>>(new Set())
+  const reindexDoc = useCallback(async (kbId: string, docId: string, docName: string) => {
+    if (reindexing.has(docId)) return
+    setReindexing((prev) => {
+      const next = new Set(prev)
+      next.add(docId)
+      return next
+    })
+    // Optimistic: reflect processing status immediately in the list.
+    setKbs((prev) => prev.map((kb) =>
+      kb.id === kbId
+        ? {
+            ...kb,
+            kb_documents: (kb.kb_documents || []).map((d) =>
+              d.id === docId ? { ...d, status: 'processing' as const } : d
+            ),
+          }
+        : kb
+    ))
+    try {
+      const res = await fetch(
+        `/api/knowledge-base/${kbId}/documents/${docId}/reindex`,
+        { method: 'POST' }
+      )
+      const data = await res.json().catch(() => ({})) as { error?: string; chunk_count?: number }
+      if (!res.ok) {
+        setError(data.error ?? `Reindex failed for "${docName}"`)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Reindex failed')
+    } finally {
+      setReindexing((prev) => {
+        const next = new Set(prev)
+        next.delete(docId)
+        return next
+      })
+      await fetchKbs()
+    }
+  }, [fetchKbs, reindexing])
+
   // ---- Detail view ----
   if (selectedKb && activeKb) {
     const docs = activeKb.kb_documents || []
     const agentName = agents.find(a => a.id === activeKb.agent_id)?.name
 
     return (
-      <div className="flex h-full bg-[#f5f5f5] overflow-hidden gap-3 p-3">
+      <div className="flex h-full bg-[#f5f5f5] overflow-hidden gap-3 p-3 pl-0">
         {/* Docs list panel — flex-fills when no viewer, shrinks when
             viewer opens. The viewer is a sibling <Panel> in this same
             flex row, matching the inbox's three-column layout. */}
@@ -398,7 +596,7 @@ export default function KnowledgePage() {
                   ref={fileInputRef}
                   type="file"
                   multiple
-                  accept=".txt,.md,.markdown,.csv,.pdf,.docx"
+                  accept=".txt,.md,.markdown,.csv,.pdf,.doc,.docx,.xls,.xlsx,.xlsm,.ppt,.pptx"
                   className="hidden"
                   onChange={e => {
                     const files = e.target.files ? Array.from(e.target.files) : []
@@ -443,18 +641,20 @@ export default function KnowledgePage() {
             </Button>
           </div>
         ) : (
-          // min-w-[820px] ensures the docs table keeps enough width for
-          // all columns to be readable (name minmax(200px, 1fr) + 5 fixed
-          // cols + gaps + padding ≈ 820px). The Panel body has
-          // overflow-auto, so when the user shrinks the panel below this
-          // threshold the table scrolls horizontally instead of
-          // truncating filenames into uselessness.
-          <div className="min-w-[820px]">
+          // Column widths shrink when the canvas (document viewer) is
+          // open — the panel is narrower so we need tighter columns to
+          // keep everything readable. Wrapper min-w enforces a horizontal
+          // scroll threshold appropriate for each mode.
+          //
+          // "Canvas" is the forward-looking name for the side viewer.
+          // Today it renders KB files (PDF / DOCX / XLSX / …); tomorrow
+          // it'll also render rich HTML / code previews / chart panels.
+          <div className={viewerDocId ? "min-w-[592px]" : "min-w-[720px]"}>
             {/* Bulk actions bar — appears above the header when anything
                 is selected. Replaces the static header row visually
                 without jumping the layout. */}
             {selected.size > 0 && (
-              <div className="grid grid-cols-[minmax(200px,1fr)_90px_110px_130px_160px_32px] items-center gap-3 px-6 h-[46px] bg-[#f5f5f5] border-b border-black/[0.04]">
+              <div className={`grid ${viewerDocId ? 'grid-cols-[minmax(180px,1fr)_90px_100px_120px_32px]' : 'grid-cols-[minmax(200px,1fr)_110px_130px_160px_32px]'} items-center gap-3 px-6 h-[46px] bg-[#f5f5f5] border-b border-black/[0.04]`}>
                 <div className="flex items-center gap-3">
                   <Checkbox
                     checked={docs.length > 0 && selected.size === docs.length}
@@ -497,7 +697,7 @@ export default function KnowledgePage() {
                 Fixed height (46px) matches the bulk-actions bar so the
                 layout doesn't jump when selection state changes. */}
             {selected.size === 0 && (
-              <div className="grid grid-cols-[minmax(200px,1fr)_90px_110px_130px_160px_32px] items-center gap-3 px-6 h-[46px] bg-[#fafafa] text-[11px] font-medium tracking-wide text-[#737373] uppercase">
+              <div className={`grid ${viewerDocId ? 'grid-cols-[minmax(180px,1fr)_90px_100px_120px_32px]' : 'grid-cols-[minmax(200px,1fr)_110px_130px_160px_32px]'} items-center gap-3 px-6 h-[46px] bg-[#fafafa] text-[11px] font-medium tracking-wide text-[#737373] uppercase`}>
                 <div className="flex items-center gap-3">
                   <span className="flex size-[18px] items-center justify-center shrink-0">
                     <Checkbox
@@ -511,7 +711,6 @@ export default function KnowledgePage() {
                   </span>
                   <span>Name</span>
                 </div>
-                <div>Type</div>
                 <div>Size</div>
                 <div>Uploaded</div>
                 <div>Status</div>
@@ -524,16 +723,20 @@ export default function KnowledgePage() {
             {uploadQueue.map(task => (
               <div
                 key={task.clientId}
-                className="grid grid-cols-[minmax(200px,1fr)_90px_110px_130px_160px_32px] items-center gap-3 px-6 py-3 border-t border-black/[0.04] bg-[#fafafa]/40"
+                className={`grid ${viewerDocId ? 'grid-cols-[minmax(180px,1fr)_90px_100px_120px_32px]' : 'grid-cols-[minmax(200px,1fr)_110px_130px_160px_32px]'} items-center gap-3 px-6 py-3 border-t border-black/[0.04] bg-[#fafafa]/40`}
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <FileText size={18} className="text-[#737373] shrink-0" />
+                  {/* File-icon slot shows upload status instead of the
+                      static file icon while the task is in flight: an
+                      animated circular progress arc during upload, a
+                      green check momentarily when done, or a red alert
+                      dot on failure. Once the task clears from the queue
+                      (~2s after done) the real doc row renders with the
+                      format-specific DocumentTypeIcon. */}
+                  <UploadStatusIcon status={task.status} progress={task.progress} />
                   <span className="text-sm font-medium text-[#2e2e2e] truncate">
                     {capitalizeFirst(task.file.name)}
                   </span>
-                </div>
-                <div className="text-xs text-[#737373]">
-                  {capitalizeFirst(fileExtension(task.file.name) || 'text')}
                 </div>
                 <div className="text-xs text-[#737373]">
                   {formatBytes(task.file.size)}
@@ -546,29 +749,29 @@ export default function KnowledgePage() {
                     <span className="text-xs text-red-600 truncate block">{task.error}</span>
                   ) : task.status === 'done' ? (
                     <Badge variant="secondary" className="text-xs bg-emerald-50 text-emerald-700">Done</Badge>
+                  ) : task.status === 'processing' ? (
+                    <Badge variant="secondary" className="text-xs bg-blue-50 text-blue-700">
+                      Processing…
+                    </Badge>
                   ) : (
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 h-1 rounded-full bg-black/[0.06] overflow-hidden">
-                        <div
-                          className="h-full bg-[#2e2e2e] transition-[width] duration-200"
-                          style={{ width: `${task.progress}%` }}
-                        />
-                      </div>
-                      <span className="text-[11px] text-[#737373] shrink-0 w-8 text-right tabular-nums">
-                        {task.progress}%
-                      </span>
-                    </div>
+                    <Badge variant="secondary" className="text-xs bg-blue-50 text-blue-700">
+                      Uploading · {task.progress}%
+                    </Badge>
                   )}
                 </div>
-                <div className="flex justify-end">
+                <div className="sticky right-0 flex items-center justify-end pr-6 pl-3">
                   {(task.status === 'error' || task.status === 'done') && (
-                    <button
-                      onClick={() => dismissUploadTask(task.clientId)}
-                      className="p-1 rounded text-[#a3a3a3] hover:text-[#2e2e2e] hover:bg-black/[0.04]"
-                      aria-label="Dismiss"
-                    >
-                      <X size={14} />
-                    </button>
+                    // Upload rows don't have a `group` hover trigger
+                    // (they're transient), so force the chip visible by
+                    // adding `opacity-100` override.
+                    <RowActions className="opacity-100">
+                      <RowActionButton
+                        label="Dismiss"
+                        onClick={() => dismissUploadTask(task.clientId)}
+                      >
+                        <X size={13} />
+                      </RowActionButton>
+                    </RowActions>
                   )}
                 </div>
               </div>
@@ -580,8 +783,14 @@ export default function KnowledgePage() {
                   - default:         file icon
                   - hovered:         checkbox fades in over the file icon
                   - selected:        checkbox only (no file icon)
-                The trash action fades in on hover and opens a confirm modal. */}
-            {docs.map(doc => {
+                The trash action fades in on hover and opens a confirm modal.
+                Filter: hide docs whose id matches an in-flight upload
+                task's docId, to prevent the brief window where both the
+                optimistic upload row AND the server-inserted doc row
+                render the same file side-by-side. */}
+            {docs
+              .filter((doc) => !uploadQueue.some((t) => t.docId === doc.id && t.status !== 'error'))
+              .map(doc => {
               const isSelected = selected.has(doc.id)
               const isViewing = viewerDocId === doc.id
               return (
@@ -591,7 +800,7 @@ export default function KnowledgePage() {
                   tabIndex={0}
                   onClick={() => setViewerDocId(doc.id)}
                   onKeyDown={(e) => { if (e.key === 'Enter') setViewerDocId(doc.id) }}
-                  className={`cursor-pointer grid grid-cols-[minmax(200px,1fr)_90px_110px_130px_160px_32px] items-center gap-3 px-6 py-3 border-t border-black/[0.04] group transition-colors ${
+                  className={`cursor-pointer grid ${viewerDocId ? 'grid-cols-[minmax(180px,1fr)_90px_100px_120px_32px]' : 'grid-cols-[minmax(200px,1fr)_110px_130px_160px_32px]'} items-center gap-3 px-6 py-3 border-t border-black/[0.04] group transition-colors ${
                     isViewing ? 'bg-blue-50/60' : isSelected ? 'bg-[#fafafa]' : 'hover:bg-[#fafafa]'
                   }`}
                 >
@@ -601,13 +810,18 @@ export default function KnowledgePage() {
                         absolutely positioned so they perfectly overlap
                         regardless of their own intrinsic dimensions. */}
                     <div className="relative h-[18px] w-[18px] shrink-0">
-                      {/* File icon — default state */}
-                      <FileText
-                        size={18}
-                        className={`absolute inset-0 text-[#737373] pointer-events-none transition-opacity ${
+                      {/* Format-specific file icon — default state.
+                          Colored per extension (PDF red, DOCX blue,
+                          XLSX green, etc.) so the list reads as a
+                          typed-file view, not a sea of identical
+                          glyphs. */}
+                      <span
+                        className={`absolute inset-0 pointer-events-none transition-opacity ${
                           isSelected ? 'opacity-0' : 'opacity-100 group-hover:opacity-0'
                         }`}
-                      />
+                      >
+                        <DocumentTypeIcon name={doc.name} fileType={doc.file_type} />
+                      </span>
                       {/* Checkbox — fades in on hover OR when selected.
                           Use pointer-events-none + auto-on-visible so the
                           hidden state doesn't intercept clicks. */}
@@ -630,9 +844,6 @@ export default function KnowledgePage() {
                       {capitalizeFirst(doc.name)}
                     </span>
                   </div>
-                  <div className="text-xs text-[#737373]">
-                    {capitalizeFirst(doc.file_type || 'text')}
-                  </div>
                   <div className="text-xs text-[#737373]" title={`${doc.char_count.toLocaleString()} chars`}>
                     {doc.file_size != null
                       ? formatBytes(doc.file_size)
@@ -646,17 +857,31 @@ export default function KnowledgePage() {
                       {capitalizeFirst(doc.status)}
                     </Badge>
                   </div>
-                  <div className="flex justify-end">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setDeleteTarget({ kind: 'single', id: doc.id, name: doc.name })
-                      }}
-                      className="p-1 rounded text-[#a3a3a3] hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity"
-                      aria-label="Delete document"
-                    >
-                      <Trash size={14} />
-                    </button>
+                  {/* Actions chip: sticky to the right edge so it stays
+                      visible when the table overflows horizontally. The
+                      chip itself carries the visual weight (white bg +
+                      shadow), so no row-bg trickery is needed — it reads
+                      as a floating control surface on any row color. */}
+                  <div className="sticky right-0 flex items-center justify-end pr-6 pl-3">
+                    <RowActions>
+                      <RowActionButton
+                        label={reindexing.has(doc.id) ? 'Reindexing…' : 'Reindex — refresh embeddings'}
+                        disabled={reindexing.has(doc.id) || doc.status === 'processing'}
+                        onClick={() => reindexDoc(activeKb.id, doc.id, doc.name)}
+                      >
+                        <ArrowClockwise
+                          size={13}
+                          className={reindexing.has(doc.id) ? 'animate-spin' : ''}
+                        />
+                      </RowActionButton>
+                      <RowActionButton
+                        label="Delete document"
+                        destructive
+                        onClick={() => setDeleteTarget({ kind: 'single', id: doc.id, name: doc.name })}
+                      >
+                        <Trash size={13} />
+                      </RowActionButton>
+                    </RowActions>
                   </div>
                 </div>
               )
@@ -664,7 +889,7 @@ export default function KnowledgePage() {
           </div>
         )}
 
-        <p className="text-xs text-[#a3a3a3] mt-4 mb-6 px-6 text-center">Supports .txt, .md, .csv, .pdf, .docx · select multiple to upload in parallel</p>
+        <p className="text-xs text-[#a3a3a3] mt-4 mb-6 px-6 text-center">Supports .txt, .md, .csv, .pdf, .doc/.docx, .xls/.xlsx, .ppt/.pptx · select multiple to upload in parallel</p>
 
         {/* Delete confirmation modal — covers both single and bulk.
             Rendered here (inside the detail view) so the state is co-located
@@ -730,7 +955,7 @@ export default function KnowledgePage() {
   // grey shell + a single Panel owning the page content with its own
   // 48px header.
   return (
-    <div className="flex h-full bg-[#f5f5f5] overflow-hidden gap-3 p-3">
+    <div className="flex h-full bg-[#f5f5f5] overflow-hidden gap-3 p-3 pl-0">
       <Panel
         className="flex-1"
         bodyClassName="overflow-auto p-6"
@@ -740,7 +965,7 @@ export default function KnowledgePage() {
             <div className="ml-auto flex items-center gap-2">
               <Button size="sm" className="rounded-full" onClick={() => setCreateOpen(true)}>
                 <Plus size={14} />
-                New Knowledge Base
+                New folder
               </Button>
             </div>
           </>
@@ -857,7 +1082,7 @@ export default function KnowledgePage() {
           <div className="text-xs text-[#a3a3a3] mt-1 mb-4">Create a knowledge base and upload documents to train your agents</div>
           <Button size="sm" onClick={() => setCreateOpen(true)}>
             <Plus size={14} weight="bold" className="mr-1.5" />
-            New Knowledge Base
+            New folder
           </Button>
         </div>
       )}
@@ -904,10 +1129,9 @@ export default function KnowledgePage() {
               {/* Column headers. Width template differs slightly from the
                   KB detail table: no select column, plus a "Knowledge base"
                   column to show where each file lives. */}
-              <div className="grid grid-cols-[1fr_140px_90px_110px_130px_140px] items-center gap-3 px-4 h-[46px] bg-[#fafafa] text-[11px] font-medium tracking-wide text-[#737373] uppercase">
+              <div className="grid grid-cols-[1fr_140px_110px_130px_140px] items-center gap-3 px-4 h-[46px] bg-[#fafafa] text-[11px] font-medium tracking-wide text-[#737373] uppercase">
                 <div>Name</div>
                 <div>Knowledge base</div>
-                <div>Type</div>
                 <div>Size</div>
                 <div>Uploaded</div>
                 <div>Status</div>
@@ -925,19 +1149,16 @@ export default function KnowledgePage() {
                     setSelectedKb(kb.id)
                     queueMicrotask(() => setViewerDocId(doc.id))
                   }}
-                  className="w-full text-left grid grid-cols-[1fr_140px_90px_110px_130px_140px] items-center gap-3 px-4 py-3 border-t border-black/[0.04] hover:bg-[#fafafa] transition-colors"
+                  className="w-full text-left grid grid-cols-[1fr_140px_110px_130px_140px] items-center gap-3 px-4 py-3 border-t border-black/[0.04] hover:bg-[#fafafa] transition-colors"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <FileText size={18} className="text-[#737373] shrink-0" />
+                    <DocumentTypeIcon name={doc.name} fileType={doc.file_type} />
                     <span className="text-sm font-medium text-[#2e2e2e] truncate">
                       {capitalizeFirst(doc.name)}
                     </span>
                   </div>
                   <div className="text-xs text-[#525252] truncate">
                     {kb.name}
-                  </div>
-                  <div className="text-xs text-[#737373]">
-                    {capitalizeFirst(doc.file_type || 'text')}
                   </div>
                   <div className="text-xs text-[#737373]" title={`${doc.char_count.toLocaleString()} chars`}>
                     {doc.file_size != null
