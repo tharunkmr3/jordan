@@ -110,11 +110,13 @@ import type { KbSource } from './knowledge-base'
 let queryKnowledgeBase:
   | ((agentId: string, query: string, topK?: number) => Promise<KbSource[]>)
   | null = null
+let listKbDocuments: ((agentId: string) => Promise<string[]>) | null = null
 
 try {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const kb = require('./knowledge-base')
   queryKnowledgeBase = kb.queryKnowledgeBase
+  listKbDocuments = kb.listKbDocuments
 } catch {
   // Knowledge base module not available yet
 }
@@ -135,8 +137,12 @@ export async function processChatMessage(
   const contact = await findOrCreateContact(supabase, agent.org_id, input)
   const conversation = await findOrCreateConversation(supabase, agent, contact, input)
 
-  // 3. Save user message, load history, and query KB in parallel
-  const [, history, kbContext] = await Promise.all([
+  // 3. Save user message, load history, query KB, and list KB documents
+  // in parallel. The document list is cheap (a plain SELECT from
+  // kb_documents) but gives the agent a ground-truth inventory so it
+  // doesn't claim "I only see N files" when retrieval missed some — see
+  // listKbDocuments() for the full rationale.
+  const [, history, kbContext, kbDocumentNames] = await Promise.all([
     saveMessage(supabase, {
       conversation_id: conversation.id,
       org_id: agent.org_id,
@@ -153,6 +159,9 @@ export async function processChatMessage(
     queryKnowledgeBase
       ? queryKnowledgeBase(input.agentId, input.message, 8).catch(() => [] as KbSource[])
       : Promise.resolve([] as KbSource[]),
+    listKbDocuments
+      ? listKbDocuments(input.agentId).catch(() => [] as string[])
+      : Promise.resolve([] as string[]),
   ])
 
   // 4. Build prompt
@@ -172,7 +181,7 @@ export async function processChatMessage(
   const effectiveModelName = input.modelOverride?.name ?? agent.model_name
 
   const messages = await buildPrompt(
-    agent, history, input.message, kbContextStr, input.channel, input.attachments,
+    agent, history, input.message, kbContextStr, kbDocumentNames, input.channel, input.attachments,
     { provider: effectiveProvider, name: effectiveModelName },
   )
   const modelConfig: ModelConfig = {
@@ -302,7 +311,7 @@ export async function* streamChatMessage(
   const contact = await findOrCreateContact(supabase, agent.org_id, input)
   const conversation = await findOrCreateConversation(supabase, agent, contact, input)
 
-  const [, history, kbContext] = await Promise.all([
+  const [, history, kbContext, kbDocumentNames] = await Promise.all([
     saveMessage(supabase, {
       conversation_id: conversation.id,
       org_id: agent.org_id,
@@ -319,6 +328,9 @@ export async function* streamChatMessage(
     queryKnowledgeBase
       ? queryKnowledgeBase(input.agentId, input.message, 8).catch(() => [] as KbSource[])
       : Promise.resolve([] as KbSource[]),
+    listKbDocuments
+      ? listKbDocuments(input.agentId).catch(() => [] as string[])
+      : Promise.resolve([] as string[]),
   ])
 
   // Render retrieved chunks with their source filename inline so the
@@ -337,7 +349,7 @@ export async function* streamChatMessage(
   const effectiveModelName = input.modelOverride?.name ?? agent.model_name
 
   const messages = await buildPrompt(
-    agent, history, input.message, kbContextStr, input.channel, input.attachments,
+    agent, history, input.message, kbContextStr, kbDocumentNames, input.channel, input.attachments,
     { provider: effectiveProvider, name: effectiveModelName },
   )
   const modelConfig: ModelConfig = {
@@ -644,6 +656,7 @@ async function buildPrompt(
   history: ChatMessage[],
   currentMessage: string,
   kbContext: string,
+  kbDocumentNames: string[],
   channel: ChannelType | undefined,
   attachments: UploadedAttachment[] | undefined,
   modelIdentity?: { provider: string; name: string },
@@ -665,6 +678,18 @@ async function buildPrompt(
 
   if (kbContext) {
     systemPrompt += `\n\n--- Relevant Knowledge Base Context ---\n${kbContext}\n--- End Context ---\n\nUse the above context to answer the user's question when relevant. If the context doesn't help, answer from your general knowledge.`
+  }
+
+  // Ground-truth inventory of the agent's KB. Without this the model
+  // treats "retrieved chunks" as equivalent to "everything I have access
+  // to" and will tell the user "I only see these four files" when the KB
+  // actually holds eight. With the list present, the agent can answer
+  // "do you have my resume?" truthfully, and can reason about whether a
+  // question is answerable from retrieved content vs. a file whose
+  // chunks simply didn't surface for this query.
+  if (kbDocumentNames.length > 0) {
+    const fileList = kbDocumentNames.map((n) => `- ${n}`).join('\n')
+    systemPrompt += `\n\n--- Knowledge Base Inventory ---\nYou have ${kbDocumentNames.length} file${kbDocumentNames.length === 1 ? '' : 's'} available in your knowledge base:\n${fileList}\n\nThe passages above (if any) are the most relevant for the current query only — they do not represent your complete KB access. If the user asks about a specific file by name, you can confirm its presence from this inventory even if its content wasn't retrieved. Don't claim a file is missing unless it's not in the list above.`
   }
 
   // Channel-aware output rules. Three tiers depending on what the

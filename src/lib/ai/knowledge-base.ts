@@ -69,3 +69,39 @@ export async function queryKnowledgeBase(
     kbId: row.kb_id,
   }))
 }
+
+/**
+ * List every document name the agent's knowledge base contains.
+ *
+ * Why this exists — the retrieved Chunk[] that RAG feeds the LLM is a
+ * response to THIS query, not an inventory of what the agent has
+ * access to. Without a file list in the system prompt the agent
+ * cannot answer "do you have my resume?" truthfully; it treats the
+ * retrieved chunks as if they were the complete set and says "I only
+ * see four files" when the KB holds eight.
+ *
+ * Returns `[]` (not null) so buildPrompt can call it unconditionally
+ * without branching on failure. We cap at 100 documents to keep the
+ * system prompt bounded — past that, we'd need a searchable file-
+ * list tool anyway.
+ */
+export async function listKbDocuments(agentId: string): Promise<string[]> {
+  const supabase = createAdminClient()
+  try {
+    const { data, error } = await supabase
+      .from('kb_documents')
+      .select('name, knowledge_bases!inner(agent_id)')
+      .eq('knowledge_bases.agent_id', agentId)
+      .eq('status', 'ready')
+      .order('created_at', { ascending: false })
+      .limit(100)
+    if (error) {
+      console.error('[kb] listKbDocuments failed:', error)
+      return []
+    }
+    return (data ?? []).map((d: { name: string }) => d.name)
+  } catch (err) {
+    console.error('[kb] listKbDocuments threw:', err)
+    return []
+  }
+}
