@@ -47,11 +47,21 @@ export async function generateAndHostSarvamAudio(
     .slice(0, 16)
   const filename = `${hash}-sarvam-${speaker}.mp3`
 
+  // Cache lookup: getPublicUrl is pure URL construction (no network),
+  // so we HEAD the public URL to detect a real hit. Public storage
+  // HEADs are fast — usually <100ms — but on a cache miss we still pay
+  // for the 404 roundtrip. Timed so the perf log shows whether cache
+  // lookup, Sarvam, or upload is the slow stage.
+  const tStart = Date.now()
   const { data: existing } = supabase.storage.from(BUCKET).getPublicUrl(filename)
   if (existing?.publicUrl) {
     const head = await fetch(existing.publicUrl, { method: 'HEAD' })
-    if (head.ok) return existing.publicUrl
+    if (head.ok) {
+      console.log('[sarvam] cache hit', { speaker, lang: languageCode, ms: Date.now() - tStart })
+      return existing.publicUrl
+    }
   }
+  const tAfterCacheCheck = Date.now()
 
   // Bulbul v3 caps input at 2500 chars; truncate defensively so a long
   // reply doesn't 400 the whole TTS call.
@@ -98,6 +108,7 @@ export async function generateAndHostSarvamAudio(
   const base64 = body.audios?.[0]
   if (!base64) throw new Error('Sarvam TTS returned no audio')
 
+  const tAfterSynth = Date.now()
   const audioBuffer = Buffer.from(base64, 'base64')
 
   const { error: uploadErr } = await supabase.storage
@@ -109,7 +120,18 @@ export async function generateAndHostSarvamAudio(
     throw new Error(`Failed to upload Sarvam audio: ${uploadErr.message}`)
   }
 
+  const tAfterUpload = Date.now()
   const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(filename)
+  console.log('[sarvam] synth', {
+    speaker,
+    lang: languageCode,
+    textLen: truncatedText.length,
+    audioBytes: audioBuffer.byteLength,
+    cacheCheckMs: tAfterCacheCheck - tStart,
+    sarvamApiMs: tAfterSynth - tAfterCacheCheck,
+    uploadMs: tAfterUpload - tAfterSynth,
+    totalMs: tAfterUpload - tStart,
+  })
   return urlData.publicUrl
 }
 

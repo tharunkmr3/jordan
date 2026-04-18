@@ -255,10 +255,12 @@ async function handle(request: NextRequest): Promise<Response> {
         contactInfo: { phone: from, channelUserId: from },
       })
       const tAfterLlm = Date.now()
-      const [responseSpeech, followUp] = await Promise.all([
-        speak(result.response, agent.voice_provider, agent.voice_id, pollyVoice, agent.language),
-        speak("Is there anything else I can help with?", agent.voice_provider, agent.voice_id, pollyVoice, agent.language),
-      ])
+      // Only synthesize the actual reply — the follow-up "Is there
+      // anything else I can help with?" was a second ~3-4s Sarvam call
+      // that doubled our TTS stage for no real UX win (callers know
+      // to speak after the reply; a prompt isn't required). <Gather>
+      // below still listens silently for the next turn.
+      const responseSpeech = await speak(result.response, agent.voice_provider, agent.voice_id, pollyVoice, agent.language)
       const tAfterTts = Date.now()
       console.log('[twilio-voice] timing', {
         llmMs: tAfterLlm - t0,
@@ -266,7 +268,7 @@ async function handle(request: NextRequest): Promise<Response> {
         totalMs: tAfterTts - t0,
         responseLen: result.response.length,
       })
-      return { responseSpeech, followUp }
+      return { responseSpeech }
     })()
 
     const raced = await withTimeout(pipelinePromise, STAGE_SOFT_TIMEOUT_MS)
@@ -286,12 +288,13 @@ async function handle(request: NextRequest): Promise<Response> {
       )
     }
 
-    const { responseSpeech, followUp } = raced.value
+    const { responseSpeech } = raced.value
+    // <Gather> without a nested prompt — the assistant's reply already
+    // played; listening silently for the next turn is more natural than
+    // asking "anything else?" after every exchange.
     return twiml(
       responseSpeech +
-      `<Gather input="speech" action="/api/webhooks/twilio-voice?agentId=${agentId}" method="POST" speechTimeout="auto" language="${speechLang}" speechModel="phone_call">` +
-      followUp +
-      `</Gather>` +
+      `<Gather input="speech" action="/api/webhooks/twilio-voice?agentId=${agentId}" method="POST" speechTimeout="auto" language="${speechLang}" speechModel="phone_call"/>` +
       `<Say voice="${pollyVoice}">Thank you for calling. Goodbye.</Say><Hangup/>`
     )
   } catch (err) {
