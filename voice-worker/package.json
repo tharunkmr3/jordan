@@ -1,0 +1,25 @@
+{
+  "name": "jordon-voice-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Jordon AI LiveKit Agents worker — bridges SIP calls to Sarvam STT/LLM/TTS with streaming.",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js start",
+    "dev": "tsx watch src/index.ts dev",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@livekit/agents": "^0.7.0",
+    "@livekit/agents-plugin-silero": "^0.6.0",
+    "@supabase/supabase-js": "^2.103.0",
+    "livekit-server-sdk": "^2.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
