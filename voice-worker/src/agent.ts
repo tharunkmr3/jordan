@@ -57,15 +57,16 @@ export async function buildVoicePipeline(config: AgentConfig): Promise<{
 }> {
   const instructions = config.system_prompt + VOICE_MODE_RIDER
 
-  // Silero VAD keeps the STT loop from firing on every breath. VAD.load
-  // pulls the ONNX model the first time and reuses it — cheap on
-  // subsequent calls in the same worker process.
+  // Silero VAD still runs — AgentSession uses it for interruption
+  // detection (caller talking over the TTS). STT endpointing is now
+  // handled by Saarika itself via vad_signals=true on the WebSocket,
+  // so we no longer wrap the STT in StreamAdapter.
   const vad = await silero.VAD.load()
 
-  // Wrap the one-shot SarvamSTT in the framework's StreamAdapter so
-  // the pipeline sees a streaming STT. VAD owns utterance boundaries.
-  const saarika = new SarvamSTT({ language: config.language })
-  const stt = new sttNs.StreamAdapter(saarika, vad)
+  // Native streaming STT via Saarika WebSocket. Partials aren't emitted
+  // by Sarvam today (final-only per utterance), but the WS cuts the
+  // whole STT stage latency from ~2s HTTP round-trip to ~200-500ms.
+  const stt = new SarvamSTT({ language: config.language })
 
   // Sarvam-M speaks OpenAI-compatible /v1/chat/completions, so the
   // OpenAI plugin works as-is when we override baseURL + apiKey.

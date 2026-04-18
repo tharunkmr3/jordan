@@ -38,7 +38,10 @@ export class SarvamSTT extends stt.STT {
   private readonly langCode: string
 
   constructor(opts: SarvamSTTOptions) {
-    super({ streaming: false, interimResults: false })
+    // Native streaming via the Saarika WebSocket endpoint — no need
+    // for the framework's StreamAdapter wrapper anymore. VAD boundary
+    // events are emitted by Saarika itself when `vad_signals=true`.
+    super({ streaming: true, interimResults: false })
     const key = process.env.SARVAM_API_KEY
     if (!key) throw new Error('SARVAM_API_KEY not set for SarvamSTT')
     this.apiKey = key
@@ -91,12 +94,20 @@ export class SarvamSTT extends stt.STT {
   }
 
   /**
-   * StreamAdapter plugs in the real streaming behaviour — this
-   * `stream()` should never be called directly. We throw so incorrect
-   * pipeline wiring surfaces loud instead of failing silently.
+   * Return a native streaming recognizer backed by Saarika's WebSocket
+   * endpoint. VAD and endpointing happen inside Sarvam (vad_signals=true
+   * on connect) so we no longer need the framework's VAD adapter for
+   * STT boundary detection.
    */
   stream(): stt.SpeechStream {
-    throw new Error('SarvamSTT must be wrapped with StreamAdapter + VAD; do not call stream() directly.')
+    // Lazy-import to avoid a circular type dep (stt_stream imports SarvamSTT).
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { SarvamSpeechStream } = require('./stt_stream.js') as typeof import('./stt_stream.js')
+    return new SarvamSpeechStream({
+      stt: this,
+      apiKey: this.apiKey,
+      langCode: this.langCode,
+    })
   }
 }
 
