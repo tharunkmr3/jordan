@@ -785,20 +785,70 @@ function toGeminiMessages(messages: ChatMessage[]): GeminiMessage[] {
 }
 
 /**
- * Strip JSON Schema fields Gemini rejects and normalize `type` enums
- * to uppercase. Composio tool schemas routinely carry
- * `additionalProperties`, `$schema`, `$ref`, `default`, `examples` and
- * lowercase type names — Gemini 400s on all of them.
+ * Strip JSON Schema fields Gemini rejects and normalize the schema to
+ * the restricted subset its function_declarations endpoint accepts.
+ *
+ * Composio tool schemas are written against the full JSON Schema spec,
+ * but Gemini's Schema type is a deliberate subset (to keep decoding
+ * tractable). Keywords it doesn't recognize cause a 400 INVALID_ARGUMENT
+ * like "Unknown name 'const' at tools[0].function_declarations[N]…".
+ *
+ * Transformations:
+ *   - STRIP removes keywords Gemini 400s on outright.
+ *   - `const: X` → `enum: [X]` (Gemini accepts enum, not const). Done as
+ *     an in-place swap so the constraint's semantics survive.
+ *   - `type` string values → UPPERCASE ("STRING", "OBJECT", …), which
+ *     is how Gemini documents the Type enum.
+ *   - Composition keywords (`oneOf`, `anyOf`, `allOf`, `not`) are stripped
+ *     because Gemini's function-declaration schema subset rejects them;
+ *     the sibling properties in the object usually still constrain
+ *     enough for the model to pick a valid shape.
+ *   - `if`/`then`/`else` conditional schemas: stripped (same reason).
+ *
+ * Kept (Gemini supports):
+ *   - type, description, nullable, enum, format
+ *   - properties, required (for objects)
+ *   - items (for arrays)
+ *   - minItems / maxItems / minLength / maxLength / minimum / maximum
+ *   - pattern
  */
 function sanitizeSchemaForGemini(schema: unknown): unknown {
   if (schema === null || schema === undefined) return schema
   if (Array.isArray(schema)) return schema.map(sanitizeSchemaForGemini)
   if (typeof schema !== 'object') return schema
 
-  const STRIP = new Set(['additionalProperties', '$schema', '$ref', 'default', 'examples', 'definitions', '$defs'])
+  const STRIP = new Set([
+    // Reference / metadata keywords
+    'additionalProperties', '$schema', '$ref', '$defs',
+    'default', 'examples', 'definitions', '$comment', '$id',
+    // Composition — Gemini's Schema subset doesn't accept these inside
+    // function declarations and 400s if present.
+    'oneOf', 'anyOf', 'allOf', 'not',
+    // Conditional schemas — same reason.
+    'if', 'then', 'else',
+    // Dependency keywords — rarely useful for tool args and not supported.
+    'dependencies', 'dependentRequired', 'dependentSchemas',
+    // Object sizing and key patterns — not in Gemini's subset.
+    'patternProperties', 'propertyNames', 'minProperties', 'maxProperties',
+    // Array uniqueness — Gemini doesn't enforce it.
+    'uniqueItems', 'contains', 'minContains', 'maxContains',
+    // Numeric divisibility — not in subset.
+    'multipleOf', 'exclusiveMinimum', 'exclusiveMaximum',
+    // Content / encoding keywords — not in subset.
+    'contentEncoding', 'contentMediaType', 'contentSchema',
+    // Draft-2019+ discriminator / readOnly / writeOnly — ignored by Gemini.
+    'readOnly', 'writeOnly', 'discriminator',
+  ])
+
   const out: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(schema as Record<string, unknown>)) {
     if (STRIP.has(k)) continue
+    // `const: X` isn't supported; rewrite as a single-member enum so the
+    // model still knows the field must equal X. Preserves semantics.
+    if (k === 'const') {
+      out.enum = Array.isArray(out.enum) ? [...(out.enum as unknown[]), v] : [v]
+      continue
+    }
     if (k === 'type' && typeof v === 'string') {
       out[k] = v.toUpperCase()
       continue
