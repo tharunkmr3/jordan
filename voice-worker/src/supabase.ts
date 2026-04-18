@@ -53,20 +53,31 @@ export async function loadAgentConfig(agentId: string): Promise<AgentConfig> {
     .from('agents')
     .select('id, name, system_prompt, language, voice_id, greeting_message, fallback_message, max_tokens')
     .eq('id', agentId)
-    .single()
+    .single<AgentRow>()
 
   if (error || !data) {
     throw new Error(`[voice-worker] Agent ${agentId} not found: ${error?.message ?? 'no row'}`)
   }
 
   return {
-    id: data.id as string,
-    name: (data.name as string) ?? 'Jordon',
-    system_prompt: (data.system_prompt as string) ?? 'You are a helpful assistant.',
-    language: (data.language as string) ?? 'en',
-    voice_id: (data.voice_id as string) ?? 'priya',
-    greeting_message: (data.greeting_message as string) ?? `Hello, how can I help you?`,
-    fallback_message: (data.fallback_message as string | null) ?? null,
-    max_tokens: (data.max_tokens as number | null) ?? 220,
+    id: data.id,
+    name: data.name ?? 'Jordon',
+    system_prompt: data.system_prompt ?? 'You are a helpful assistant.',
+    language: data.language ?? 'en',
+    voice_id: data.voice_id ?? 'priya',
+    greeting_message: data.greeting_message ?? 'Hello, how can I help you?',
+    fallback_message: data.fallback_message,
+    max_tokens: data.max_tokens ?? 220,
   }
+}
+
+interface AgentRow {
+  id: string
+  name: string | null
+  system_prompt: string | null
+  language: string | null
+  voice_id: string | null
+  greeting_message: string | null
+  fallback_message: string | null
+  max_tokens: number | null
 }

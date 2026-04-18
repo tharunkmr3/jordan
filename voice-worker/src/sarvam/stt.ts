@@ -1,87 +1,145 @@
 // ============================================================================
-// Sarvam Saarika — streaming STT for LiveKit Agents.
+// Sarvam Saarika — non-streaming STT for LiveKit Agents.
 // ============================================================================
 //
-// Saarika is Sarvam's ASR model tuned for Indian languages + Indian-
-// accented English. Native streaming over WebSocket (lower latency
-// than the chunked-HTTP endpoint). We subscribe to the caller's audio
-// frames, forward them into the Saarika socket, and emit transcripts
-// back into the LiveKit Agent pipeline.
+// Uses Saarika's synchronous HTTP /speech-to-text endpoint. Wrap this
+// instance with @livekit/agents' StreamAdapter + a VAD to get the
+// streaming interface the voice pipeline expects — LiveKit buffers
+// audio between speech-start/end events, calls our `_recognize`, we
+// POST a WAV to Saarika, and return the transcript.
 //
-// Endpoint reference:
-//   wss://api.sarvam.ai/speech-to-text-streaming
-//   Auth: api-subscription-key header on connect
-//   Frame format: 16kHz PCM S16LE chunks, JSON control messages
-//   Returns: partial + final transcripts with language_code
-//
-// Status: STUB — class structure + endpoint constants are in place, the
-// WebSocket wiring lives in a follow-up commit so this turn's scaffold
-// is a clean compile. The LiveKit Agents `stt.STT` interface expects:
-//   - stream(): returns an STT.SpeechStream that emits events
-//   - close(): releases the socket
-// Implementation plan below in-line.
+// The real streaming endpoint (wss://api.sarvam.ai/speech-to-text-
+// streaming) is a follow-up — buffered-utterance latency is already
+// fine for MVP since our LLM+TTS stages are the bigger waits.
 // ============================================================================
 
+import type { AudioFrame } from '@livekit/rtc-node'
 import { stt } from '@livekit/agents'
+import type { AudioBuffer, LanguageCode } from '@livekit/agents'
 
-const SAARIKA_WSS_URL = 'wss://api.sarvam.ai/speech-to-text-streaming'
+const SAARIKA_URL = 'https://api.sarvam.ai/speech-to-text'
+const SAARIKA_MODEL = 'saarika:v2'
 
-// Sarvam-supported Indic codes. Saarika takes a "target_language_code"
-// like hi-IN on connect; for English + Indian accent use en-IN.
+// agents.language (ISO-639-1) → Sarvam BCP-47. `unknown` lets Saarika
+// auto-detect, which matters for multilingual callers.
 const AGENT_LANG_TO_SAARIKA: Record<string, string> = {
   en: 'en-IN', hi: 'hi-IN', ta: 'ta-IN', te: 'te-IN', kn: 'kn-IN',
   bn: 'bn-IN', mr: 'mr-IN', gu: 'gu-IN', ml: 'ml-IN', pa: 'pa-IN', od: 'od-IN',
 }
 
 export interface SarvamSTTOptions {
+  /** ISO-639-1 hint ("te", "hi", etc). Maps to Saarika BCP-47. */
   language: string
 }
 
-/**
- * LiveKit Agents STT adapter backed by Sarvam Saarika streaming.
- *
- * Wire plan for the follow-up pass:
- *   1. On `recognize()`, open a WebSocket to SAARIKA_WSS_URL with the
- *      api-subscription-key header and a `config` frame specifying
- *      target_language_code (from options.language) + enable_partials.
- *   2. Pipe inbound audio frames into the socket as base64 PCM16.
- *   3. For every response frame, emit an `INTERIM_TRANSCRIPT` (when
- *      partial) or `FINAL_TRANSCRIPT` (when final) into the LiveKit
- *      Agents event stream.
- *   4. Propagate language_code from the response so downstream TTS can
- *      pin to what the caller actually spoke.
- *   5. Close the socket on `close()` and reopen per recognition session
- *      (Saarika sockets are scoped to one utterance).
- */
 export class SarvamSTT extends stt.STT {
+  label = 'sarvam.saarika'
   private readonly apiKey: string
   private readonly langCode: string
 
   constructor(opts: SarvamSTTOptions) {
-    super({
-      capabilities: {
-        streaming: true,
-        interimResults: true,
-      },
-    })
+    super({ streaming: false, interimResults: false })
     const key = process.env.SARVAM_API_KEY
     if (!key) throw new Error('SARVAM_API_KEY not set for SarvamSTT')
     this.apiKey = key
-    this.langCode = AGENT_LANG_TO_SAARIKA[opts.language.toLowerCase()] ?? 'en-IN'
+    this.langCode = AGENT_LANG_TO_SAARIKA[opts.language.toLowerCase()] ?? 'unknown'
+  }
+
+  get model() { return SAARIKA_MODEL }
+  get provider() { return 'sarvam' }
+
+  /**
+   * Synchronous utterance recognition. Called by the StreamAdapter
+   * wrapper once VAD has carved the caller's speech into a complete
+   * utterance buffer.
+   */
+  protected async _recognize(frame: AudioBuffer): Promise<stt.SpeechEvent> {
+    const wav = audioBufferToWav(frame)
+    const form = new FormData()
+    form.append('file', new Blob([new Uint8Array(wav)], { type: 'audio/wav' }), 'utt.wav')
+    form.append('model', SAARIKA_MODEL)
+    form.append('language_code', this.langCode)
+
+    const res = await fetch(SAARIKA_URL, {
+      method: 'POST',
+      headers: { 'api-subscription-key': this.apiKey },
+      body: form,
+    })
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      console.error('[sarvam-stt] failed', { status: res.status, body: body.slice(0, 300) })
+      // Empty transcript lets AgentSession continue gracefully —
+      // throwing would kill the whole voice session mid-call.
+      return {
+        type: stt.SpeechEventType.FINAL_TRANSCRIPT,
+        alternatives: [{ text: '', language: 'en-IN' as LanguageCode, startTime: 0, endTime: 0, confidence: 0 }],
+      }
+    }
+    const json = (await res.json()) as { transcript?: string; language_code?: string }
+    const text = (json.transcript ?? '').trim()
+    console.log('[sarvam-stt] ok', { len: text.length, lang: json.language_code })
+    return {
+      type: stt.SpeechEventType.FINAL_TRANSCRIPT,
+      alternatives: [{
+        text,
+        language: (json.language_code ?? this.langCode) as LanguageCode,
+        startTime: 0,
+        endTime: 0,
+        confidence: 1,
+      }],
+    }
   }
 
   /**
-   * LiveKit Agents calls `_recognize` (protected) under the hood when
-   * the session needs a one-shot recognition; `stream()` is preferred
-   * for streaming. For now we throw on one-shot since Saarika's
-   * sweet-spot is streaming — the upper-layer pipeline shouldn't land
-   * here.
+   * StreamAdapter plugs in the real streaming behaviour — this
+   * `stream()` should never be called directly. We throw so incorrect
+   * pipeline wiring surfaces loud instead of failing silently.
    */
-  async _recognize(_frame: unknown): Promise<stt.SpeechEvent> {
-    throw new Error('SarvamSTT: non-streaming recognize not wired yet — use stream()')
+  stream(): stt.SpeechStream {
+    throw new Error('SarvamSTT must be wrapped with StreamAdapter + VAD; do not call stream() directly.')
   }
+}
 
-  // Override stream() once the WebSocket protocol is wired.
-  // `stt.STT#stream()` returns a SpeechStream; we'll return a
-  // SarvamSpeechStream that owns the socket lifecycle.
+/**
+ * Encode one or more LiveKit AudioFrames (mono PCM16) as a WAV byte
+ * buffer — what Saarika expects as file contents. Handles a single
+ * frame or an array transparently.
+ */
+function audioBufferToWav(buffer: AudioBuffer): Uint8Array {
+  const frames: AudioFrame[] = Array.isArray(buffer) ? buffer : [buffer]
+  const sampleRate = frames[0]?.sampleRate ?? 16000
+
+  // Flatten sample data into one Int16Array across all frames.
+  let totalSamples = 0
+  for (const f of frames) totalSamples += (f.data as Int16Array).length
+  const samples = new Int16Array(totalSamples)
+  let off = 0
+  for (const f of frames) {
+    const d = f.data as Int16Array
+    samples.set(d, off)
+    off += d.length
+  }
+  const byteLen = samples.length * 2
+
+  // Minimal PCM16 mono WAV header.
+  const out = new Uint8Array(44 + byteLen)
+  const view = new DataView(out.buffer)
+  const writeStr = (offset: number, s: string) => {
+    for (let i = 0; i < s.length; i++) view.setUint8(offset + i, s.charCodeAt(i))
+  }
+  writeStr(0, 'RIFF')
+  view.setUint32(4, 36 + byteLen, true)
+  writeStr(8, 'WAVE')
+  writeStr(12, 'fmt ')
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true)       // PCM
+  view.setUint16(22, 1, true)       // mono
+  view.setUint32(24, sampleRate, true)
+  view.setUint32(28, sampleRate * 2, true)
+  view.setUint16(32, 2, true)
+  view.setUint16(34, 16, true)
+  writeStr(36, 'data')
+  view.setUint32(40, byteLen, true)
+  new Int16Array(out.buffer, 44).set(samples)
+  return out
 }

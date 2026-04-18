@@ -1,37 +1,32 @@
 // ============================================================================
-// AgentSession factory — wires Sarvam STT/LLM/TTS into a LiveKit voice
-// pipeline for one call.
+// AgentSession factory — wires Sarvam STT/TTS + Sarvam-M LLM (via the
+// OpenAI-compatible plugin) into a LiveKit voice pipeline for one call.
 // ============================================================================
 //
-// Returns a ready-to-start AgentSession that subscribes to the caller's
-// audio, runs Sarvam Saarika for streaming STT, routes the transcript
-// through Sarvam-M with the agent's system prompt, synthesises replies
-// via Sarvam Bulbul v3, and publishes audio back to the room — all
-// streaming where possible so first-token-out is measured in hundreds
-// of milliseconds, not seconds.
+// - STT: SarvamSTT (non-streaming /speech-to-text) wrapped in
+//   StreamAdapter + Silero VAD so the framework sees a streaming STT
+//   interface while we call Saarika per-utterance.
+// - LLM: @livekit/agents-plugin-openai pointed at Sarvam's
+//   OpenAI-compatible /v1/chat/completions with model=sarvam-m.
+// - TTS: SarvamTTS (non-streaming Bulbul v3 /text-to-speech).
 //
-// Interruption (barge-in) is handled by LiveKit Agents for free: when
-// the caller starts speaking while TTS is playing, the VAD cuts the
-// synthesis and restarts the STT loop. Huge UX win over our previous
-// Twilio webhook dance.
+// Barge-in (caller interrupting assistant) is handled by the framework
+// via VAD + TTS cancellation — no extra work on our side.
 // ============================================================================
 
-import {
-  Agent,
-  AgentSession,
-} from '@livekit/agents'
-import { VoiceActivityDetection } from '@livekit/agents-plugin-silero'
+import { stt as sttNs } from '@livekit/agents'
+import * as openaiPlugin from '@livekit/agents-plugin-openai'
+import * as silero from '@livekit/agents-plugin-silero'
 import { SarvamSTT } from './sarvam/stt.js'
-import { SarvamLLM } from './sarvam/llm.js'
 import { SarvamTTS } from './sarvam/tts.js'
 import type { AgentConfig } from './supabase.js'
 
 /**
- * The voice-mode prompt rider. Even with the agent's business prompt
- * present, voice callers need stricter conversational guidance — TTS
- * reads verbatim, so markdown and lists ruin the audio, and every
- * extra word costs real latency. This mirrors the buildPrompt() rules
- * in the Next.js chat-pipeline for channel === 'phone'.
+ * Voice-mode prompt rider. The agent's business prompt is written for
+ * rich chat/markdown; on the phone the output is spoken verbatim, so
+ * bullets/lists/emoji turn into garbage and every extra word costs
+ * both LLM and TTS time. Mirrors buildPrompt() in the Next.js
+ * chat-pipeline for channel === 'phone'.
  */
 const VOICE_MODE_RIDER = `\n\n--- Voice Call Mode ---
 You are on a LIVE phone call. Your reply will be spoken aloud:
@@ -39,54 +34,66 @@ You are on a LIVE phone call. Your reply will be spoken aloud:
 - ONE short sentence when possible. Never more than two.
 - Under 25 words total.
 - Natural, warm, conversational. Not a customer-service script.
-- Mirror the caller's language exactly. Clean output only — no code-switching unless the caller does.
-- No markdown, bullets, headings, URLs, or emojis.
+- Mirror the caller's language exactly. If they speak Telugu, reply in clean Telugu.
+- No markdown, bullets, headings, URLs, or emojis — these are read aloud literally.
 - No openers like "Sure!" / "Of course!" — answer directly.
 - No closers like "I hope that helps!" — the line stays open for the next turn.
 - Ask ONE question at a time, never a stack.`
 
 /**
- * Build the full voice pipeline for this call. Returns the session and
- * a prepared agent object — the caller invokes `session.start()` once
- * they've connected to the room, and `session.say()` for the greeting.
+ * Build the voice pipeline for this call. Returns the plugin instances
+ * needed to start an AgentSession in `src/index.ts`. We return these as
+ * loose values (not an AgentSession directly) because the LiveKit
+ * Agents Node SDK expects the session to be constructed inside the
+ * agent entry closure with access to the JobContext.
  */
-export function buildAgentSession(config: AgentConfig): {
-  agent: Agent
-  session: AgentSession
-  say: (text: string, opts?: { allowInterruptions?: boolean }) => Promise<void>
-  start: (opts: { agent: Agent; room: unknown }) => Promise<void>
-} {
+export async function buildVoicePipeline(config: AgentConfig): Promise<{
+  instructions: string
+  stt: sttNs.STT
+  llm: openaiPlugin.LLM
+  tts: SarvamTTS
+  vad: silero.VAD
+  greeting: string
+}> {
   const instructions = config.system_prompt + VOICE_MODE_RIDER
 
-  const agent = new Agent({
-    instructions,
+  // Silero VAD keeps the STT loop from firing on every breath. VAD.load
+  // pulls the ONNX model the first time and reuses it — cheap on
+  // subsequent calls in the same worker process.
+  const vad = await silero.VAD.load()
+
+  // Wrap the one-shot SarvamSTT in the framework's StreamAdapter so
+  // the pipeline sees a streaming STT. VAD owns utterance boundaries.
+  const saarika = new SarvamSTT({ language: config.language })
+  const stt = new sttNs.StreamAdapter(saarika, vad)
+
+  // Sarvam-M speaks OpenAI-compatible /v1/chat/completions, so the
+  // OpenAI plugin works as-is when we override baseURL + apiKey.
+  const llm = new openaiPlugin.LLM({
+    apiKey: requireEnv('SARVAM_API_KEY'),
+    baseURL: 'https://api.sarvam.ai/v1',
+    model: 'sarvam-m',
+    // Low-ish temp for phone — we want short, direct replies.
+    temperature: 0.6,
   })
 
-  // VAD keeps the pipeline from running the LLM on every breath —
-  // Silero's Node port is deterministic and runs CPU-only, plenty fast.
-  const vad = new VoiceActivityDetection()
-
-  const session = new AgentSession({
-    vad,
-    stt: new SarvamSTT({ language: config.language }),
-    llm: new SarvamLLM({
-      model: 'sarvam-m',
-      maxTokens: config.max_tokens ?? 220,
-    }),
-    tts: new SarvamTTS({
-      speaker: config.voice_id,
-      // Language is auto-detected per-utterance inside the TTS class
-      // using Sarvam /text-lid — same pattern as the Twilio fallback
-      // path. The agent-level language only kicks in for pure
-      // Latin-script replies where the detector falls back.
-      fallbackLanguage: config.language,
-    }),
+  const tts = new SarvamTTS({
+    speaker: config.voice_id,
+    fallbackLanguage: config.language,
   })
 
   return {
-    agent,
-    session,
-    say: (text, opts) => session.say(text, opts ?? {}),
-    start: (opts) => session.start(opts as Parameters<typeof session.start>[0]),
+    instructions,
+    stt,
+    llm,
+    tts,
+    vad,
+    greeting: config.greeting_message,
   }
+}
+
+function requireEnv(name: string): string {
+  const value = process.env[name]
+  if (!value) throw new Error(`Missing required env var: ${name}`)
+  return value
 }
