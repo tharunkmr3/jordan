@@ -109,5 +109,11 @@ export default defineAgent({
 cli.runApp(
   new WorkerOptions({
     agent: fileURLToPath(import.meta.url),
+    // Named dispatch — our LiveKit Cloud SIP dispatch rule references
+    // this exact name. Without it, the worker joins any available
+    // room, not just the ones explicitly dispatched to it, which
+    // would conflict if we ever run multiple agent types on the
+    // same LiveKit project.
+    agentName: 'jordon-voice-worker',
   }),
 )
