@@ -21,6 +21,7 @@ import type { UploadedAttachment } from '@/lib/chat-attachments/constants'
 import { Source, SourceTrigger, SourceContent } from '@/components/ui/source'
 import { DocumentTypeIcon } from '@/components/ui/document-type-icon'
 import { StructuredReply } from '@/components/ui/structured-reply'
+import { ReasoningSteps, type ReasoningStep } from '@/components/ui/reasoning-steps'
 import { parseStructuredReply } from '@/lib/ai/structured-output'
 import type { MessageSource } from '@/types/database'
 import { Badge } from '@/components/ui/badge'
@@ -857,8 +858,54 @@ function InboxInner() {
                   return { ...prev, messages: nextMessages }
                 })
               } catch { /* malformed structured payload — keep streamed prose */ }
+            } else if (chunk.type === 'thought') {
+              // Chain-of-thought timeline events from the agentic loop. The
+              // server yields three relevant kinds we render:
+              //   - 'thinking'   — label for a reasoning phase ("Analyzing
+              //                    request", "Deciding next step")
+              //   - 'tool_call'  — agent started a tool call (shown with a
+              //                    running indicator until the matching
+              //                    tool_done lands)
+              //   - 'tool_done'  — tool finished; updates the matching
+              //                    tool_call entry with a result preview
+              // We append these into msg.metadata.steps so the bubble renders
+              // a collapsible step list. token_delta / final_text are handled
+              // above (as 'token') and below (in the post-stream merge) and
+              // aren't stored as steps.
+              try {
+                const ev = JSON.parse(chunk.data) as
+                  | { kind: 'thinking'; id: string; trigger: string; items: string[] }
+                  | { kind: 'tool_call'; id: string; tool: string; args: Record<string, unknown>; status: 'running' }
+                  | { kind: 'tool_done'; id: string; tool: string; resultPreview: string }
+                  | { kind: 'token_delta'; text: string }
+                  | { kind: 'final_text'; text: string }
+                if (ev.kind !== 'thinking' && ev.kind !== 'tool_call' && ev.kind !== 'tool_done') return
+                setDetail(prev => {
+                  if (!prev) return prev
+                  const nextMessages = prev.messages.map(m => {
+                    if (m.id !== tempAsstId) return m
+                    const prevSteps = (m.metadata as { steps?: unknown[] } | null | undefined)?.steps as Array<Record<string, unknown>> | undefined
+                    const steps = Array.isArray(prevSteps) ? [...prevSteps] : []
+                    if (ev.kind === 'tool_done') {
+                      // Update the matching running tool_call in place.
+                      const idx = steps.findIndex(s => (s.kind === 'tool_call' && s.id === ev.id))
+                      if (idx >= 0) {
+                        steps[idx] = { ...steps[idx], status: 'done', resultPreview: ev.resultPreview }
+                      } else {
+                        // Orphan tool_done (tool_call event never arrived, or
+                        // arrived out of order). Record anyway so the step
+                        // count doesn't undercount the work the agent did.
+                        steps.push({ ...ev, status: 'done' })
+                      }
+                    } else {
+                      steps.push(ev as unknown as Record<string, unknown>)
+                    }
+                    return { ...m, metadata: { ...(m.metadata ?? {}), steps } }
+                  })
+                  return { ...prev, messages: nextMessages }
+                })
+              } catch { /* malformed thought payload — skip */ }
             }
-            // 'thought' chunks (tool events) ignored in UI for now.
           } catch { /* malformed chunk — skip */ }
         }
       }
@@ -1506,10 +1553,21 @@ function InboxInner() {
                                       const raw = typeof msg.content === 'string' ? msg.content : ''
                                       const { thinking, visible, thinkingOpen } = splitThinking(raw)
                                       const hasAny = thinking.length > 0 || visible.length > 0
+                                      const rawSteps = (msg.metadata as { steps?: unknown[] } | null | undefined)?.steps
+                                      const steps = Array.isArray(rawSteps) ? (rawSteps as ReasoningStep[]) : []
                                       return (
                                         <div className="flex flex-col gap-2">
-                                          {/* Shimmer "Generating..." placeholder — shown only while no tokens have arrived yet. */}
-                                          {!hasAny && (
+                                          {/* Agentic-loop reasoning timeline. Streams
+                                              in live as thought events arrive from the
+                                              server (thinking / tool_call / tool_done).
+                                              Takes over from the generic "Thinking..."
+                                              shimmer as soon as the first step lands. */}
+                                          {steps.length > 0 && (
+                                            <ReasoningSteps steps={steps} streaming />
+                                          )}
+                                          {/* Shimmer "Generating..." placeholder — shown only
+                                              while no tokens AND no steps have arrived yet. */}
+                                          {!hasAny && steps.length === 0 && (
                                             <TextShimmerWave
                                               className="[--base-color:#a3a3a3] [--base-gradient-color:#2e2e2e] text-[14px] font-medium"
                                               duration={1}
@@ -1582,9 +1640,14 @@ function InboxInner() {
                                       const structuredReply = rawStructured
                                         ? parseStructuredReply(JSON.stringify(rawStructured))
                                         : null
+                                      const rawStepsStr = (msg.metadata as { steps?: unknown[] } | null | undefined)?.steps
+                                      const stepsStr = Array.isArray(rawStepsStr) ? (rawStepsStr as ReasoningStep[]) : []
                                       if (structuredReply) {
                                         return (
                                           <div className="flex flex-col gap-2">
+                                            {stepsStr.length > 0 && (
+                                              <ReasoningSteps steps={stepsStr} />
+                                            )}
                                             {thinking && (
                                               <details className="group/think">
                                                 <summary className="cursor-pointer list-none select-none inline-flex items-center gap-1 text-[12px] font-medium text-[#737373] hover:text-[#2e2e2e] transition-colors">
@@ -1603,6 +1666,9 @@ function InboxInner() {
                                       }
                                       return (
                                         <div className="flex flex-col gap-2">
+                                          {stepsStr.length > 0 && (
+                                            <ReasoningSteps steps={stepsStr} />
+                                          )}
                                           {thinking && (
                                             <details className="group/think">
                                               <summary className="cursor-pointer list-none select-none inline-flex items-center gap-1 text-[12px] font-medium text-[#737373] hover:text-[#2e2e2e] transition-colors">

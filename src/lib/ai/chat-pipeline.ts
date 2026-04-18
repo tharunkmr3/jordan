@@ -550,6 +550,27 @@ export async function* streamChatMessage(
   })
 
   let fullResponse = ''
+  // Collect the reasoning timeline (thinking / tool_call / tool_done) so
+  // we can persist it to metadata.steps. The client already stitches a
+  // live version from the 'thought' SSE events — this copy survives page
+  // reload and lets historic messages show "Worked through N steps".
+  // tool_done events collapse into the matching tool_call entry so the
+  // saved shape matches what the client reducer produces.
+  const persistedSteps: Array<Record<string, unknown>> = []
+  const recordStep = (ev: { kind: string; id?: string; tool?: string; resultPreview?: string; [k: string]: unknown }) => {
+    if (ev.kind === 'tool_done') {
+      const idx = persistedSteps.findIndex(s => s.kind === 'tool_call' && s.id === ev.id)
+      if (idx >= 0) {
+        persistedSteps[idx] = { ...persistedSteps[idx], status: 'done', resultPreview: ev.resultPreview }
+      } else {
+        persistedSteps.push({ ...ev, status: 'done' })
+      }
+      return
+    }
+    if (ev.kind === 'thinking' || ev.kind === 'tool_call') {
+      persistedSteps.push(ev as unknown as Record<string, unknown>)
+    }
+  }
   if (mergedTools.length > 0) {
     try {
       for await (const ev of runAgenticLoopStream(
@@ -573,6 +594,7 @@ export async function* streamChatMessage(
           yield { type: 'token', data: ev.text }
         } else {
           // thinking / tool_call / tool_done → chain-of-thought timeline
+          recordStep(ev as unknown as { kind: string; id?: string; tool?: string; resultPreview?: string })
           yield { type: 'thought', data: JSON.stringify(ev) }
         }
       }
@@ -630,6 +652,7 @@ export async function* streamChatMessage(
         tools_available: mergedTools.length,
         ...(messageSources.length > 0 ? { sources: messageSources } : {}),
         ...(structured ? { structured } : {}),
+        ...(persistedSteps.length > 0 ? { steps: persistedSteps } : {}),
       },
     }).then((res) => {
       // Once the message has an id, fire off memory extraction for

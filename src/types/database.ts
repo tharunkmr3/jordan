@@ -424,6 +424,21 @@ export interface MessageMetadata {
    * Typed as `unknown` here so this module doesn't import the AI layer.
    */
   structured?: { blocks: unknown[] };
+  /**
+   * Chain-of-thought timeline — every reasoning phase and tool call the
+   * agent ran while composing the reply. Populated in streamChatMessage
+   * when the agentic loop fires; the inbox renders it as a collapsible
+   * ReasoningSteps panel above the assistant body so users can audit
+   * what the agent did. Survives page reload.
+   *
+   * Each entry is one of (discriminated by `kind`):
+   *   - { kind: 'thinking', id, trigger, items? }
+   *   - { kind: 'tool_call', id, tool, args, status, resultPreview? }
+   *
+   * tool_done events merge into their matching tool_call server-side,
+   * so this shape is already "resolved" — no orphan tool_done rows.
+   */
+  steps?: Array<Record<string, unknown>>;
   [key: string]: unknown;
 }
 
