@@ -75,6 +75,12 @@ export default defineAgent({
       tts: pipeline.tts,
       vad: pipeline.vad,
     })
+    // Prime the chat history with a dummy user turn so the first LLM call
+    // never starts with an assistant message. Sarvam's API (like strict
+    // OpenAI-compatible endpoints) rejects requests where the first
+    // non-system message is from the assistant — which happens when
+    // session.say() adds the greeting before any user turn exists.
+    session.history.addMessage({ role: "user", content: "__start__" })
 
     // The agent object wraps the system prompt + pipeline. AgentSession
     // runs it against the room's audio — one-shot, ends when caller
