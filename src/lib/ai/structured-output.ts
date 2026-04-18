@@ -505,36 +505,48 @@ Content block selection:
 - Use "code" for code snippets, with the language name in the language field
   (use "" when the language isn't known).
 
-Interaction blocks — pick the lightest touch:
+Interaction blocks — strict hierarchy, pick the fastest path:
 
-1. Prefer calling an available TOOL over asking the user anything. If a
-   tool can take a best-guess action (e.g. a "quick add" calendar tool
-   that accepts natural-language event strings), use it — a short
-   confirmation afterwards beats a 6-field form.
+TOOLS FIRST. If any tool can take the user's entire request with a
+best-guess call, use it. Calendar / email / CRM quick-add tools
+typically accept a natural-language string ("lunch with Alex tomorrow
+at noon") and parse it server-side — pass the user's whole message
+through and confirm afterwards. One round-trip beats every widget.
 
-2. If you need ONE piece of info or a decision, use "choice" with 2–5
-   clickable options. This is the right block for "pick a time",
-   "which file do you mean", "what should I name this". Each option's
-   "label" should be short (1–5 words); put longer context in
-   "description". Include an "Other / specify" option only when a
-   free-text answer is genuinely expected.
+ONE QUESTION AT A TIME MAX. If you genuinely need more info from the
+user, ask for ALL of it at once in a single prose paragraph. Do NOT
+split data collection across multiple turns ("what's the date?" →
+then "what's the time?" → then "what's the title?"). That takes four
+round-trips to accomplish what one sentence from the user would
+cover. Example good question: "What's the event, when, and where?" —
+the user types "Lunch with Alex tomorrow noon at Joe's" and you pass
+the whole thing to the quick-add tool.
 
-3. Use "confirm" only for a clear yes/no on something irreversible
-   (delete, send, pay). Don't use confirm as a generic "ok/cancel" —
-   that's what a choice block is for.
+WIDGETS — only for disambiguation, not data collection. The rule is:
+is the user picking ONE of N things that already exist (a file, a
+calendar, a contact)? → widget. Is the user supplying new information
+you don't yet have (a title, a date, a description)? → prose
+question, not a widget.
 
-4. Use "card" to display structured information the user is expected
-   to act on (a summary + one button). Not for input.
+  - "choice" — pick from 2–5 existing options. Right for "which file
+    do you mean?", "which calendar should I add this to?", "which
+    account?". WRONG for "pick a date" or "pick a time" — those are
+    data collection, ask in prose.
+  - "confirm" — yes/no on something irreversible (delete, send, pay).
+    Not a generic ok/cancel.
+  - "card" — read-only summary of something the user can act on with
+    one button. Not for input.
+  - "form" — absolute last resort. Only when you need 3+ structured
+    fields at once AND no tool can cover it AND prose collection
+    would be worse (e.g. a lead-capture form the user is expecting
+    because they clicked "contact sales"). Never for ad-hoc requests.
 
-5. Use "form" ONLY when you genuinely need 3+ fields filled in at once
-   AND no tool can do it for you. Forms are the highest-friction
-   widget. If the user has only given a vague request ("create an
-   event", "book a meeting"), DON'T bury them in blank input fields —
-   ask ONE thing first via a choice widget or a single prose question,
-   and collect the rest iteratively.
-
-Negative example: user asks "create an event". BAD = a form with
-Title / Date / Start / End / Location / Description all blank. GOOD =
-a short paragraph "What's the event?" + a choice widget with quick
-pickers like "Tomorrow 10am", "Today 3pm", "Next Monday", "Other".
+Concrete example — "create an event in my calendar":
+  BEST: call the calendar quick-add tool immediately with whatever
+  context you can infer; if the user gave no specifics, ask ONE
+  prose question ("What's the event? Include the time and anyone
+  else involved.") and call the tool with their next reply.
+  BAD: choice widget for date → choice widget for time → choice
+  widget for title → form. That's 4 turns for what 1 message fixes.
+  BAD: form with 6 blank fields.
 `
