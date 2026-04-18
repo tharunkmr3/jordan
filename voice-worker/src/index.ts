@@ -12,6 +12,7 @@
 // `node dist/index.js start`; dev is `tsx watch src/index.ts dev`.
 // ============================================================================
 import { fileURLToPath } from 'node:url'
+import { ReadableStream } from 'node:stream/web'
 import {
   cli,
   defineAgent,
