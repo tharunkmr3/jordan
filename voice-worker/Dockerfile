@@ -17,6 +17,7 @@ WORKDIR /app
 # lockfile gets regenerated for the target platform, which avoids the
 # darwin-vs-linux binding mismatch.
 COPY package.json ./
+ENV onnxruntime_node_install_cuda=skip
 RUN npm install --no-audit --no-fund --include=optional
 
 # Compile TypeScript.
@@ -40,6 +41,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
   && rm -rf /var/lib/apt/lists/*
 
 COPY package.json ./
+# Skip CUDA binaries for onnxruntime-node — Silero VAD runs CPU-only;
+# the CUDA tgz download from GitHub has been flaky and pulls ~500MB
+# of binaries we'd never use.
+ENV onnxruntime_node_install_cuda=skip
 RUN npm install --omit=dev --no-audit --no-fund --include=optional
 
 COPY --from=build /app/dist ./dist
