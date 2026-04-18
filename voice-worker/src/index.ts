@@ -43,6 +43,93 @@ function requireEnv(name: string): string {
   return value
 }
 
+/**
+ * Strip <think>...</think> reasoning blocks from a text stream before TTS.
+ *
+ * sarvam-m is a chain-of-thought model (like DeepSeek-R1) that emits its
+ * internal reasoning inside <think>...</think> tags before the actual reply.
+ * Without stripping, the TTS speaks every word of the reasoning verbatim,
+ * which the caller hears as long nonsensical text before (or instead of) the
+ * real answer.
+ *
+ * Handles the case where <think> or </think> is split across chunk boundaries
+ * by keeping a small look-behind buffer (7 chars for '<think>', 8 for
+ * '</think>').
+ */
+function stripThinkBlocks(upstream: ReadableStream<string>): ReadableStream<string> {
+  let buf = ''
+  let inside = false
+
+  return new ReadableStream<string>({
+    async start(controller) {
+      const reader = upstream.getReader()
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) {
+            // Flush any leftover text that's outside a think block
+            if (!inside && buf) controller.enqueue(buf)
+            controller.close()
+            return
+          }
+          buf += value
+          let out = ''
+
+          // Drain as much of buf as we can safely classify
+          // eslint-disable-next-line no-constant-condition
+          while (true) {
+            if (inside) {
+              const end = buf.indexOf('</think>')
+              if (end === -1) {
+                // Close tag not yet arrived — hold last 8 chars so '</think>'
+                // split across chunks doesn't slip through as output
+                buf = buf.slice(Math.max(0, buf.length - 8))
+                break
+              }
+              buf = buf.slice(end + 8) // consume up to and including </think>
+              inside = false
+            } else {
+              const start = buf.indexOf('<think>')
+              if (start === -1) {
+                // No open tag in sight — emit all but last 7 chars so a
+                // '<think>' split across chunks isn't emitted prematurely
+                const safe = buf.length - 7
+                if (safe > 0) {
+                  out += buf.slice(0, safe)
+                  buf = buf.slice(safe)
+                }
+                break
+              }
+              out += buf.slice(0, start) // emit text before the think block
+              buf = buf.slice(start + 7) // consume <think>
+              inside = true
+            }
+          }
+
+          if (out) controller.enqueue(out)
+        }
+      } catch (err) {
+        controller.error(err)
+      } finally {
+        reader.releaseLock()
+      }
+    },
+  })
+}
+
+/**
+ * voice.Agent subclass that intercepts ttsNode to strip <think> blocks.
+ * All other behaviour (sttNode, llmNode, etc.) is inherited unchanged.
+ */
+class JordonAgent extends voice.Agent {
+  override async ttsNode(
+    text: ReadableStream<string>,
+    modelSettings: Parameters<voice.Agent['ttsNode']>[1],
+  ) {
+    return super.ttsNode(stripThinkBlocks(text), modelSettings)
+  }
+}
+
 export default defineAgent({
   entry: async (ctx: JobContext) => {
     console.log('[voice-worker] job accepted', {
@@ -86,10 +173,11 @@ export default defineAgent({
     const seedCtx = new llm.ChatContext()
     seedCtx.addMessage({ role: 'user', content: '__start__' })
 
-    // The agent object wraps the system prompt + pipeline. AgentSession
-    // runs it against the room's audio — one-shot, ends when caller
-    // hangs up or the SIP trunk closes the session.
-    const agent = new voice.Agent({
+    // JordonAgent extends voice.Agent to strip <think>...</think> blocks
+    // from LLM output before TTS receives it. sarvam-m is a CoT reasoner
+    // and emits its thinking verbatim — without stripping the caller hears
+    // hundreds of words of internal monologue before the actual reply.
+    const agent = new JordonAgent({
       instructions: pipeline.instructions,
       chatCtx: seedCtx,
     })
