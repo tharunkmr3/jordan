@@ -10,6 +10,7 @@ import { processChatMessage } from '@/lib/ai/chat-pipeline'
 import { generateAndHostAudio } from '@/lib/tts/elevenlabs'
 import { generateAndHostSarvamAudio, SARVAM_DEFAULT_VOICE } from '@/lib/tts/sarvam'
 import { detectSarvamLanguageAsync, agentLanguageToSarvam } from '@/lib/lang/detect'
+import { createVoiceJob, setVoiceJobReady, setVoiceJobError, newJobId } from './job-store'
 
 // Next runtime hints — keep the handler on Node.js (not Edge, which would
 // reject some of our deps like the Supabase admin client), force dynamic
@@ -21,12 +22,6 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-// Cap on how long we'll wait for the LLM+TTS stage. Twilio gives us 15s.
-// If we hit 12s we bail out with a "one moment" redirect so the caller
-// hears something real instead of Coolify's 502 page — the redirect
-// bounces right back into this route; the model reply is still saved
-// to the conversation so the next turn can reference it.
-const STAGE_SOFT_TIMEOUT_MS = 12_000
 
 function twiml(xml: string) {
   return new Response(`<?xml version="1.0" encoding="UTF-8"?><Response>${xml}</Response>`, {
@@ -139,22 +134,6 @@ async function speak(
 // POST — Handle incoming call or speech result
 // ---------------------------------------------------------------------------
 
-/**
- * Race `promise` against a timer. Resolves to { ok: true, value } when the
- * promise finishes in time, or { ok: false } when it doesn't. Never throws
- * — the caller decides how to degrade. Used to keep the webhook handler
- * under Twilio's 15s + Coolify's proxy read-timeout.
- */
-async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<{ ok: true; value: T } | { ok: false }> {
-  return new Promise((resolve) => {
-    const t = setTimeout(() => resolve({ ok: false }), ms)
-    promise.then(
-      (value) => { clearTimeout(t); resolve({ ok: true, value }) },
-      () => { clearTimeout(t); resolve({ ok: false }) },
-    )
-  })
-}
-
 export async function POST(request: NextRequest) {
   // Top-level guard: any uncaught error becomes a graceful <Hangup/>
   // instead of a 500 that Twilio reports as "Got HTTP 502 response" to
@@ -223,30 +202,28 @@ async function handle(request: NextRequest): Promise<Response> {
     )
   }
 
-  // Got speech — process through AI pipeline.
+  // Got user speech — kick the LLM + TTS pipeline off asynchronously and
+  // hand Twilio a short <Pause>+<Redirect> to the poll endpoint, which
+  // will play the answer as soon as it's ready. This pattern:
   //
-  // Twilio enforces a 15s hard timeout on the webhook response. With the
-  // LLM turn (5-12s on Opus / Gemini Pro) plus two serial Sarvam TTS
-  // calls (2-4s each on longer replies), sequential execution reliably
-  // blows past the limit → the caller hears "an application error
-  // occurred". Countermeasures:
+  //   - Responds to Twilio in well under 2s every turn (no 15s cliff)
+  //   - Doesn't replay the greeting on retries (the old stall-redirect
+  //     looped back to this handler with no speechResult, which hit the
+  //     greeting branch again and confused callers)
+  //   - Survives LLMs/TTS that take 20s+ — the poll endpoint just keeps
+  //     polling until the job reports ready
   //
-  //   1. Run the two TTS synths concurrently (~halves the TTS stage)
-  //   2. Pipeline-side, the 'phone' channel caps max_tokens and asks
-  //      the model for ≤40-word replies (see buildPrompt in
-  //      src/lib/ai/chat-pipeline.ts)
-  //   3. Timing log around each stage so Coolify reveals the slow step
-  try {
-    const t0 = Date.now()
+  // Job state lives in a module-level Map (job-store.ts). Suffices for
+  // the current single-container Coolify deploy; a horizontal-scale
+  // move would migrate this to coolify-redis.
+  const jobId = newJobId(callSid)
+  createVoiceJob(jobId)
 
-    // Soft timeout ladder: race the full LLM+TTS pipeline against a 12s
-    // clock. If it wins, return the real reply. If the clock wins, we
-    // cut our losses and return a stall TwiML ("One moment please")
-    // that redirects Twilio back into this webhook — the work keeps
-    // running in the Node event loop so the answer may be ready on the
-    // next hop (cached audio URL, since Sarvam's cache key is
-    // deterministic). Prevents Coolify's proxy from 502'ing the call.
-    const pipelinePromise = (async () => {
+  // Fire-and-forget the real work. Errors land in the job store so the
+  // poll endpoint can surface an apology instead of a silent hang.
+  ;(async () => {
+    const t0 = Date.now()
+    try {
       const result = await processChatMessage({
         agentId: agent.id,
         message: speechResult,
@@ -255,52 +232,46 @@ async function handle(request: NextRequest): Promise<Response> {
         contactInfo: { phone: from, channelUserId: from },
       })
       const tAfterLlm = Date.now()
-      // Only synthesize the actual reply — the follow-up "Is there
-      // anything else I can help with?" was a second ~3-4s Sarvam call
-      // that doubled our TTS stage for no real UX win (callers know
-      // to speak after the reply; a prompt isn't required). <Gather>
-      // below still listens silently for the next turn.
-      const responseSpeech = await speak(result.response, agent.voice_provider, agent.voice_id, pollyVoice, agent.language)
+      const responseSpeech = await speak(
+        result.response,
+        agent.voice_provider,
+        agent.voice_id,
+        pollyVoice,
+        agent.language,
+      )
       const tAfterTts = Date.now()
       console.log('[twilio-voice] timing', {
+        jobId,
         llmMs: tAfterLlm - t0,
         ttsMs: tAfterTts - tAfterLlm,
         totalMs: tAfterTts - t0,
         responseLen: result.response.length,
       })
-      return { responseSpeech }
-    })()
-
-    const raced = await withTimeout(pipelinePromise, STAGE_SOFT_TIMEOUT_MS)
-
-    if (!raced.ok) {
-      // Didn't finish in time. Keep the real work going in the
-      // background so Sarvam's cache fills for the retry hop, and
-      // return a short "thinking" TwiML that loops the user back
-      // here. After a handful of loops Twilio hits its own retry cap,
-      // but in practice the cache lands on the first retry.
-      pipelinePromise.catch((e) => console.error('[twilio-voice] background pipeline error:', e))
-      console.warn('[twilio-voice] soft timeout — redirecting to stall loop', { ms: STAGE_SOFT_TIMEOUT_MS })
-      return twiml(
-        `<Say voice="${pollyVoice}">One moment, please.</Say>` +
-        `<Pause length="2"/>` +
-        `<Redirect method="POST">/api/webhooks/twilio-voice?agentId=${agentId}&amp;stall=1</Redirect>`
-      )
+      // responseSpeech is a <Play> or <Say> TwiML fragment. We need the
+      // raw audio URL for the poll endpoint's <Play>. Extract it; if
+      // Polly was used (no URL — <Say voice=...>...</Say>), the poll
+      // endpoint's fallback message handles it — rare because speak()
+      // only falls back to Polly on Sarvam/ElevenLabs error.
+      const urlMatch = responseSpeech.match(/<Play>([^<]+)<\/Play>/)
+      if (urlMatch) {
+        setVoiceJobReady(jobId, urlMatch[1], result.response)
+      } else {
+        // TTS providers all failed; bank Polly TwiML as the "audioUrl"
+        // by data-URL-ing the text — simpler: just error and let the
+        // caller hear the apology message.
+        setVoiceJobError(jobId, 'TTS unavailable')
+      }
+    } catch (err) {
+      console.error('[twilio-voice] background pipeline error:', err)
+      setVoiceJobError(jobId, err instanceof Error ? err.message : 'Pipeline error')
     }
+  })()
 
-    const { responseSpeech } = raced.value
-    // <Gather> without a nested prompt — the assistant's reply already
-    // played; listening silently for the next turn is more natural than
-    // asking "anything else?" after every exchange.
-    return twiml(
-      responseSpeech +
-      `<Gather input="speech" action="/api/webhooks/twilio-voice?agentId=${agentId}" method="POST" speechTimeout="auto" language="${speechLang}" speechModel="phone_call"/>` +
-      `<Say voice="${pollyVoice}">Thank you for calling. Goodbye.</Say><Hangup/>`
-    )
-  } catch (err) {
-    console.error('[twilio-voice] Pipeline error:', err)
-    // Best-effort graceful close — fall back to Polly so we don't
-    // double-fail trying to synthesise the error message itself.
-    return twiml(`<Say voice="${pollyVoice}">I'm sorry, I'm having trouble right now. Please try again later. Goodbye.</Say><Hangup/>`)
-  }
+  // Quick response to Twilio: a short pause (not silent — a filler word
+  // would be more natural, but TTS-ing it adds more latency than it
+  // saves) then poll. The poll endpoint owns the rest of the turn.
+  return twiml(
+    `<Pause length="1"/>` +
+    `<Redirect method="POST">/api/webhooks/twilio-voice/poll?jobId=${jobId}&amp;agentId=${agentId}&amp;retries=0</Redirect>`
+  )
 }
