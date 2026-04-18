@@ -16,6 +16,7 @@
 import type { AudioFrame } from '@livekit/rtc-node'
 import { stt } from '@livekit/agents'
 import type { AudioBuffer, LanguageCode } from '@livekit/agents'
+import { SarvamSpeechStream } from './stt_stream.js'
 
 const SAARIKA_URL = 'https://api.sarvam.ai/speech-to-text'
 const SAARIKA_MODEL = 'saarika:v2'
@@ -100,9 +101,6 @@ export class SarvamSTT extends stt.STT {
    * STT boundary detection.
    */
   stream(): stt.SpeechStream {
-    // Lazy-import to avoid a circular type dep (stt_stream imports SarvamSTT).
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { SarvamSpeechStream } = require('./stt_stream.js') as typeof import('./stt_stream.js')
     return new SarvamSpeechStream({
       stt: this,
       apiKey: this.apiKey,
