@@ -12,6 +12,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { authedRequest } from '@/lib/integrations/auth-helpers'
 import { requireIntegrationAction, PermissionError } from '@/lib/permissions/integrations'
 import { logAudit } from '@/lib/composio/audit'
+import { invalidateBuildAgentTools } from '@/lib/composio/tools'
 
 export async function GET(
   _req: NextRequest,
@@ -125,6 +126,13 @@ export async function POST(
   if (error || !data) {
     return NextResponse.json({ error: error?.message ?? 'Attach failed' }, { status: 500 })
   }
+
+  // Bust the buildAgentTools cache so the next chat turn picks up the
+  // newly-attached integration immediately instead of waiting for the
+  // 60s TTL. Without this call eventual consistency still works but
+  // "I just enabled this, why doesn't the agent know about it yet?"
+  // is the kind of UX confusion not worth saving 2 lines to avoid.
+  invalidateBuildAgentTools(agentId)
 
   await logAudit(admin, {
     orgId: membership.orgId,

@@ -307,6 +307,24 @@ export async function processChatMessage(
     model: effectiveModelName,
     temperature: agent.temperature,
     maxTokens: agent.max_tokens,
+    // Inline structured output on OpenAI — saves a ~1–2s synthesis call
+    // per turn on the website channel. The model emits either tool_calls
+    // (content null) or JSON valid against STRUCTURED_REPLY_SCHEMA on
+    // the final iteration; synthesizeStructured's fast-path parses it
+    // without another API round-trip. Anthropic and Gemini don't support
+    // tools + response_format together cleanly, so they keep using the
+    // post-hoc synthesis path.
+    responseFormat:
+      effectiveProvider === 'openai' && wantsStructuredOutput(input.channel)
+        ? {
+            type: 'json_schema',
+            json_schema: {
+              name: 'structured_reply',
+              strict: true,
+              schema: STRUCTURED_REPLY_SCHEMA as Record<string, unknown>,
+            },
+          }
+        : undefined,
   }
 
   // 5a. Load tools — three bundles that all merge into one tool list:
@@ -316,14 +334,16 @@ export async function processChatMessage(
   //     whenever the agent has any ready documents. Agentic retrieval
   //     lets the model recover when one-shot retrieval missed the
   //     right chunks (see buildKbAgenticTools for rationale).
-  const composioBundle = supportsTools(effectiveProvider)
-    ? await buildAgentTools(supabase, agent.id)
-    : null
+  //
+  // Composio + KB-agentic lookups hit the DB / network so we fire them
+  // in parallel. builtinsBundle is synchronous (just reads agent.settings)
+  // so it runs synchronously below.
+  const [composioBundle, kbAgenticBundle] = await Promise.all([
+    supportsTools(effectiveProvider) ? buildAgentTools(supabase, agent.id) : Promise.resolve(null),
+    supportsTools(effectiveProvider) ? buildKbAgenticTools(supabase, agent.id) : Promise.resolve(null),
+  ])
   const builtinsBundle = supportsTools(effectiveProvider)
     ? buildBuiltinTools(agent.settings as Record<string, unknown> | null | undefined)
-    : null
-  const kbAgenticBundle = supportsTools(effectiveProvider)
-    ? await buildKbAgenticTools(supabase, agent.id)
     : null
   const mergedTools: LlmTool[] = [
     ...(composioBundle?.tools ?? []),
@@ -508,6 +528,19 @@ export async function* streamChatMessage(
     model: effectiveModelName,
     temperature: agent.temperature,
     maxTokens: agent.max_tokens,
+    // Inline structured output on OpenAI — saves a post-hoc synthesis
+    // call. See the non-streaming path above for the full rationale.
+    responseFormat:
+      effectiveProvider === 'openai' && wantsStructuredOutput(input.channel)
+        ? {
+            type: 'json_schema',
+            json_schema: {
+              name: 'structured_reply',
+              strict: true,
+              schema: STRUCTURED_REPLY_SCHEMA as Record<string, unknown>,
+            },
+          }
+        : undefined,
   }
 
   // Yield conversation ID first so frontend can track it
@@ -517,14 +550,15 @@ export async function* streamChatMessage(
   // to see the full tool_calls array before executing). If the agent has
   // tools enabled, run the non-streaming agentic loop then yield the final
   // text as a single chunk. UX: slightly slower first token, but tools work.
-  const composioBundle = supportsTools(effectiveProvider)
-    ? await buildAgentTools(supabase, agent.id)
-    : null
+  //
+  // Composio + KB-agentic lookups hit the DB / network; fire them in
+  // parallel to shave ~200–400ms off the pre-generation setup latency.
+  const [composioBundle, kbAgenticBundle] = await Promise.all([
+    supportsTools(effectiveProvider) ? buildAgentTools(supabase, agent.id) : Promise.resolve(null),
+    supportsTools(effectiveProvider) ? buildKbAgenticTools(supabase, agent.id) : Promise.resolve(null),
+  ])
   const builtinsBundle = supportsTools(effectiveProvider)
     ? buildBuiltinTools(agent.settings as Record<string, unknown> | null | undefined)
-    : null
-  const kbAgenticBundle = supportsTools(effectiveProvider)
-    ? await buildKbAgenticTools(supabase, agent.id)
     : null
   const mergedTools: LlmTool[] = [
     ...(composioBundle?.tools ?? []),
@@ -1113,10 +1147,22 @@ async function synthesizeStructured(
   draft: string | null,
   modelConfig: ModelConfig,
 ): Promise<StructuredReply | null> {
-  // Fast path: the draft is already valid structured JSON.
+  // Fast path 1: the draft is already valid structured JSON.
+  // Happens when the provider did inline structured output (OpenAI on
+  // the website channel — see ModelConfig.responseFormat) or a previous
+  // synthesis step produced JSON.
   if (draft) {
     const direct = parseStructuredReply(draft)
     if (direct) return direct
+  }
+
+  // Fast path 2: trivial prose reply. Wrapping "Yes, done ✓" or "Event
+  // created" in a single paragraph block saves a 1–2s synthesis round-
+  // trip that adds no real structural value. Conservative definition of
+  // "trivial": short, single-paragraph, no Markdown markers. Anything
+  // with headings / bullets / tables falls through to real synthesis.
+  if (draft && isTrivialDraft(draft)) {
+    return { blocks: [{ type: 'paragraph', text: draft.trim() }] }
   }
 
   const synthMessages: ChatMessage[] = draft
@@ -1137,6 +1183,30 @@ async function synthesizeStructured(
     console.error('[chat-pipeline] Structured synthesis failed:', err)
     return null
   }
+}
+
+/**
+ * Is this draft short and plain enough that a full synthesis call would
+ * be wasted work? If yes, the pipeline wraps it in a single paragraph
+ * block and saves the round-trip.
+ *
+ * Rules (all must match):
+ *   - Trimmed length ≤ 220 chars.
+ *   - No Markdown block-level markers (#, ##, -, *, 1., >, ```, |).
+ *   - Single paragraph (no blank-line-separated paragraphs).
+ *
+ * The character cap is tuned from inspected samples — most confirmation-
+ * style replies ("Event created. You can view it here.") live well under
+ * 150 chars; 220 leaves headroom for a second sentence without eating
+ * into territory where real structure starts to matter.
+ */
+function isTrivialDraft(text: string): boolean {
+  const t = text.trim()
+  if (t.length === 0 || t.length > 220) return false
+  if (t.includes('\n\n')) return false
+  // Any block-level Markdown marker at the start of any line disqualifies.
+  if (/(^|\n)\s*(#{1,6}\s|[-*]\s|\d+\.\s|>\s|```|\|)/.test(t)) return false
+  return true
 }
 
 /**

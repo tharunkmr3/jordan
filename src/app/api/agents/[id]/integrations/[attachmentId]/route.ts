@@ -12,6 +12,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { authedRequest } from '@/lib/integrations/auth-helpers'
 import { requireIntegrationAction, PermissionError } from '@/lib/permissions/integrations'
 import { logAudit } from '@/lib/composio/audit'
+import { invalidateBuildAgentTools } from '@/lib/composio/tools'
 
 export async function PATCH(
   request: NextRequest,
@@ -72,6 +73,10 @@ export async function PATCH(
     return NextResponse.json({ error: error?.message ?? 'Update failed' }, { status: 500 })
   }
 
+  // Bust the cache so enabled_tools / tool_configs changes reflect on
+  // the next chat turn instead of after the 60s TTL.
+  invalidateBuildAgentTools(agentId)
+
   await logAudit(admin, {
     orgId: membership.orgId,
     actorUserId: membership.userId,
@@ -123,6 +128,10 @@ export async function DELETE(
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  // Bust the cache so the agent immediately drops the detached
+  // integration's tools instead of continuing to offer them for 60s.
+  invalidateBuildAgentTools(agentId)
 
   const orgInt = Array.isArray(existing.org_integration)
     ? existing.org_integration[0]

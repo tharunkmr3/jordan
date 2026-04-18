@@ -69,7 +69,13 @@ export async function rerank(opts: RerankOptions): Promise<RerankedHit[] | null>
   if (opts.documents.length === 0) return []
 
   const topK = Math.min(opts.topK ?? 8, opts.documents.length)
-  const model = opts.model ?? 'rerank-2.5'
+  // Default to rerank-2.5-lite — ~3× faster than the full rerank-2.5 at
+  // ~5% quality loss on standard benchmarks. The right tradeoff for the
+  // inline critical path: a perceptible latency reduction matters more
+  // than the tail quality when our hybrid+name-boost retrieval already
+  // did most of the work before the reranker sees it. Callers that want
+  // the full model pass `model: 'rerank-2.5'` explicitly.
+  const model = opts.model ?? 'rerank-2.5-lite'
 
   try {
     const res = await fetch(RERANK_ENDPOINT, {

@@ -34,6 +34,22 @@ export interface ModelConfig {
   model?: string
   temperature?: number
   maxTokens?: number
+  /**
+   * Inline structured output — set when the caller wants the model's
+   * reply constrained to a JSON schema at generation time. Currently
+   * honored only by OpenAI in the tool-calling path: OpenAI's
+   * `response_format: json_schema` coexists cleanly with `tools`, so
+   * the model either emits tool_calls (content = null) OR structured
+   * JSON (content = valid against the schema). Avoids the extra
+   * synthesis round-trip for OpenAI agents on the website channel.
+   *
+   * Anthropic and Gemini ignore this field and still go through the
+   * post-hoc generateStructured path.
+   *
+   * Shape matches OpenAI's `response_format` parameter:
+   *   { type: 'json_schema', json_schema: { name, strict, schema } }
+   */
+  responseFormat?: Record<string, unknown>
 }
 
 /**
@@ -375,6 +391,20 @@ async function generateWithToolsOpenAI(
   tools: LlmToolDef[],
   config: ModelConfig
 ): Promise<GenerateWithToolsResult> {
+  // Inline structured output. When config.responseFormat is set, OpenAI
+  // enforces the JSON schema on any text content the model produces —
+  // which means when the model decides to RESPOND (not call tools) on
+  // the final agentic-loop iteration, its reply is already valid
+  // structured JSON and we can skip the post-hoc synthesis round-trip.
+  // Tool-calling and response_format coexist cleanly: if the model
+  // picks tools, content is null and the schema doesn't matter.
+  //
+  // Cast through Record<string,unknown> because the SDK's response_format
+  // type is a tagged union whose discriminants have shifted across
+  // minor versions.
+  type RF = NonNullable<Parameters<ReturnType<typeof getOpenAI>['chat']['completions']['create']>[0]['response_format']>
+  const rf = config.responseFormat ? (config.responseFormat as unknown as RF) : undefined
+
   const response = await getOpenAI().chat.completions.create({
     model: config.model || 'gpt-5.4',
     messages: messages.map(toOpenAiMessage),
@@ -382,6 +412,7 @@ async function generateWithToolsOpenAI(
     tool_choice: tools.length > 0 ? 'auto' : undefined,
     temperature: config.temperature ?? 0.7,
     ...(config.maxTokens ? { max_completion_tokens: config.maxTokens } : {}),
+    ...(rf ? { response_format: rf } : {}),
   })
   const choice = response.choices[0]?.message
   const rawCalls = (choice?.tool_calls ?? []) as Array<{
@@ -862,11 +893,20 @@ async function* streamOpenAI(
   messages: ChatMessage[],
   config: ModelConfig
 ): AsyncGenerator<string> {
+  // Same inline-structured-output path as generateWithToolsOpenAI — when
+  // the caller set responseFormat, the streamed JSON is valid against
+  // the schema by the end of the stream. OpenAI supports streaming JSON
+  // objects chunk-by-chunk; we still yield raw deltas and let the caller
+  // parse the accumulated result as JSON after the stream ends.
+  type RF = NonNullable<Parameters<ReturnType<typeof getOpenAI>['chat']['completions']['create']>[0]['response_format']>
+  const rf = config.responseFormat ? (config.responseFormat as unknown as RF) : undefined
+
   const stream = await getOpenAI().chat.completions.create({
     model: config.model || 'gpt-5.4',
     messages: messages.map(toOpenAiMessage),
     temperature: config.temperature ?? 0.7,
     ...(config.maxTokens ? { max_completion_tokens: config.maxTokens } : {}),
+    ...(rf ? { response_format: rf } : {}),
     stream: true,
   })
   for await (const chunk of stream) {

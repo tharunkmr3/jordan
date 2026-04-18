@@ -30,6 +30,40 @@ export interface AgentToolContext {
   allowedToolSlugs: Set<string>
 }
 
+// ---------------------------------------------------------------------------
+// Per-agent cache
+//
+// buildAgentTools runs on EVERY chat turn and makes two network hops:
+//   1. Supabase query against agent_integrations (~50–150ms)
+//   2. Composio tools.get() for the schema list (~200–400ms)
+//
+// Neither result changes on the order-of-seconds timescale — integration
+// attachments change via admin UI, tool schemas change only on Composio
+// SDK releases. A 60s in-memory cache per agent cuts a reliable ~200–
+// 400ms off the pre-generation setup latency without meaningfully
+// stale-ing anyone's experience.
+//
+// The cached value is safe to share across turns: toolToIntegration is a
+// Map of string→string, allowedToolSlugs is a Set of strings, tools is
+// a plain schema array. No live DB handles, no live Composio clients.
+//
+// Invalidation: invalidateBuildAgentTools(agentId) is exported so the
+// integrations-management UI can bust the cache on save. Without that
+// call, edits to enabled_tools would take up to CACHE_TTL_MS to reflect
+// in running chats — still eventually consistent, never wrong.
+// ---------------------------------------------------------------------------
+
+const BUILD_AGENT_TOOLS_CACHE_TTL_MS = 60_000
+const buildAgentToolsCache = new Map<
+  string,
+  { expires: number; value: { tools: LlmTool[]; ctx: AgentToolContext } | null }
+>()
+
+/** Bust the cache for a specific agent. Call after editing integrations. */
+export function invalidateBuildAgentTools(agentId: string): void {
+  buildAgentToolsCache.delete(agentId)
+}
+
 /**
  * Fetch the tool list for an agent: joins agent_integrations → org_integrations
  * (only active ones), collects enabled_tools across attachments, and asks
@@ -37,11 +71,19 @@ export interface AgentToolContext {
  *
  * Returns an empty list if the agent has no integrations — callers should
  * gracefully skip tool-calling in that case.
+ *
+ * Cached per-agent for BUILD_AGENT_TOOLS_CACHE_TTL_MS. See cache block
+ * above for rationale. Stale caches are refreshed lazily on the next
+ * call; no background refresh.
  */
 export async function buildAgentTools(
   supabase: SupabaseClient,
   agentId: string
 ): Promise<{ tools: LlmTool[]; ctx: AgentToolContext } | null> {
+  const now = Date.now()
+  const cached = buildAgentToolsCache.get(agentId)
+  if (cached && cached.expires > now) return cached.value
+
   const { data: rows, error } = await supabase
     .from('agent_integrations')
     .select(`
@@ -59,9 +101,14 @@ export async function buildAgentTools(
 
   if (error) {
     console.error('[composio/tools] buildAgentTools query failed:', error)
+    // Don't cache failures — transient DB issues shouldn't wedge the
+    // agent into a tool-less state for 60 seconds.
     return null
   }
-  if (!rows || rows.length === 0) return null
+  if (!rows || rows.length === 0) {
+    buildAgentToolsCache.set(agentId, { expires: now + BUILD_AGENT_TOOLS_CACHE_TTL_MS, value: null })
+    return null
+  }
 
   const orgId = rows[0].org_id as string
   const toolToIntegration = new Map<
@@ -91,7 +138,10 @@ export async function buildAgentTools(
     }
   }
 
-  if (allSlugs.length === 0) return null
+  if (allSlugs.length === 0) {
+    buildAgentToolsCache.set(agentId, { expires: now + BUILD_AGENT_TOOLS_CACHE_TTL_MS, value: null })
+    return null
+  }
 
   const composio = getComposio()
   const userId = composioUserIdForOrg(orgId)
@@ -105,11 +155,16 @@ export async function buildAgentTools(
     // Composio's OpenAI provider returns an array of OpenAI-style tool defs.
     const tools = Array.isArray(result) ? (result as LlmTool[]) : []
 
-    return {
+    const value = {
       tools,
       ctx: { agentId, orgId, toolToIntegration, allowedToolSlugs },
     }
+    buildAgentToolsCache.set(agentId, { expires: now + BUILD_AGENT_TOOLS_CACHE_TTL_MS, value })
+    return value
   } catch (err) {
+    // Don't cache Composio API failures — tool listing is eventually
+    // consistent, but a transient 5xx shouldn't leave the agent without
+    // tools for 60 seconds.
     console.error('[composio/tools] composio.tools.get failed:', err)
     return null
   }
