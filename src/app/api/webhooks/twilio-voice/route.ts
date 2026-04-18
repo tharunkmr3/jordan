@@ -11,6 +11,23 @@ import { generateAndHostAudio } from '@/lib/tts/elevenlabs'
 import { generateAndHostSarvamAudio, SARVAM_DEFAULT_VOICE } from '@/lib/tts/sarvam'
 import { detectSarvamLanguageAsync, agentLanguageToSarvam } from '@/lib/lang/detect'
 
+// Next runtime hints — keep the handler on Node.js (not Edge, which would
+// reject some of our deps like the Supabase admin client), force dynamic
+// so no caching layer between Twilio and us, and allow up to 60s of
+// execution. The actual hard ceiling is Twilio's 15s webhook timeout and
+// Coolify's reverse-proxy read-timeout — these hints matter mostly when
+// hosting on serverless platforms with their own defaults.
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+export const maxDuration = 60
+
+// Cap on how long we'll wait for the LLM+TTS stage. Twilio gives us 15s.
+// If we hit 12s we bail out with a "one moment" redirect so the caller
+// hears something real instead of Coolify's 502 page — the redirect
+// bounces right back into this route; the model reply is still saved
+// to the conversation so the next turn can reference it.
+const STAGE_SOFT_TIMEOUT_MS = 12_000
+
 function twiml(xml: string) {
   return new Response(`<?xml version="1.0" encoding="UTF-8"?><Response>${xml}</Response>`, {
     headers: { 'Content-Type': 'text/xml' },
@@ -122,7 +139,35 @@ async function speak(
 // POST — Handle incoming call or speech result
 // ---------------------------------------------------------------------------
 
+/**
+ * Race `promise` against a timer. Resolves to { ok: true, value } when the
+ * promise finishes in time, or { ok: false } when it doesn't. Never throws
+ * — the caller decides how to degrade. Used to keep the webhook handler
+ * under Twilio's 15s + Coolify's proxy read-timeout.
+ */
+async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<{ ok: true; value: T } | { ok: false }> {
+  return new Promise((resolve) => {
+    const t = setTimeout(() => resolve({ ok: false }), ms)
+    promise.then(
+      (value) => { clearTimeout(t); resolve({ ok: true, value }) },
+      () => { clearTimeout(t); resolve({ ok: false }) },
+    )
+  })
+}
+
 export async function POST(request: NextRequest) {
+  // Top-level guard: any uncaught error becomes a graceful <Hangup/>
+  // instead of a 500 that Twilio reports as "Got HTTP 502 response" to
+  // the caller. Twilio can't read a crash trace — we owe it valid XML.
+  try {
+    return await handle(request)
+  } catch (err) {
+    console.error('[twilio-voice] uncaught:', err)
+    return twiml('<Say voice="Polly.Joanna">Sorry, something went wrong on our side. Please try again in a moment.</Say><Hangup/>')
+  }
+}
+
+async function handle(request: NextRequest): Promise<Response> {
   const formData = await request.formData()
   const agentId = request.nextUrl.searchParams.get('agentId')
   const callSid = formData.get('CallSid') as string
@@ -193,33 +238,55 @@ export async function POST(request: NextRequest) {
   //   3. Timing log around each stage so Coolify reveals the slow step
   try {
     const t0 = Date.now()
-    const result = await processChatMessage({
-      agentId: agent.id,
-      message: speechResult,
-      conversationId: callSid,
-      channel: 'phone',
-      contactInfo: {
-        phone: from,
-        channelUserId: from,
-      },
-    })
-    const tAfterLlm = Date.now()
 
-    // Generate TTS for the AI response and the follow-up prompt in
-    // parallel — they're independent and Sarvam comfortably handles
-    // concurrent requests.
-    const [responseSpeech, followUp] = await Promise.all([
-      speak(result.response, agent.voice_provider, agent.voice_id, pollyVoice, agent.language),
-      speak("Is there anything else I can help with?", agent.voice_provider, agent.voice_id, pollyVoice, agent.language),
-    ])
-    const tAfterTts = Date.now()
-    console.log('[twilio-voice] timing', {
-      llmMs: tAfterLlm - t0,
-      ttsMs: tAfterTts - tAfterLlm,
-      totalMs: tAfterTts - t0,
-      responseLen: result.response.length,
-    })
+    // Soft timeout ladder: race the full LLM+TTS pipeline against a 12s
+    // clock. If it wins, return the real reply. If the clock wins, we
+    // cut our losses and return a stall TwiML ("One moment please")
+    // that redirects Twilio back into this webhook — the work keeps
+    // running in the Node event loop so the answer may be ready on the
+    // next hop (cached audio URL, since Sarvam's cache key is
+    // deterministic). Prevents Coolify's proxy from 502'ing the call.
+    const pipelinePromise = (async () => {
+      const result = await processChatMessage({
+        agentId: agent.id,
+        message: speechResult,
+        conversationId: callSid,
+        channel: 'phone',
+        contactInfo: { phone: from, channelUserId: from },
+      })
+      const tAfterLlm = Date.now()
+      const [responseSpeech, followUp] = await Promise.all([
+        speak(result.response, agent.voice_provider, agent.voice_id, pollyVoice, agent.language),
+        speak("Is there anything else I can help with?", agent.voice_provider, agent.voice_id, pollyVoice, agent.language),
+      ])
+      const tAfterTts = Date.now()
+      console.log('[twilio-voice] timing', {
+        llmMs: tAfterLlm - t0,
+        ttsMs: tAfterTts - tAfterLlm,
+        totalMs: tAfterTts - t0,
+        responseLen: result.response.length,
+      })
+      return { responseSpeech, followUp }
+    })()
 
+    const raced = await withTimeout(pipelinePromise, STAGE_SOFT_TIMEOUT_MS)
+
+    if (!raced.ok) {
+      // Didn't finish in time. Keep the real work going in the
+      // background so Sarvam's cache fills for the retry hop, and
+      // return a short "thinking" TwiML that loops the user back
+      // here. After a handful of loops Twilio hits its own retry cap,
+      // but in practice the cache lands on the first retry.
+      pipelinePromise.catch((e) => console.error('[twilio-voice] background pipeline error:', e))
+      console.warn('[twilio-voice] soft timeout — redirecting to stall loop', { ms: STAGE_SOFT_TIMEOUT_MS })
+      return twiml(
+        `<Say voice="${pollyVoice}">One moment, please.</Say>` +
+        `<Pause length="2"/>` +
+        `<Redirect method="POST">/api/webhooks/twilio-voice?agentId=${agentId}&amp;stall=1</Redirect>`
+      )
+    }
+
+    const { responseSpeech, followUp } = raced.value
     return twiml(
       responseSpeech +
       `<Gather input="speech" action="/api/webhooks/twilio-voice?agentId=${agentId}" method="POST" speechTimeout="auto" language="${speechLang}" speechModel="phone_call">` +
@@ -229,10 +296,8 @@ export async function POST(request: NextRequest) {
     )
   } catch (err) {
     console.error('[twilio-voice] Pipeline error:', err)
-    const errorSpeech = await speak(
-      "I'm sorry, I'm having trouble right now. Please try again later. Goodbye.",
-      agent.voice_provider, agent.voice_id, pollyVoice, agent.language
-    )
-    return twiml(errorSpeech + '<Hangup/>')
+    // Best-effort graceful close — fall back to Polly so we don't
+    // double-fail trying to synthesise the error message itself.
+    return twiml(`<Say voice="${pollyVoice}">I'm sorry, I'm having trouble right now. Please try again later. Goodbye.</Say><Hangup/>`)
   }
 }
