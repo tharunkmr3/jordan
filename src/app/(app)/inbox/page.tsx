@@ -267,7 +267,7 @@ function InternalNewChatHero({
   agentName: string
   replyText: string
   onChangeValue: (next: string) => void
-  onSend: (ctx: { text: string; attachments: UploadedAttachment[] }) => void
+  onSend: (ctx: { text: string; attachments: UploadedAttachment[]; kbReferenceIds: string[] }) => void
   sending: boolean
   model: { value: string; options: { value: string; label: string }[]; onChange: (v: string) => void }
 }) {
@@ -588,7 +588,7 @@ function InboxInner() {
     return () => { supabase.removeChannel(channel) }
   }, [orgId, fetchConversations, scrollToBottom]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function handleSendReply(override?: { message: string; attachments?: UploadedAttachment[] }) {
+  async function handleSendReply(override?: { message: string; attachments?: UploadedAttachment[]; kbReferenceIds?: string[] }) {
     // Internal agent mode: ChatGPT-style. Send via /api/chat which
     // handles auth-based visitor scoping, may create the conversation
     // if selectedId is null, and generates an AI response.
@@ -600,7 +600,7 @@ function InboxInner() {
 
     if (isInternalAgent && filteredAgent) {
       if ((!content && !hasAttachments) || sending) return
-      return handleInternalChatSend({ message: content, attachments: override?.attachments })
+      return handleInternalChatSend({ message: content, attachments: override?.attachments, kbReferenceIds: override?.kbReferenceIds })
     }
     if ((!content && !hasAttachments) || !selectedId || sending) return
     const convId = selectedId
@@ -685,7 +685,7 @@ function InboxInner() {
     }
   }
 
-  async function handleInternalChatSend(override?: { message: string; attachments?: UploadedAttachment[] }) {
+  async function handleInternalChatSend(override?: { message: string; attachments?: UploadedAttachment[]; kbReferenceIds?: string[] }) {
     if (!filteredAgent) return
     const content = (override?.message ?? replyText).trim()
     if (!content) return
@@ -770,6 +770,9 @@ function InboxInner() {
           modelName: chatModel || undefined,
           attachments: override?.attachments && override.attachments.length > 0
             ? override.attachments
+            : undefined,
+          kbReferenceIds: override?.kbReferenceIds && override.kbReferenceIds.length > 0
+            ? override.kbReferenceIds
             : undefined,
         }),
       })
@@ -1325,7 +1328,7 @@ function InboxInner() {
             agentName={filteredAgent?.name ?? 'agent'}
             replyText={replyText}
             onChangeValue={setReplyText}
-            onSend={(ctx) => { void handleInternalChatSend({ message: ctx.text, attachments: ctx.attachments }) }}
+            onSend={(ctx) => { void handleInternalChatSend({ message: ctx.text, attachments: ctx.attachments, kbReferenceIds: ctx.kbReferenceIds }) }}
             sending={sending}
             model={composerModel!}
           />
@@ -1765,11 +1768,14 @@ function InboxInner() {
                 onChange={setReplyText}
                 onSubmit={(ctx) => {
                   if (isInternalAgent) {
-                    void handleInternalChatSend({ message: ctx.text, attachments: ctx.attachments })
+                    void handleInternalChatSend({ message: ctx.text, attachments: ctx.attachments, kbReferenceIds: ctx.kbReferenceIds })
                   } else {
                     // Customer-facing reply: attachments now wired. Reply
                     // route persists them on the message and dispatches to
                     // the platform (WhatsApp/Messenger) as media sends.
+                    // Customer-facing channels (WhatsApp/Messenger) don't
+                    // forward KB references — the operator can paste context
+                    // into the message directly if needed.
                     void handleSendReply({ message: ctx.text, attachments: ctx.attachments })
                   }
                 }}

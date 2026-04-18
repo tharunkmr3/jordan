@@ -22,7 +22,7 @@ export async function OPTIONS() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { agentId, message, conversationId, visitorId, visitorName, stream, isTest, modelName, attachments, forceNewConversation } = body
+    const { agentId, message, conversationId, visitorId, visitorName, stream, isTest, modelName, attachments, forceNewConversation, kbReferenceIds } = body
 
     if (!agentId || typeof agentId !== 'string') {
       return NextResponse.json({ error: 'agentId is required' }, { status: 400, headers: corsHeaders })
@@ -91,6 +91,13 @@ export async function POST(request: NextRequest) {
       ? attachments
       : undefined
 
+    // Same trust model as attachments — only authenticated team members can
+    // pin KB files. RLS isn't bypassed on the pipeline side (it uses the
+    // service role) so validating the caller here is the first gate.
+    const effectiveKbReferenceIds = teamUser && Array.isArray(kbReferenceIds) && kbReferenceIds.length > 0
+      ? (kbReferenceIds as unknown[]).filter((v): v is string => typeof v === 'string').slice(0, 10)
+      : undefined
+
     const pipelineInput = {
       agentId,
       message,
@@ -102,23 +109,34 @@ export async function POST(request: NextRequest) {
       forceNewConversation: Boolean(teamUser && forceNewConversation && !conversationId),
       modelOverride,
       attachments: effectiveAttachments,
+      kbReferenceIds: effectiveKbReferenceIds,
       contactInfo: effectiveVisitorId
         ? { channelUserId: effectiveVisitorId, name: effectiveVisitorName || undefined }
         : undefined,
     }
 
-    // Streaming mode — Server-Sent Events
+    // Streaming mode — Server-Sent Events.
+    //
+    // Uses the pull-based ReadableStream pattern from the Next.js 16
+    // streaming guide (node_modules/next/dist/docs/01-app/02-guides/streaming.md).
+    // `pull` is called when the downstream consumer is ready for more,
+    // which gives Next's server the right backpressure signal to flush
+    // each chunk over the wire immediately instead of batching until
+    // the generator finishes.
     if (stream) {
       const encoder = new TextEncoder()
+      const iterator = streamChatMessage(pipelineInput)[Symbol.asyncIterator]()
       const readable = new ReadableStream({
-        async start(controller) {
+        async pull(controller) {
           try {
-            for await (const chunk of streamChatMessage(pipelineInput)) {
-              const data = JSON.stringify(chunk) + '\n'
-              controller.enqueue(encoder.encode(`data: ${data}\n`))
+            const { value, done } = await iterator.next()
+            if (done) {
+              controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+              controller.close()
+              return
             }
-            controller.enqueue(encoder.encode('data: [DONE]\n\n'))
-            controller.close()
+            const payload = JSON.stringify(value)
+            controller.enqueue(encoder.encode(`data: ${payload}\n\n`))
           } catch (err) {
             console.error('[api/chat] Stream error:', err)
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'token', data: 'Sorry, something went wrong.' })}\n\n`))
@@ -131,9 +149,14 @@ export async function POST(request: NextRequest) {
       return new Response(readable, {
         headers: {
           ...corsHeaders,
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
+          'Content-Type': 'text/event-stream; charset=utf-8',
+          'Cache-Control': 'no-cache, no-transform',
           'Connection': 'keep-alive',
+          // Disable proxy buffering (nginx / Coolify / Cloudflare) so
+          // each SSE frame reaches the browser immediately. Without
+          // this, proxies may hold chunks until they hit a ~8KB
+          // threshold — making the stream appear to arrive in one blob.
+          'X-Accel-Buffering': 'no',
         },
       })
     }

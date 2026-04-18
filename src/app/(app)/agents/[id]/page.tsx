@@ -257,10 +257,11 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
     router.push("/dashboard")
   }
 
-  async function sendChat(override?: { message: string; attachments?: UploadedAttachment[] }) {
+  async function sendChat(override?: { message: string; attachments?: UploadedAttachment[]; kbReferenceIds?: string[] }) {
     const incoming = override?.message ?? chatInput.trim()
     const attachments = override?.attachments
-    if ((!incoming && (!attachments || attachments.length === 0)) || chatLoading) return
+    const kbReferenceIds = override?.kbReferenceIds
+    if ((!incoming && (!attachments || attachments.length === 0) && (!kbReferenceIds || kbReferenceIds.length === 0)) || chatLoading) return
     const msg = incoming
     if (!override) setChatInput("")
     setMessages(prev => [...prev, { role: "user", content: msg, attachments }])
@@ -278,6 +279,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
           visitorId: `test-${id}`,
           visitorName: "Test",
           attachments: attachments && attachments.length > 0 ? attachments : undefined,
+          kbReferenceIds: kbReferenceIds && kbReferenceIds.length > 0 ? kbReferenceIds : undefined,
         }),
       })
       if (!res.body) throw new Error("No stream")
@@ -1301,7 +1303,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
           <AiComposer
             value={chatInput}
             onChange={setChatInput}
-            onSubmit={(ctx) => { void sendChat({ message: ctx.text, attachments: ctx.attachments }) }}
+            onSubmit={(ctx) => { void sendChat({ message: ctx.text, attachments: ctx.attachments, kbReferenceIds: ctx.kbReferenceIds }) }}
             sending={chatLoading}
             variant="inline"
             placeholder="Ask anything"

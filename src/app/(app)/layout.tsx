@@ -8,6 +8,7 @@ import {
   Robot,
   UsersThree,
   BookOpenText,
+  Brain,
   ChartBar,
   CreditCard,
   GearSix,
@@ -34,6 +35,7 @@ const navGroup2 = [
   // cross-agent view added visual clutter without a clear use case.
   { label: "Contacts", href: "/contacts", icon: UsersThree },
   { label: "Knowledge", href: "/knowledge", icon: BookOpenText },
+  { label: "Memories", href: "/memories", icon: Brain },
   { label: "Analytics", href: "/analytics", icon: ChartBar },
 ]
 const nav = [...navGroup1, ...navGroup2]

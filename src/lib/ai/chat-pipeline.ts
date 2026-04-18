@@ -93,6 +93,14 @@ export interface PipelineInput {
    * and are sent as vision content parts.
    */
   attachments?: UploadedAttachment[]
+  /**
+   * IDs of kb_documents the user explicitly pinned to this turn via
+   * @-mention in the composer. Their chunks are loaded separately from
+   * the usual semantic-retrieval path and prepended to the KB context
+   * with a "the user referenced this document explicitly" marker so
+   * the model treats them as high-priority context.
+   */
+  kbReferenceIds?: string[]
 }
 
 export interface PipelineOutput {
@@ -141,6 +149,78 @@ try {
  * a WhatsApp contact routed to an internal agent by mistake) returns null
  * and memory is skipped for this turn.
  */
+/**
+ * Load the full chunked content of explicitly @-mentioned KB documents for
+ * this turn. Distinct from the semantic-retrieval path because the user is
+ * saying "look at THIS file" — retrieval scores don't matter, we want all
+ * the chunks. Returns a rendered context string ready to paste into the
+ * system prompt, plus the source chips for message metadata.
+ *
+ * Scopes to the agent's org to prevent a malicious client from pinning a
+ * document it shouldn't have access to.
+ */
+async function loadPinnedKbContext(
+  supabase: SupabaseAdmin,
+  orgId: string,
+  docIds: string[] | undefined,
+): Promise<{ contextStr: string; sources: ReturnType<typeof buildMessageSources> }> {
+  if (!docIds || docIds.length === 0) return { contextStr: '', sources: [] }
+
+  // Fetch document names for header annotations and chunk content in a
+  // single round-trip via the inner join.
+  type Row = {
+    id: string
+    content: string
+    document_id: string
+    kb_id: string
+    kb_documents: { id: string; name: string } | { id: string; name: string }[] | null
+  }
+
+  const { data, error } = await supabase
+    .from('kb_chunks')
+    .select('id, content, document_id, kb_id, kb_documents!inner(id, name)')
+    .in('document_id', docIds)
+    .eq('org_id', orgId)
+    .order('document_id')
+
+  if (error || !data) return { contextStr: '', sources: [] }
+
+  // Group chunks by document so each file is rendered as a single block.
+  const byDoc = new Map<string, { name: string; kbId: string; content: string[] }>()
+  for (const r of data as Row[]) {
+    const doc = Array.isArray(r.kb_documents) ? r.kb_documents[0] : r.kb_documents
+    const name = doc?.name ?? 'Unnamed document'
+    const entry = byDoc.get(r.document_id) ?? { name, kbId: r.kb_id, content: [] }
+    entry.content.push(r.content)
+    byDoc.set(r.document_id, entry)
+  }
+
+  // Guardrail — cap total chars so a reference to a giant file can't blow
+  // the context window. 80k chars ≈ 20k tokens; plenty for a sanity cap.
+  const MAX_CHARS = 80_000
+  let total = 0
+  const blocks: string[] = []
+  const sources: ReturnType<typeof buildMessageSources> = []
+  for (const [docId, entry] of byDoc) {
+    const joined = entry.content.join('\n\n')
+    const slice = joined.length + total > MAX_CHARS ? joined.slice(0, Math.max(0, MAX_CHARS - total)) : joined
+    if (!slice) break
+    blocks.push(`[Pinned by user: ${entry.name}]\n${slice}`)
+    total += slice.length
+    sources.push({
+      chunk_id: docId, // no single chunk — use doc id so the chip is stable
+      document_id: docId,
+      document_name: entry.name,
+      kb_id: entry.kbId,
+      snippet: slice.length > 220 ? slice.slice(0, 220).trim() + '…' : slice,
+      similarity: 1, // sorted to front, user-explicit
+    })
+    if (total >= MAX_CHARS) break
+  }
+
+  return { contextStr: blocks.join('\n\n'), sources }
+}
+
 function resolveMemoryOwner(agent: Agent, contact: Contact): MemoryOwner | null {
   const settings = agent.settings as { is_customer_facing?: boolean } | null | undefined
   if (settings?.is_customer_facing !== false) return null
@@ -172,21 +252,21 @@ export async function processChatMessage(
   // Memory retrieval and extraction are gated on this being non-null.
   const memoryOwner = resolveMemoryOwner(agent, contact)
 
-  // 3. Save user message, load history, query KB, list KB docs, and
-  // fetch relevant memories in parallel. Memory retrieval is a pgvector
-  // lookup like KB search, so adding it to the fan-out is free.
-  const [, history, kbContext, kbDocumentNames, memoryHits] = await Promise.all([
+  // 3. Save user message, load history, query KB, list KB docs, fetch
+  // memories, and load any user-pinned KB docs in parallel. Memory
+  // retrieval is a pgvector lookup like KB search, so adding it to the
+  // fan-out is free. Pinned docs run alongside the semantic retrieval —
+  // they're the "user said: look at THIS file" path.
+  const [, history, kbContext, kbDocumentNames, memoryHits, pinned] = await Promise.all([
     saveMessage(supabase, {
       conversation_id: conversation.id,
       org_id: agent.org_id,
       role: 'user',
       content: input.message,
       channel: input.channel,
-      // Persist attachments on the user message so history replay and
-      // the inbox bubble renderer can reconstruct the chips / previews.
-      metadata: input.attachments && input.attachments.length > 0
-        ? { attachments: input.attachments }
-        : undefined,
+      // Persist attachments + kb references on the user message so history
+      // replay and the inbox bubble renderer can reconstruct the chips.
+      metadata: buildUserMessageMetadata(input),
     }),
     loadHistory(supabase, conversation.id, 20),
     queryKnowledgeBase
@@ -198,17 +278,18 @@ export async function processChatMessage(
     memoryOwner
       ? queryMemories(memoryOwner, input.message, 5).catch(() => [] as MemoryHit[])
       : Promise.resolve([] as MemoryHit[]),
+    loadPinnedKbContext(supabase, agent.org_id, input.kbReferenceIds).catch(() => ({ contextStr: '', sources: [] as ReturnType<typeof buildMessageSources> })),
   ])
 
   // 4. Build prompt
-  // Render retrieved chunks with their source filename inline so the
-  // LLM can cite them in its answer ("From Resume.pdf: …"). Separately,
-  // produce a compact de-duplicated sources list to persist on the
-  // assistant message — the UI uses it to render clickable source chips.
-  const kbContextStr = kbContext.length > 0
+  // Pinned docs come first in kbContextStr (marked as explicitly referenced)
+  // so the model gives them priority over semantic-retrieval hits. Sources
+  // list interleaves pinned entries at the front of the chip strip too.
+  const retrievedContextStr = kbContext.length > 0
     ? kbContext.map((s) => `[Source: ${s.documentName}]\n${s.content}`).join('\n\n')
     : ''
-  const kbSources = buildMessageSources(kbContext)
+  const kbContextStr = [pinned.contextStr, retrievedContextStr].filter(Boolean).join('\n\n')
+  const kbSources = [...pinned.sources, ...buildMessageSources(kbContext)]
   const memoryContext = formatMemoryContext(memoryHits)
 
   // Resolve effective model first so buildPrompt can inject a small
@@ -381,18 +462,14 @@ export async function* streamChatMessage(
 
   const memoryOwner = resolveMemoryOwner(agent, contact)
 
-  const [, history, kbContext, kbDocumentNames, memoryHits] = await Promise.all([
+  const [, history, kbContext, kbDocumentNames, memoryHits, pinned] = await Promise.all([
     saveMessage(supabase, {
       conversation_id: conversation.id,
       org_id: agent.org_id,
       role: 'user',
       content: input.message,
       channel: input.channel,
-      // Persist attachments on the user message so history replay and
-      // the inbox bubble renderer can reconstruct the chips / previews.
-      metadata: input.attachments && input.attachments.length > 0
-        ? { attachments: input.attachments }
-        : undefined,
+      metadata: buildUserMessageMetadata(input),
     }),
     loadHistory(supabase, conversation.id, 20),
     queryKnowledgeBase
@@ -404,16 +481,16 @@ export async function* streamChatMessage(
     memoryOwner
       ? queryMemories(memoryOwner, input.message, 5).catch(() => [] as MemoryHit[])
       : Promise.resolve([] as MemoryHit[]),
+    loadPinnedKbContext(supabase, agent.org_id, input.kbReferenceIds).catch(() => ({ contextStr: '', sources: [] as ReturnType<typeof buildMessageSources> })),
   ])
 
-  // Render retrieved chunks with their source filename inline so the
-  // LLM can cite them in its answer, and build a de-duplicated compact
-  // source list for the assistant message metadata (powers clickable
-  // source chips in the chat UI).
-  const kbContextStr = kbContext.length > 0
+  // Pinned docs lead the KB context (user said "look at THIS"); retrieved
+  // chunks follow. Source chips are interleaved the same way.
+  const retrievedContextStr = kbContext.length > 0
     ? kbContext.map((s) => `[Source: ${s.documentName}]\n${s.content}`).join('\n\n')
     : ''
-  const kbSources = buildMessageSources(kbContext)
+  const kbContextStr = [pinned.contextStr, retrievedContextStr].filter(Boolean).join('\n\n')
+  const kbSources = [...pinned.sources, ...buildMessageSources(kbContext)]
   const memoryContext = formatMemoryContext(memoryHits)
 
   // Per-turn override applies here too (internal chat composer sends
@@ -649,6 +726,22 @@ export async function* streamChatMessage(
 // ---------------------------------------------------------------------------
 
 type SupabaseAdmin = ReturnType<typeof createAdminClient>
+
+/**
+ * Assemble the `metadata` JSON for a user message insert. Returns undefined
+ * when there's nothing to persist so we don't write empty-object rows.
+ * Lives here (not inline in the pipeline bodies) so both streaming and
+ * non-streaming paths stay in sync on what they persist.
+ */
+function buildUserMessageMetadata(input: PipelineInput): Record<string, unknown> | undefined {
+  const hasAttachments = Boolean(input.attachments && input.attachments.length > 0)
+  const hasKbRefs = Boolean(input.kbReferenceIds && input.kbReferenceIds.length > 0)
+  if (!hasAttachments && !hasKbRefs) return undefined
+  return {
+    ...(hasAttachments ? { attachments: input.attachments } : {}),
+    ...(hasKbRefs ? { kb_reference_ids: input.kbReferenceIds } : {}),
+  }
+}
 
 async function loadAgent(supabase: SupabaseAdmin, agentId: string): Promise<Agent> {
   const { data, error } = await supabase

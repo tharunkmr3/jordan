@@ -1,7 +1,7 @@
 "use client"
 
-import { forwardRef, useImperativeHandle, useRef, useState } from 'react'
-import { Plus, PaperPlaneTilt, Microphone, X, FileText, FilePdf, FileDoc, FileXls, FilePpt, Image as ImageIcon, SpeakerHigh } from '@phosphor-icons/react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { Plus, PaperPlaneTilt, Microphone, X, FileText, FilePdf, FileDoc, FileXls, FilePpt, Image as ImageIcon, SpeakerHigh, BookOpenText } from '@phosphor-icons/react'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Loader } from '@/components/ui/loader'
@@ -36,15 +36,22 @@ export interface AiComposerHandle {
   focus: () => void
 }
 
+export interface KbReference {
+  id: string
+  name: string
+  kbName: string
+}
+
 export interface AiComposerProps {
   value: string
   onChange: (next: string) => void
   /**
-   * Called with the typed text and any uploaded attachments when the user
-   * hits send. The composer clears its own text/attachment state after a
-   * successful submit — parent only needs to dispatch the request.
+   * Called with the typed text, uploaded attachments, and any KB docs the
+   * user pinned with @-mention when the user hits send. Composer clears
+   * its own text/attachment/reference state after a successful submit —
+   * parent only needs to dispatch the request.
    */
-  onSubmit: (context: { text: string; attachments: UploadedAttachment[] }) => void
+  onSubmit: (context: { text: string; attachments: UploadedAttachment[]; kbReferenceIds: string[] }) => void
   disabled?: boolean
   sending?: boolean
   placeholder?: string
@@ -76,6 +83,14 @@ export interface AiComposerProps {
    * unauthenticated widget will need its own endpoint later.
    */
   uploadEndpoint?: string
+  /**
+   * Enable @-mention to reference knowledge-base files. When true the
+   * composer lazily fetches /api/knowledge-base/files on the first @ and
+   * opens a picker; selections become pinned chips (separate from upload
+   * attachments) and are emitted as kbReferenceIds on submit. Default
+   * true; disable for public widget surfaces.
+   */
+  knowledgeMentions?: boolean
 }
 
 /**
@@ -88,6 +103,14 @@ type ComposerAttachment =
   | { id: string; kind: AttachmentKind; name: string; size: number; status: 'pending'; file: File }
   | { id: string; kind: AttachmentKind; name: string; size: number; status: 'ready'; uploaded: UploadedAttachment }
   | { id: string; kind: AttachmentKind; name: string; size: number; status: 'failed'; error: string }
+
+interface KbFile {
+  id: string
+  name: string
+  kb_id: string
+  kb_name: string
+  char_count: number
+}
 
 function clientTempId(): string {
   return Math.random().toString(36).slice(2, 10)
@@ -125,6 +148,7 @@ export const AiComposer = forwardRef<AiComposerHandle, AiComposerProps>(function
     onVoiceToggle,
     attachments: attachmentsEnabled = true,
     uploadEndpoint = '/api/chat/attachments',
+    knowledgeMentions = true,
   },
   ref,
 ) {
@@ -132,6 +156,14 @@ export const AiComposer = forwardRef<AiComposerHandle, AiComposerProps>(function
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([])
   const [dragActive, setDragActive] = useState(false)
+  // @-mention state. `mention` is non-null while the textarea cursor sits
+  // inside an active @query token; nulling it closes the popover.
+  // `mentionFiles` caches the KB file list (fetched once per session);
+  // `mentionHighlight` is the keyboard-highlighted row.
+  const [mention, setMention] = useState<{ query: string; start: number } | null>(null)
+  const [mentionFiles, setMentionFiles] = useState<KbFile[] | null>(null)
+  const [mentionHighlight, setMentionHighlight] = useState(0)
+  const [kbReferences, setKbReferences] = useState<KbReference[]>([])
   /**
    * Voice input state:
    *   idle        → mic button enabled, normal styling
@@ -149,9 +181,70 @@ export const AiComposer = forwardRef<AiComposerHandle, AiComposerProps>(function
   }))
 
   const hasPendingUpload = attachments.some(a => a.status === 'pending')
-  const canSubmit = !disabled && !sending && !hasPendingUpload && (value.trim().length > 0 || attachments.some(a => a.status === 'ready'))
+  const canSubmit = !disabled && !sending && !hasPendingUpload && (
+    value.trim().length > 0
+    || attachments.some(a => a.status === 'ready')
+    || kbReferences.length > 0
+  )
+
+  // Fetch KB file list once, the first time the user opens an @ mention.
+  // Kept in a ref-gated state so repeated opens reuse the same array.
+  async function ensureMentionFiles() {
+    if (mentionFiles !== null) return
+    try {
+      const res = await fetch('/api/knowledge-base/files')
+      if (!res.ok) { setMentionFiles([]); return }
+      const data = await res.json() as KbFile[]
+      setMentionFiles(data)
+    } catch {
+      setMentionFiles([])
+    }
+  }
+
+  /**
+   * Scan backwards from the cursor to figure out whether the user is inside
+   * an @ token. A token is @<alnum-or-space-dot-dash-underscore> up to 60
+   * chars, bounded on the left by start-of-string or whitespace. Matching a
+   * token opens the popover; leaving the token (space-after-query, moving
+   * the cursor, deleting past the @) closes it.
+   */
+  function detectMention(text: string, cursor: number): { query: string; start: number } | null {
+    if (!knowledgeMentions) return null
+    const before = text.slice(0, cursor)
+    const match = before.match(/(?:^|\s)@([\w .\-_/]{0,60})$/)
+    if (!match) return null
+    const query = match[1] ?? ''
+    const start = before.length - query.length - 1 // index of '@'
+    return { query, start }
+  }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // @-mention navigation takes priority when the popover is open so Enter
+    // selects a file instead of sending, and Up/Down move the highlight.
+    if (mention && mentionFiles && filteredMentionFiles.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setMentionHighlight((h) => (h + 1) % filteredMentionFiles.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setMentionHighlight((h) => (h - 1 + filteredMentionFiles.length) % filteredMentionFiles.length)
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        const pick = filteredMentionFiles[mentionHighlight]
+        if (pick) selectMention(pick)
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setMention(null)
+        return
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       if (canSubmit) doSubmit()
@@ -159,11 +252,78 @@ export const AiComposer = forwardRef<AiComposerHandle, AiComposerProps>(function
   }
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    onChange(e.target.value)
+    const next = e.target.value
+    onChange(next)
     const el = e.target
     el.style.height = 'auto'
     el.style.height = Math.min(el.scrollHeight, 240) + 'px'
+
+    if (knowledgeMentions) {
+      const m = detectMention(next, el.selectionStart ?? next.length)
+      if (m) {
+        setMention(m)
+        setMentionHighlight(0)
+        void ensureMentionFiles()
+      } else if (mention) {
+        setMention(null)
+      }
+    }
   }
+
+  function selectMention(file: KbFile) {
+    if (!mention) return
+    // Replace "@query" (from mention.start up to the current cursor) with
+    // nothing — the chip below the textarea carries the reference. Avoids
+    // leaving "@filename" inline which would then be sent literally.
+    const el = textareaRef.current
+    const cursor = el?.selectionStart ?? value.length
+    const next = value.slice(0, mention.start) + value.slice(cursor)
+    onChange(next)
+    setMention(null)
+    // De-dupe: skip if this file is already pinned.
+    setKbReferences((prev) => {
+      if (prev.some((r) => r.id === file.id)) return prev
+      return [...prev, { id: file.id, name: file.name, kbName: file.kb_name }]
+    })
+    // Restore focus + cursor to where the @ used to be.
+    requestAnimationFrame(() => {
+      if (!el) return
+      el.focus()
+      el.selectionStart = mention.start
+      el.selectionEnd = mention.start
+    })
+  }
+
+  function removeKbReference(id: string) {
+    setKbReferences((prev) => prev.filter((r) => r.id !== id))
+  }
+
+  // Filter + sort the KB file list for the popover using a simple case-
+  // insensitive substring match. Kept inline since the list is capped at
+  // 500 server-side and the user types interactively.
+  const filteredMentionFiles: KbFile[] = (() => {
+    if (!mention || !mentionFiles) return []
+    const q = mention.query.trim().toLowerCase()
+    if (!q) return mentionFiles.slice(0, 8)
+    return mentionFiles
+      .filter((f) => f.name.toLowerCase().includes(q) || f.kb_name.toLowerCase().includes(q))
+      .slice(0, 8)
+  })()
+
+  // Clicking outside the textarea/popover closes the popover cleanly.
+  useEffect(() => {
+    if (!mention) return
+    const handler = (e: MouseEvent) => {
+      const el = textareaRef.current
+      if (!el) return
+      if (el.contains(e.target as Node)) return
+      const pop = document.getElementById('ai-composer-mention-popover')
+      if (pop && pop.contains(e.target as Node)) return
+      setMention(null)
+    }
+    window.addEventListener('mousedown', handler)
+    return () => window.removeEventListener('mousedown', handler)
+  }, [mention])
 
   async function uploadFile(file: File) {
     const id = clientTempId()
@@ -228,10 +388,13 @@ export const AiComposer = forwardRef<AiComposerHandle, AiComposerProps>(function
     const ready = attachments
       .filter(a => a.status === 'ready')
       .map(a => (a as Extract<ComposerAttachment, { status: 'ready' }>).uploaded)
-    onSubmit({ text: value, attachments: ready })
-    // Composer owns these concerns — clear text + attachments after send.
+    onSubmit({ text: value, attachments: ready, kbReferenceIds: kbReferences.map((r) => r.id) })
+    // Composer owns these concerns — clear text, attachments, and KB refs
+    // after send.
     onChange('')
     setAttachments([])
+    setKbReferences([])
+    setMention(null)
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
   }
 
@@ -340,11 +503,57 @@ export const AiComposer = forwardRef<AiComposerHandle, AiComposerProps>(function
         </div>
       )}
 
-      {attachments.length > 0 && (
+      {(attachments.length > 0 || kbReferences.length > 0) && (
         <div className="flex flex-wrap gap-1.5 px-3 pt-3">
+          {kbReferences.map((r) => (
+            <KbReferenceChip key={r.id} reference={r} onRemove={() => removeKbReference(r.id)} />
+          ))}
           {attachments.map(a => (
             <AttachmentChip key={a.id} attachment={a} onRemove={() => removeAttachment(a.id)} />
           ))}
+        </div>
+      )}
+
+      {mention && filteredMentionFiles.length > 0 && (
+        <div
+          id="ai-composer-mention-popover"
+          className="absolute bottom-full left-2 z-30 mb-2 w-[320px] rounded-xl border border-black/[0.06] bg-white py-1 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.12)]"
+        >
+          <div className="px-3 py-1.5 text-[11px] font-medium text-[#a3a3a3]">
+            Knowledge files
+          </div>
+          <ul className="max-h-[280px] overflow-y-auto">
+            {filteredMentionFiles.map((f, i) => {
+              const isActive = i === mentionHighlight
+              return (
+                <li key={f.id}>
+                  <button
+                    type="button"
+                    onMouseEnter={() => setMentionHighlight(i)}
+                    onClick={() => selectMention(f)}
+                    className={cn(
+                      'flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px]',
+                      isActive ? 'bg-[#f5f5f5]' : 'hover:bg-[#fafafa]',
+                    )}
+                  >
+                    <BookOpenText size={14} weight="bold" className="flex-shrink-0 text-[#737373]" />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-medium text-[#2e2e2e]">{f.name}</div>
+                      <div className="truncate text-[11px] text-[#a3a3a3]">{f.kb_name}</div>
+                    </div>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
+      {mention && mentionFiles && filteredMentionFiles.length === 0 && (
+        <div
+          id="ai-composer-mention-popover"
+          className="absolute bottom-full left-2 z-30 mb-2 w-[320px] rounded-xl border border-black/[0.06] bg-white px-3 py-3 text-[12px] text-[#737373] shadow-[0_4px_20px_-4px_rgba(0,0,0,0.12)]"
+        >
+          No matching files. Upload documents under <span className="font-medium text-[#2e2e2e]">Knowledge</span> to reference them here.
         </div>
       )}
 
@@ -499,6 +708,34 @@ function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`
   return `${(n / 1024 / 1024).toFixed(1)} MB`
+}
+
+function KbReferenceChip({
+  reference,
+  onRemove,
+}: {
+  reference: KbReference
+  onRemove: () => void
+}) {
+  return (
+    <div className="group/chip relative flex items-center gap-2 max-w-[240px] rounded-lg px-2 py-1.5 text-[12px] bg-[#FFF4EE] text-[#2e2e2e] ring-1 ring-[#F4511E]/20">
+      <span className="flex-shrink-0 text-[#F4511E]">
+        <BookOpenText size={14} weight="bold" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="truncate font-medium">{reference.name}</div>
+        <div className="truncate text-[10px] text-[#a3a3a3]">{reference.kbName}</div>
+      </div>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="flex h-5 w-5 items-center justify-center rounded-full text-[#a3a3a3] hover:bg-black/5 hover:text-[#2e2e2e] transition-colors"
+        aria-label="Remove reference"
+      >
+        <X size={11} weight="bold" />
+      </button>
+    </div>
+  )
 }
 
 function AttachmentChip({
