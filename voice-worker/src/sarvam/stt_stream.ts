@@ -68,6 +68,10 @@ export class SarvamSpeechStream extends stt.SpeechStream {
     url.searchParams.set('sample_rate', String(SAMPLE_RATE))
     url.searchParams.set('vad_signals', 'true')
     url.searchParams.set('flush_signal', 'true')
+    // Codec selection is via this query param, NOT the message-level
+    // `encoding` field (that's a Pydantic enum that only accepts
+    // 'audio/wav'). pcm_s16le lets us skip WAV-header framing per chunk.
+    url.searchParams.set('input_audio_codec', 'pcm_s16le')
 
     console.log('[sarvam-stt-stream] connecting', { lang: this.langCode })
     this.ws = new WebSocket(url.toString(), {
@@ -128,11 +132,16 @@ export class SarvamSpeechStream extends stt.SpeechStream {
   private sendAudioChunk(samples: Int16Array): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
     const b64 = Buffer.from(samples.buffer, samples.byteOffset, samples.byteLength).toString('base64')
+    // `encoding` in the message body must be the Pydantic enum literal
+    // 'audio/wav' — the ACTUAL codec is selected by the URL query param
+    // `input_audio_codec=pcm_s16le` set on connect. Without this exact
+    // string Sarvam throws a 422-ish enum validation error and closes
+    // the socket mid-stream.
     this.ws.send(JSON.stringify({
       audio: {
         data: b64,
         sample_rate: String(SAMPLE_RATE),
-        encoding: 'pcm_s16le',
+        encoding: 'audio/wav',
       },
     }))
   }
