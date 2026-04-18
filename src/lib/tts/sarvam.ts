@@ -118,21 +118,28 @@ export async function generateAndHostSarvamAudio(
 // ---------------------------------------------------------------------------
 
 /**
- * Curated Sarvam Bulbul v3 voices exposed in the agent-settings UI. The full
- * v3 catalog has 30+ voices; we surface a shorter set that covers warm,
- * professional, clear registers. `anushka` is first because it's the most
- * reliable "customer support" voice — neutral, friendly, clear — and is
- * selected as the default when the agent first picks Sarvam.
+ * Curated Sarvam Bulbul v3 speakers exposed in the agent-settings UI.
+ *
+ * The full v3 roster has 38 speakers (aditya, ritu, ashutosh, priya, neha,
+ * rahul, pooja, rohan, simran, kavya, amit, dev, ishita, shreya, ratan,
+ * varun, manan, sumit, roopa, kabir, aayan, shubh, advait, anand, tanya,
+ * tarun, sunny, mani, gokul, vijay, shruti, suhani, mohit, kavitha, rehan,
+ * soham, rupali, niharika). We surface a shortlist covering warm /
+ * professional / clear registers in both genders. `priya` leads because
+ * it's the Indian stock-customer-support persona name — pinned as the
+ * default when the agent first picks Sarvam. Earlier catalogues listed
+ * v2-only names (anushka, manisha, vidya, ...) which throw 400 on v3.
  */
 export const SARVAM_VOICES: Array<{ id: string; label: string; note: string }> = [
-  { id: 'anushka',  label: 'Anushka',  note: 'Customer support (default)' },
-  { id: 'manisha',  label: 'Manisha',  note: 'Warm, friendly' },
-  { id: 'vidya',    label: 'Vidya',    note: 'Calm, narrator' },
-  { id: 'arya',     label: 'Arya',     note: 'Clear, professional' },
-  { id: 'abhilash', label: 'Abhilash', note: 'Neutral, male' },
-  { id: 'karun',    label: 'Karun',    note: 'Warm, male' },
-  { id: 'hitesh',   label: 'Hitesh',   note: 'Confident, male' },
+  { id: 'priya',    label: 'Priya',    note: 'Customer support (default)' },
+  { id: 'neha',     label: 'Neha',     note: 'Friendly, warm' },
+  { id: 'pooja',    label: 'Pooja',    note: 'Calm, reassuring' },
+  { id: 'shreya',   label: 'Shreya',   note: 'Clear, professional' },
+  { id: 'kavitha',  label: 'Kavitha',  note: 'South-Indian persona' },
+  { id: 'aditya',   label: 'Aditya',   note: 'Neutral male' },
+  { id: 'rahul',    label: 'Rahul',    note: 'Warm male' },
+  { id: 'amit',     label: 'Amit',     note: 'Confident male' },
 ]
 
 /** Default speaker when the user switches an agent to Sarvam. */
-export const SARVAM_DEFAULT_VOICE = 'anushka'
+export const SARVAM_DEFAULT_VOICE = 'priya'
