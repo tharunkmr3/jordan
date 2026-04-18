@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, use, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { SARVAM_VOICES, SARVAM_DEFAULT_VOICE } from "@/lib/tts/sarvam"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -156,6 +157,9 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
   const [showKbPicker, setShowKbPicker] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const avatarInputRef = useRef<HTMLInputElement>(null)
+  // Holds the AbortController for the current streaming chat so the stop
+  // button on the composer can abort the fetch + halt token decoding.
+  const chatAbortRef = useRef<AbortController | null>(null)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
 
   const loadChannels = useCallback(() => {
@@ -257,6 +261,18 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
     router.push("/dashboard")
   }
 
+  /**
+   * Abort the in-flight chat stream if any. Safe to call multiple times —
+   * AbortController is idempotent and the controller ref is cleared when
+   * the stream completes naturally. Wired to the composer's onStop so the
+   * send button doubles as a stop button while the assistant is replying.
+   */
+  function stopChat() {
+    chatAbortRef.current?.abort()
+    chatAbortRef.current = null
+    setChatLoading(false)
+  }
+
   async function sendChat(override?: { message: string; attachments?: UploadedAttachment[]; kbReferenceIds?: string[] }) {
     const incoming = override?.message ?? chatInput.trim()
     const attachments = override?.attachments
@@ -266,10 +282,13 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
     if (!override) setChatInput("")
     setMessages(prev => [...prev, { role: "user", content: msg, attachments }])
     setChatLoading(true)
+    const controller = new AbortController()
+    chatAbortRef.current = controller
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           agentId: id,
           message: msg,
@@ -332,9 +351,18 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
           } catch { /* skip malformed lines */ }
         }
       }
-    } catch {
+    } catch (err) {
+      // User-initiated abort is expected — the partial assistant bubble
+      // keeps whatever tokens already arrived; don't replace it with an
+      // error message.
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setChatLoading(false)
+        return
+      }
       setMessages(prev => [...prev, { role: "assistant", content: "Failed to get response" }])
       setChatLoading(false)
+    } finally {
+      if (chatAbortRef.current === controller) chatAbortRef.current = null
     }
   }
 
@@ -775,9 +803,48 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
                     </SelectContent>
                   </Select>
                 </Field>
-                <Field label="Voice provider" description="How the agent speaks on phone calls.">
-                  <Select value={editData.voice_provider || "none"} onValueChange={v => v && setEditData({...editData, voice_provider: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Twilio Polly (Default)</SelectItem><SelectItem value="elevenlabs">ElevenLabs</SelectItem></SelectContent></Select>
+                <Field label="Voice provider" description="How the agent speaks on phone calls. Sarvam auto-detects the spoken language and is tuned for Indian English + 10 regional languages.">
+                  <Select
+                    value={editData.voice_provider || "none"}
+                    onValueChange={v => {
+                      if (!v) return
+                      // Switching to Sarvam seeds a sensible default speaker
+                      // so the agent is immediately usable without making
+                      // the user hunt through the voice picker. Existing
+                      // voice_id is preserved if it already points at a
+                      // Sarvam speaker.
+                      const sarvamIds = SARVAM_VOICES.map(x => x.id)
+                      const next: Partial<Agent> = { voice_provider: v }
+                      if (v === 'sarvam' && !sarvamIds.includes(editData.voice_id || '')) {
+                        next.voice_id = SARVAM_DEFAULT_VOICE
+                      } else if (v !== 'sarvam' && sarvamIds.includes(editData.voice_id || '')) {
+                        // Leaving Sarvam for a provider that doesn't share
+                        // voice ids — clear the stale id.
+                        next.voice_id = ''
+                      }
+                      setEditData({ ...editData, ...next })
+                    }}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Twilio Polly (Default)</SelectItem>
+                      <SelectItem value="sarvam">Sarvam — Indian voices, auto language</SelectItem>
+                      <SelectItem value="elevenlabs">ElevenLabs — English</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </Field>
+                {editData.voice_provider === "sarvam" && (
+                  <Field label="Voice" description="Sarvam Bulbul v3 voice. Language is auto-detected from each reply — pick a voice and Sarvam will speak whatever language the agent replies in.">
+                    <Select value={editData.voice_id || SARVAM_DEFAULT_VOICE} onValueChange={v => v && setEditData({...editData, voice_id: v})}>
+                      <SelectTrigger><SelectValue placeholder="Select a voice" /></SelectTrigger>
+                      <SelectContent>
+                        {SARVAM_VOICES.map(v => (
+                          <SelectItem key={v.id} value={v.id}>{v.label} — {v.note}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                )}
                 {editData.voice_provider === "elevenlabs" && (
                   <Field label="Voice" description="Pick a preset or paste a custom ElevenLabs voice ID.">
                     <div className="space-y-2">
@@ -1304,6 +1371,7 @@ export default function AgentViewPage({ params }: { params: Promise<{ id: string
             value={chatInput}
             onChange={setChatInput}
             onSubmit={(ctx) => { void sendChat({ message: ctx.text, attachments: ctx.attachments, kbReferenceIds: ctx.kbReferenceIds }) }}
+            onStop={stopChat}
             sending={chatLoading}
             variant="inline"
             placeholder="Ask anything"

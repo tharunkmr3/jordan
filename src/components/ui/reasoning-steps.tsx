@@ -88,17 +88,28 @@ export function ReasoningSteps({ steps, streaming, className }: ReasoningStepsPr
         aria-expanded={open}
       >
         {streaming ? (
-          <TextShimmerWave
-            as="span"
-            className="[--base-color:#a3a3a3] [--base-gradient-color:#2e2e2e] text-[12px] font-medium"
-            duration={1}
-            spread={1}
-            zDistance={1}
-            scaleDistance={1.05}
-            rotateYDistance={10}
-          >
-            {summaryLabel}
-          </TextShimmerWave>
+          <>
+            {/* Animated dot-matrix loader — the outer ring of dots pulses
+                dark while the core stays solid. Lives beside the label so
+                the row reads as one unit instead of a floating spinner. */}
+            <img
+              src="/loading_animator/1.svg"
+              alt=""
+              aria-hidden="true"
+              className="h-4 w-4 shrink-0"
+            />
+            <TextShimmerWave
+              as="span"
+              className="[--base-color:#a3a3a3] [--base-gradient-color:#2e2e2e] text-[12px] font-medium"
+              duration={1}
+              spread={1}
+              zDistance={1}
+              scaleDistance={1.05}
+              rotateYDistance={10}
+            >
+              {summaryLabel}
+            </TextShimmerWave>
+          </>
         ) : (
           <span>{summaryLabel}</span>
         )}

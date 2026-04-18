@@ -8,6 +8,8 @@ import { NextRequest } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { processChatMessage } from '@/lib/ai/chat-pipeline'
 import { generateAndHostAudio } from '@/lib/tts/elevenlabs'
+import { generateAndHostSarvamAudio, SARVAM_DEFAULT_VOICE } from '@/lib/tts/sarvam'
+import { detectSarvamLanguageAsync, agentLanguageToSarvam } from '@/lib/lang/detect'
 
 function twiml(xml: string) {
   return new Response(`<?xml version="1.0" encoding="UTF-8"?><Response>${xml}</Response>`, {
@@ -20,38 +22,99 @@ function escapeXml(str: string): string {
 }
 
 /**
- * Strip markdown and formatting for TTS — voice should not read asterisks, hashes, etc.
+ * Strip markdown + formatting chars that TTS engines vocalize literally.
+ * Polly's Indian voices in particular spell out stray asterisks, hashes,
+ * and underscores ("star", "hash", "underscore"), which ends up being
+ * read aloud during a call. Sarvam is better-behaved but we normalize
+ * uniformly so the text that hits either provider is clean.
  */
 function stripMarkdown(text: string): string {
   return text
-    .replace(/\*\*(.+?)\*\*/g, '$1')      // bold **text**
-    .replace(/\*(.+?)\*/g, '$1')          // italic *text*
-    .replace(/__(.+?)__/g, '$1')          // bold __text__
-    .replace(/_(.+?)_/g, '$1')            // italic _text_
-    .replace(/`([^`]+)`/g, '$1')          // inline code
-    .replace(/^#{1,6}\s+/gm, '')          // headings
-    .replace(/^[-*+]\s+/gm, '')           // bullet lists
-    .replace(/^\d+\.\s+/gm, '')           // numbered lists
+    // Paired emphasis first so the unmatched-char sweep below doesn't
+    // accidentally swallow content before emphasis is removed cleanly.
+    .replace(/\*\*([^*]+?)\*\*/g, '$1')      // bold **text**
+    .replace(/\*([^*]+?)\*/g, '$1')          // italic *text*
+    .replace(/__([^_]+?)__/g, '$1')          // bold __text__
+    .replace(/_([^_]+?)_/g, '$1')            // italic _text_
+    .replace(/`([^`]+)`/g, '$1')             // inline code
+    .replace(/```[\s\S]*?```/g, '')          // fenced code blocks
+    .replace(/^#{1,6}\s+/gm, '')             // headings
+    .replace(/^[-*+]\s+/gm, '')              // bullet lists
+    .replace(/^\d+\.\s+/gm, '')              // numbered lists
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // links [text](url)
-    .replace(/\n{2,}/g, '. ')             // collapse paragraphs into sentences
-    .replace(/\n/g, ' ')                  // single newlines to spaces
-    .replace(/\s+/g, ' ')                 // collapse whitespace
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')// images ![alt](url)
+    // Strip leftover standalone formatting chars that paired patterns
+    // missed (stray `*`, `_`, `#`, `~`, `|`, `>`, backticks). Without
+    // this, Polly.Aditi literally says "star" / "hash" / "underscore".
+    .replace(/[*_#~|>`]/g, '')
+    // URLs: TTS engines read every character of a raw URL. Strip bare
+    // http(s) / www links entirely — agents shouldn't be emitting them
+    // on voice channels, but defence in depth.
+    .replace(/https?:\/\/\S+/gi, '')
+    .replace(/\bwww\.\S+/gi, '')
+    // Emoji + pictographs → TTS vocalises them as "face with tears of joy"
+    // etc. Strip the entire Extended_Pictographic range.
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '')
+    .replace(/\n{2,}/g, '. ')                // collapse paragraphs
+    .replace(/\n/g, ' ')                     // single newlines to spaces
+    .replace(/\s+/g, ' ')                    // collapse whitespace
     .trim()
 }
 
 /**
- * Generate a TwiML speech element — <Play> for ElevenLabs, <Say> for Polly fallback
+ * Generate a TwiML speech element. Provider ladder:
+ *   - sarvam → Bulbul v3 with Unicode-script language detection (auto-
+ *     switches voice language turn-by-turn for multilingual conversations)
+ *   - elevenlabs → English-first generative voice
+ *   - anything else → Twilio Polly <Say> (free, works everywhere)
+ * Each non-Polly provider falls through to Polly on error so a provider
+ * outage degrades gracefully instead of killing the call.
  */
-async function speak(text: string, voiceProvider: string | null, voiceId: string | null, pollyVoice: string): Promise<string> {
+async function speak(
+  text: string,
+  voiceProvider: string | null,
+  voiceId: string | null,
+  pollyVoice: string,
+  agentLanguage: string | null = null,
+): Promise<string> {
   const cleanText = stripMarkdown(text)
+
+  console.log('[twilio-voice/speak] start', {
+    provider: voiceProvider,
+    voiceId,
+    agentLanguage,
+    textLen: cleanText.length,
+    textPreview: cleanText.slice(0, 80),
+  })
+
+  if (voiceProvider === 'sarvam') {
+    try {
+      // Language auto-detection: try Sarvam's /text-lid first (it handles
+      // Romanised Hinglish and code-mixed content the local script
+      // detector can't see), fall back to Unicode-script analysis on
+      // failure, and finally to the agent's configured language for
+      // pure Latin-script content.
+      const fallback = agentLanguageToSarvam(agentLanguage)
+      const lang = await detectSarvamLanguageAsync(cleanText, fallback)
+      const speaker = voiceId || SARVAM_DEFAULT_VOICE
+      console.log('[twilio-voice/speak] sarvam', { lang, speaker })
+      const audioUrl = await generateAndHostSarvamAudio(cleanText, speaker, lang)
+      console.log('[twilio-voice/speak] sarvam ok', { audioUrl })
+      return `<Play>${escapeXml(audioUrl)}</Play>`
+    } catch (err) {
+      console.error('[twilio-voice/speak] sarvam failed → Polly fallback:', err)
+    }
+  }
+
   if (voiceProvider === 'elevenlabs' && voiceId) {
     try {
       const audioUrl = await generateAndHostAudio(cleanText, voiceId)
       return `<Play>${escapeXml(audioUrl)}</Play>`
     } catch (err) {
-      console.error('[twilio-voice] ElevenLabs failed, falling back to Polly:', err)
+      console.error('[twilio-voice/speak] elevenlabs failed → Polly fallback:', err)
     }
   }
+  console.log('[twilio-voice/speak] polly', { pollyVoice })
   return `<Say voice="${pollyVoice}">${escapeXml(cleanText)}</Say>`
 }
 
@@ -99,8 +162,8 @@ export async function POST(request: NextRequest) {
   // First call — no speech result yet, greet and listen
   if (!speechResult) {
     const greeting = agent.greeting_message || `Hi, you've reached ${agent.name}. How can I help you?`
-    const greetingSpeech = await speak(greeting, agent.voice_provider, agent.voice_id, pollyVoice)
-    const listenPrompt = await speak("I'm listening.", agent.voice_provider, agent.voice_id, pollyVoice)
+    const greetingSpeech = await speak(greeting, agent.voice_provider, agent.voice_id, pollyVoice, agent.language)
+    const listenPrompt = await speak("I'm listening.", agent.voice_provider, agent.voice_id, pollyVoice, agent.language)
 
     return twiml(
       greetingSpeech +
@@ -125,8 +188,8 @@ export async function POST(request: NextRequest) {
     })
 
     // Generate TTS for the AI response
-    const responseSpeech = await speak(result.response, agent.voice_provider, agent.voice_id, pollyVoice)
-    const followUp = await speak("Is there anything else I can help with?", agent.voice_provider, agent.voice_id, pollyVoice)
+    const responseSpeech = await speak(result.response, agent.voice_provider, agent.voice_id, pollyVoice, agent.language)
+    const followUp = await speak("Is there anything else I can help with?", agent.voice_provider, agent.voice_id, pollyVoice, agent.language)
 
     return twiml(
       responseSpeech +
@@ -139,7 +202,7 @@ export async function POST(request: NextRequest) {
     console.error('[twilio-voice] Pipeline error:', err)
     const errorSpeech = await speak(
       "I'm sorry, I'm having trouble right now. Please try again later. Goodbye.",
-      agent.voice_provider, agent.voice_id, pollyVoice
+      agent.voice_provider, agent.voice_id, pollyVoice, agent.language
     )
     return twiml(errorSpeech + '<Hangup/>')
   }

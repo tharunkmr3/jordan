@@ -262,6 +262,7 @@ function InternalNewChatHero({
   replyText,
   onChangeValue,
   onSend,
+  onStop,
   sending,
   model,
 }: {
@@ -269,6 +270,7 @@ function InternalNewChatHero({
   replyText: string
   onChangeValue: (next: string) => void
   onSend: (ctx: { text: string; attachments: UploadedAttachment[]; kbReferenceIds: string[] }) => void
+  onStop: () => void
   sending: boolean
   model: { value: string; options: { value: string; label: string }[]; onChange: (v: string) => void }
 }) {
@@ -287,6 +289,7 @@ function InternalNewChatHero({
             value={replyText}
             onChange={onChangeValue}
             onSubmit={onSend}
+            onStop={onStop}
             sending={sending}
             variant="hero"
             placeholder="Ask anything"
@@ -389,6 +392,16 @@ function InboxInner() {
   }
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  // AbortController for the in-flight /api/chat stream. Allows the stop
+  // button on the composer to abort mid-response and clears cleanly when
+  // the stream ends on its own.
+  const sendAbortRef = useRef<AbortController | null>(null)
+
+  function stopSending() {
+    sendAbortRef.current?.abort()
+    sendAbortRef.current = null
+    setSending(false)
+  }
 
   const scrollToBottom = useCallback((mode: 'smooth' | 'instant' = 'smooth') => {
     const el = messagesEndRef.current
@@ -754,10 +767,13 @@ function InboxInner() {
     setTimeout(scrollToBottom, 50)
 
     setSending(true)
+    const controller = new AbortController()
+    sendAbortRef.current = controller
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           agentId: filteredAgent.id,
           message: content,
@@ -996,6 +1012,22 @@ function InboxInner() {
 
       setTimeout(scrollToBottom, 100)
     } catch (err) {
+      // User-initiated stop — leave the partial assistant bubble as-is
+      // (marked streaming=false below is handled by the finally + the
+      // stopSending call that flipped sending=false synchronously). Do
+      // not roll back the user message or drop tokens already received.
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setDetail(prev => {
+          if (!prev) return prev
+          const nextMessages = prev.messages.map(m =>
+            m.id === tempAsstId
+              ? { ...m, metadata: { ...(m.metadata ?? {}), streaming: false } }
+              : m
+          )
+          return { ...prev, messages: nextMessages }
+        })
+        return
+      }
       console.error('Internal chat send failed:', err)
       // Roll back optimistic bubble.
       setDetail(prev => prev
@@ -1004,6 +1036,7 @@ function InboxInner() {
       setReplyText(content)
     } finally {
       setSending(false)
+      if (sendAbortRef.current === controller) sendAbortRef.current = null
     }
   }
 
@@ -1376,6 +1409,7 @@ function InboxInner() {
             replyText={replyText}
             onChangeValue={setReplyText}
             onSend={(ctx) => { void handleInternalChatSend({ message: ctx.text, attachments: ctx.attachments, kbReferenceIds: ctx.kbReferenceIds }) }}
+            onStop={stopSending}
             sending={sending}
             model={composerModel!}
           />
@@ -1845,6 +1879,7 @@ function InboxInner() {
                     void handleSendReply({ message: ctx.text, attachments: ctx.attachments })
                   }
                 }}
+                onStop={isInternalAgent ? stopSending : undefined}
                 sending={sending}
                 model={composerModel}
                 variant="inline"

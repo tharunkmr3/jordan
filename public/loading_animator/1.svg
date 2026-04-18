@@ -1,0 +1,38 @@
+<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    @keyframes pulse { 0%, 100% { fill: #c8c8c8; } 50% { fill: #000000; } }
+    .edge { animation: pulse 1.4s ease-in-out infinite; }
+  </style>
+  <circle class="edge" cx="5" cy="19" r="5" fill="#C8C8C8"/>
+  <circle cx="5" cy="33" r="5" fill="black"/>
+  <circle cx="5" cy="47" r="5" fill="black"/>
+  <circle class="edge" cx="5" cy="61" r="5" fill="#C8C8C8"/>
+  <circle class="edge" cx="19" cy="5" r="5" fill="#C8C8C8"/>
+  <circle class="edge" cx="19" cy="19" r="5" fill="#C8C8C8"/>
+  <circle cx="19" cy="33" r="5" fill="black"/>
+  <circle cx="19" cy="47" r="5" fill="black"/>
+  <circle class="edge" cx="19" cy="61" r="5" fill="#C8C8C8"/>
+  <circle class="edge" cx="19" cy="75" r="5" fill="#C8C8C8"/>
+  <circle cx="33" cy="5" r="5" fill="black"/>
+  <circle cx="33" cy="19" r="5" fill="black"/>
+  <circle cx="33" cy="33" r="5" fill="black"/>
+  <circle cx="33" cy="47" r="5" fill="black"/>
+  <circle cx="33" cy="61" r="5" fill="black"/>
+  <circle cx="33" cy="75" r="5" fill="black"/>
+  <circle cx="47" cy="5" r="5" fill="black"/>
+  <circle cx="47" cy="19" r="5" fill="black"/>
+  <circle cx="47" cy="33" r="5" fill="black"/>
+  <circle cx="47" cy="47" r="5" fill="black"/>
+  <circle cx="47" cy="61" r="5" fill="black"/>
+  <circle cx="47" cy="75" r="5" fill="black"/>
+  <circle class="edge" cx="61" cy="5" r="5" fill="#C8C8C8"/>
+  <circle class="edge" cx="61" cy="19" r="5" fill="#C8C8C8"/>
+  <circle cx="61" cy="33" r="5" fill="black"/>
+  <circle cx="61" cy="47" r="5" fill="black"/>
+  <circle class="edge" cx="61" cy="61" r="5" fill="#C8C8C8"/>
+  <circle class="edge" cx="61" cy="75" r="5" fill="#C8C8C8"/>
+  <circle class="edge" cx="75" cy="19" r="5" fill="#C8C8C8"/>
+  <circle cx="75" cy="33" r="5" fill="black"/>
+  <circle cx="75" cy="47" r="5" fill="black"/>
+  <circle class="edge" cx="75" cy="61" r="5" fill="#C8C8C8"/>
+</svg>

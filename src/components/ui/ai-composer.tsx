@@ -1,7 +1,7 @@
 "use client"
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
-import { Plus, PaperPlaneTilt, Microphone, X, FileText, FilePdf, FileDoc, FileXls, FilePpt, Image as ImageIcon, SpeakerHigh, BookOpenText } from '@phosphor-icons/react'
+import { Plus, PaperPlaneTilt, Microphone, X, FileText, FilePdf, FileDoc, FileXls, FilePpt, Image as ImageIcon, SpeakerHigh, BookOpenText, Stop } from '@phosphor-icons/react'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Loader } from '@/components/ui/loader'
@@ -76,6 +76,15 @@ export interface AiComposerProps {
   trailingSlot?: React.ReactNode
   /** Called when voice input is toggled. TODO: wire to MediaRecorder. */
   onVoiceToggle?: () => void
+  /**
+   * Called when the user clicks the send button while `sending` is true.
+   * Enables the stop-generation UX — the send button turns into a stop
+   * button (black square) as soon as the stream starts. Parent is
+   * responsible for aborting the in-flight request (typically via an
+   * AbortController) and clearing `sending`. Omit to keep the old
+   * behaviour where the button just disables while sending.
+   */
+  onStop?: () => void
   /** Enable the attach button + drag-drop. Default true. */
   attachments?: boolean
   /**
@@ -146,6 +155,7 @@ export const AiComposer = forwardRef<AiComposerHandle, AiComposerProps>(function
     leadingSlot,
     trailingSlot,
     onVoiceToggle,
+    onStop,
     attachments: attachmentsEnabled = true,
     uploadEndpoint = '/api/chat/attachments',
     knowledgeMentions = true,
@@ -650,22 +660,37 @@ export const AiComposer = forwardRef<AiComposerHandle, AiComposerProps>(function
 
         {trailingSlot}
 
-        {/* Send */}
-        <button
-          type="button"
-          onClick={doSubmit}
-          disabled={!canSubmit}
-          className={cn(
-            'flex h-10 w-10 items-center justify-center rounded-full transition-colors',
-            canSubmit
-              ? 'bg-[#2e2e2e] text-white hover:bg-black'
-              : 'bg-[#ebebeb] text-[#a3a3a3]',
-          )}
-          title="Send"
-          aria-label="Send message"
-        >
-          <PaperPlaneTilt size={16} weight="fill" />
-        </button>
+        {/* Send / Stop — while sending and a stop handler is wired, the
+            send button becomes a stop button that aborts the in-flight
+            stream. Matches the ChatGPT / Claude pattern where the same
+            affordance doubles as submit and halt. */}
+        {sending && onStop ? (
+          <button
+            type="button"
+            onClick={onStop}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-[#2e2e2e] text-white transition-colors hover:bg-black"
+            title="Stop generating"
+            aria-label="Stop generating"
+          >
+            <Stop size={14} weight="fill" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={doSubmit}
+            disabled={!canSubmit}
+            className={cn(
+              'flex h-10 w-10 items-center justify-center rounded-full transition-colors',
+              canSubmit
+                ? 'bg-[#2e2e2e] text-white hover:bg-black'
+                : 'bg-[#ebebeb] text-[#a3a3a3]',
+            )}
+            title="Send"
+            aria-label="Send message"
+          >
+            <PaperPlaneTilt size={16} weight="fill" />
+          </button>
+        )}
       </div>
     </div>
   )
