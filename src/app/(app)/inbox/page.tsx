@@ -1230,19 +1230,89 @@ function InboxInner() {
             </div>
           </div>
         ) : detailLoading ? (
+          // Loading skeleton that mirrors the real conversation layout
+          // so there's no visual pop when `detail` resolves. Two layouts
+          // because the underlying chat UI diverges meaningfully:
+          //
+          //  - Internal-agent chats: title-only header (no contact
+          //    avatar, because it's always "You"), and AI replies
+          //    render bubble-less ChatGPT-style — so AI rows are
+          //    represented as stacked text lines, not a pill bubble.
+          //  - Customer-facing chats: avatar + name header, and both
+          //    parties have rounded-3xl bubbles with a contact avatar
+          //    on the incoming side.
+          //
+          // Widths, gaps, and shapes match the real render (rounded-3xl,
+          // max-w-3xl column, 24px contact avatar on incoming rows).
           <div className="flex flex-1 flex-col">
+            {/* Header */}
             <div className="flex h-12 items-center justify-between border-b border-black/[0.04] px-5 flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <Skeleton className="h-8 w-8 rounded-full" />
-                <Skeleton className="h-4 w-32" />
+              <div className="flex items-center gap-3 min-w-0">
+                {isInternalAgent ? (
+                  <Skeleton className="h-4 w-48" />
+                ) : (
+                  <>
+                    <Skeleton className="h-8 w-8 rounded-full" />
+                    <Skeleton className="h-4 w-32" />
+                  </>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-4 w-4 rounded-sm" />
+                <Skeleton className="h-4 w-4 rounded-sm" />
               </div>
             </div>
-            <div className="flex-1 px-5 py-4 space-y-3">
-              {[60, 80, 50, 90].map((w, i) => (
-                <div key={i} className={i % 2 === 0 ? 'flex' : 'flex justify-end'}>
-                  <Skeleton className="h-12 rounded-2xl" style={{ width: `${w}%` }} />
+            {/* Body */}
+            <div className="flex-1 min-h-0 px-5 py-4 overflow-hidden">
+              {isInternalAgent ? (
+                // Internal: matches the real ChatGPT-style layout —
+                // right-aligned user bubbles interleaved with multi-line
+                // bubble-less AI replies.
+                <div className="mx-auto w-full max-w-3xl space-y-6">
+                  {/* User bubble */}
+                  <div className="flex justify-end">
+                    <Skeleton className="h-8 w-56 rounded-3xl" />
+                  </div>
+                  {/* AI reply — title + paragraph + short bullet list */}
+                  <div className="space-y-2.5">
+                    <Skeleton className="h-5 w-48" />
+                    <Skeleton className="h-3.5 w-full" />
+                    <Skeleton className="h-3.5 w-[92%]" />
+                    <Skeleton className="h-3.5 w-[78%]" />
+                    <div className="h-1" />
+                    <Skeleton className="h-3.5 w-[70%]" />
+                    <Skeleton className="h-3.5 w-[60%]" />
+                  </div>
+                  {/* Second user bubble */}
+                  <div className="flex justify-end">
+                    <Skeleton className="h-8 w-40 rounded-3xl" />
+                  </div>
+                  {/* Second AI reply — shorter */}
+                  <div className="space-y-2.5">
+                    <Skeleton className="h-3.5 w-full" />
+                    <Skeleton className="h-3.5 w-[85%]" />
+                  </div>
                 </div>
-              ))}
+              ) : (
+                // Customer-facing: alternating bubbles, 24px avatar
+                // on incoming rows, max-w-[75%] to match real bubbles.
+                <div className="space-y-3">
+                  <div className="flex items-end gap-2 justify-start">
+                    <Skeleton className="h-6 w-6 rounded-full flex-shrink-0" />
+                    <Skeleton className="h-9 w-[55%] rounded-3xl" />
+                  </div>
+                  <div className="flex justify-end">
+                    <Skeleton className="h-9 w-[45%] rounded-3xl" />
+                  </div>
+                  <div className="flex items-end gap-2 justify-start">
+                    <Skeleton className="h-6 w-6 rounded-full flex-shrink-0" />
+                    <Skeleton className="h-14 w-[65%] rounded-3xl" />
+                  </div>
+                  <div className="flex justify-end">
+                    <Skeleton className="h-9 w-[50%] rounded-3xl" />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         ) : isInternalAgent && detail.messages.length === 0 ? (
