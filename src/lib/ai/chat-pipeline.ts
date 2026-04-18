@@ -306,7 +306,12 @@ export async function processChatMessage(
     provider: effectiveProvider,
     model: effectiveModelName,
     temperature: agent.temperature,
-    maxTokens: agent.max_tokens,
+    // Phone channel: hard-cap completion tokens so the model can't spend
+    // 10 seconds writing a three-paragraph reply that then takes another
+    // 4 seconds to synthesize — Twilio times out the webhook at 15s.
+    // 220 tokens ≈ 30-45 English words / ~35 Telugu words, matching the
+    // prompt rider "ONE or TWO short sentences, under 40 words".
+    maxTokens: input.channel === 'phone' ? Math.min(agent.max_tokens ?? 4096, 220) : agent.max_tokens,
     // Inline structured output on OpenAI — saves a ~1–2s synthesis call
     // per turn on the website channel. The model emits either tool_calls
     // (content null) or JSON valid against STRUCTURED_REPLY_SCHEMA on
@@ -527,7 +532,12 @@ export async function* streamChatMessage(
     provider: effectiveProvider,
     model: effectiveModelName,
     temperature: agent.temperature,
-    maxTokens: agent.max_tokens,
+    // Phone channel: hard-cap completion tokens so the model can't spend
+    // 10 seconds writing a three-paragraph reply that then takes another
+    // 4 seconds to synthesize — Twilio times out the webhook at 15s.
+    // 220 tokens ≈ 30-45 English words / ~35 Telugu words, matching the
+    // prompt rider "ONE or TWO short sentences, under 40 words".
+    maxTokens: input.channel === 'phone' ? Math.min(agent.max_tokens ?? 4096, 220) : agent.max_tokens,
     // Inline structured output on OpenAI — saves a post-hoc synthesis
     // call. See the non-streaming path above for the full rationale.
     responseFormat:
@@ -981,7 +991,10 @@ async function buildPrompt(
   //  - website:       our chat widget + test chat + internal agents —
   //                   full markdown + generative UI widgets available.
   if (channel === 'phone') {
-    systemPrompt += `\n\n--- Voice Call Mode ---\nYou are on a phone call. Respond conversationally in 1-3 short sentences. Do NOT use markdown, bullet points, asterisks, or headings — these will be read aloud literally. Speak naturally as if you were talking.`
+    // Twilio's webhook timeout is 15s end-to-end. Every word costs both
+    // LLM time and TTS time. Keep replies short so the caller hears a
+    // real reply instead of Twilio's "application error" fallback.
+    systemPrompt += `\n\n--- Voice Call Mode ---\nYou are on a live phone call. Respond in ONE or TWO short sentences, under 40 words total. Be direct, warm, and human. Do NOT use markdown, bullet points, asterisks, headings, URLs, or emojis — these are read aloud literally. Speak the way a friendly support rep would.`
   } else if (channel === 'whatsapp' || channel === 'facebook') {
     systemPrompt += `\n\n--- Messenger Mode ---\nYou are replying inside ${channel === 'whatsapp' ? 'WhatsApp' : 'Facebook Messenger'}. Respond in plain text. Light markdown is OK (*bold*, _italic_, simple lists) but do NOT emit headings, tables, or fenced code blocks — especially not "ui" blocks, they render as raw JSON on this channel. Keep replies concise.`
   } else {

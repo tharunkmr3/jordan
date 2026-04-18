@@ -159,11 +159,15 @@ export async function POST(request: NextRequest) {
   }
   const speechLang = langMap[agent.language] || 'en-US'
 
-  // First call — no speech result yet, greet and listen
+  // First call — no speech result yet, greet and listen. The two speak()
+  // calls are independent, so run them in parallel to shave ~1s off the
+  // initial webhook response.
   if (!speechResult) {
     const greeting = agent.greeting_message || `Hi, you've reached ${agent.name}. How can I help you?`
-    const greetingSpeech = await speak(greeting, agent.voice_provider, agent.voice_id, pollyVoice, agent.language)
-    const listenPrompt = await speak("I'm listening.", agent.voice_provider, agent.voice_id, pollyVoice, agent.language)
+    const [greetingSpeech, listenPrompt] = await Promise.all([
+      speak(greeting, agent.voice_provider, agent.voice_id, pollyVoice, agent.language),
+      speak("I'm listening.", agent.voice_provider, agent.voice_id, pollyVoice, agent.language),
+    ])
 
     return twiml(
       greetingSpeech +
@@ -174,8 +178,21 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // Got speech — process through AI pipeline
+  // Got speech — process through AI pipeline.
+  //
+  // Twilio enforces a 15s hard timeout on the webhook response. With the
+  // LLM turn (5-12s on Opus / Gemini Pro) plus two serial Sarvam TTS
+  // calls (2-4s each on longer replies), sequential execution reliably
+  // blows past the limit → the caller hears "an application error
+  // occurred". Countermeasures:
+  //
+  //   1. Run the two TTS synths concurrently (~halves the TTS stage)
+  //   2. Pipeline-side, the 'phone' channel caps max_tokens and asks
+  //      the model for ≤40-word replies (see buildPrompt in
+  //      src/lib/ai/chat-pipeline.ts)
+  //   3. Timing log around each stage so Coolify reveals the slow step
   try {
+    const t0 = Date.now()
     const result = await processChatMessage({
       agentId: agent.id,
       message: speechResult,
@@ -186,10 +203,22 @@ export async function POST(request: NextRequest) {
         channelUserId: from,
       },
     })
+    const tAfterLlm = Date.now()
 
-    // Generate TTS for the AI response
-    const responseSpeech = await speak(result.response, agent.voice_provider, agent.voice_id, pollyVoice, agent.language)
-    const followUp = await speak("Is there anything else I can help with?", agent.voice_provider, agent.voice_id, pollyVoice, agent.language)
+    // Generate TTS for the AI response and the follow-up prompt in
+    // parallel — they're independent and Sarvam comfortably handles
+    // concurrent requests.
+    const [responseSpeech, followUp] = await Promise.all([
+      speak(result.response, agent.voice_provider, agent.voice_id, pollyVoice, agent.language),
+      speak("Is there anything else I can help with?", agent.voice_provider, agent.voice_id, pollyVoice, agent.language),
+    ])
+    const tAfterTts = Date.now()
+    console.log('[twilio-voice] timing', {
+      llmMs: tAfterLlm - t0,
+      ttsMs: tAfterTts - tAfterLlm,
+      totalMs: tAfterTts - t0,
+      responseLen: result.response.length,
+    })
 
     return twiml(
       responseSpeech +
