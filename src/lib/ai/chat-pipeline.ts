@@ -221,6 +221,26 @@ async function loadPinnedKbContext(
   return { contextStr: blocks.join('\n\n'), sources }
 }
 
+/**
+ * Pick the LLM for this turn. Normally we honour the agent's configured
+ * model (or the per-turn modelOverride from internal chat). For the
+ * phone channel we hard-override to Sarvam-M — it's native to Indian
+ * languages (more natural Telugu/Hindi phrasing than translated Claude)
+ * and ~3x faster than Sonnet. Voice latency is the dominant UX signal
+ * on a call; quality difference on short replies is negligible.
+ */
+function resolveModel(
+  input: PipelineInput,
+  agent: Agent,
+): { provider: 'openai' | 'anthropic' | 'sarvam' | 'gemini'; name: string } {
+  if (input.channel === 'phone') {
+    return { provider: 'sarvam', name: 'sarvam-m' }
+  }
+  const provider = input.modelOverride?.provider ?? agent.model_provider
+  const name = input.modelOverride?.name ?? agent.model_name
+  return { provider: provider as 'openai' | 'anthropic' | 'sarvam' | 'gemini', name }
+}
+
 function resolveMemoryOwner(agent: Agent, contact: Contact): MemoryOwner | null {
   const settings = agent.settings as { is_customer_facing?: boolean } | null | undefined
   if (settings?.is_customer_facing !== false) return null
@@ -294,9 +314,14 @@ export async function processChatMessage(
 
   // Resolve effective model first so buildPrompt can inject a small
   // identity hint — without it, models refuse to reveal which LLM is
-  // powering the conversation.
-  const effectiveProvider = input.modelOverride?.provider ?? agent.model_provider
-  const effectiveModelName = input.modelOverride?.name ?? agent.model_name
+  // powering the conversation. For phone calls we force Sarvam-M
+  // regardless of agent config: it's native-trained on Indian languages
+  // (so Telugu/Hindi replies sound natural instead of translated), and
+  // it finishes in ~1-2s vs Claude Sonnet's 4-6s — critical on a live
+  // phone call where every second of silence feels awkward.
+  const { provider: baseProvider, name: baseModel } = resolveModel(input, agent)
+  const effectiveProvider = baseProvider
+  const effectiveModelName = baseModel
 
   const messages = await buildPrompt(
     agent, history, input.message, kbContextStr, kbDocumentNames, memoryContext, input.channel, input.attachments,
@@ -521,8 +546,10 @@ export async function* streamChatMessage(
   // Per-turn override applies here too (internal chat composer sends
   // a modelOverride for the currently-selected model). Resolved first
   // so the model-identity hint can make it into buildPrompt.
-  const effectiveProvider = input.modelOverride?.provider ?? agent.model_provider
-  const effectiveModelName = input.modelOverride?.name ?? agent.model_name
+  // Phone channel force-picks Sarvam-M for latency + native Indic quality.
+  const { provider: baseProvider2, name: baseModel2 } = resolveModel(input, agent)
+  const effectiveProvider = baseProvider2
+  const effectiveModelName = baseModel2
 
   const messages = await buildPrompt(
     agent, history, input.message, kbContextStr, kbDocumentNames, memoryContext, input.channel, input.attachments,
@@ -991,10 +1018,11 @@ async function buildPrompt(
   //  - website:       our chat widget + test chat + internal agents —
   //                   full markdown + generative UI widgets available.
   if (channel === 'phone') {
-    // Twilio's webhook timeout is 15s end-to-end. Every word costs both
-    // LLM time and TTS time. Keep replies short so the caller hears a
-    // real reply instead of Twilio's "application error" fallback.
-    systemPrompt += `\n\n--- Voice Call Mode ---\nYou are on a live phone call. Respond in ONE or TWO short sentences, under 40 words total. Be direct, warm, and human. Do NOT use markdown, bullet points, asterisks, headings, URLs, or emojis — these are read aloud literally. Speak the way a friendly support rep would.`
+    // Voice call mode — the output goes through Sarvam TTS. Every word
+    // costs ~30ms of TTS time, so brevity is the primary UX constraint.
+    // Second constraint: the text is SPOKEN, not read — the LLM must
+    // write like a human on the phone, not like a chatbot.
+    systemPrompt += `\n\n--- Voice Call Mode ---\nYou are on a LIVE phone call. Your reply will be spoken aloud by a TTS engine. Write how you would SPEAK, not how you would write:\n\n- ONE short sentence when possible. Never more than two.\n- Under 25 words total. Shorter is better.\n- Natural, warm, conversational. Like a friendly human, not a customer-service script.\n- Mirror the caller's language exactly. If they speak Telugu, reply in clean Telugu. If they mix languages, mirror the mix.\n- No markdown, no bullets, no headings, no URLs, no lists, no emojis — these are read aloud literally.\n- No openers like "Sure!" "Certainly!" "Of course!" — get straight to the point.\n- No closers like "I hope this helps!" "Let me know if…" — the Gather listens silently for the next turn.\n- Don't announce what you're about to do — just do it.\n- Ask ONE question at a time, never a stack of them.`
   } else if (channel === 'whatsapp' || channel === 'facebook') {
     systemPrompt += `\n\n--- Messenger Mode ---\nYou are replying inside ${channel === 'whatsapp' ? 'WhatsApp' : 'Facebook Messenger'}. Respond in plain text. Light markdown is OK (*bold*, _italic_, simple lists) but do NOT emit headings, tables, or fenced code blocks — especially not "ui" blocks, they render as raw JSON on this channel. Keep replies concise.`
   } else {
