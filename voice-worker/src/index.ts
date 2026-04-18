@@ -11,11 +11,11 @@
 // outbound WebSocket to LiveKit + Sarvam + Supabase). Starts with
 // `node dist/index.js start`; dev is `tsx watch src/index.ts dev`.
 // ============================================================================
-
 import { fileURLToPath } from 'node:url'
 import {
   cli,
   defineAgent,
+  llm,
   type JobContext,
   WorkerOptions,
   voice,
@@ -75,18 +75,23 @@ export default defineAgent({
       tts: pipeline.tts,
       vad: pipeline.vad,
     })
-    // Prime the chat history with a dummy user turn so the first LLM call
-    // never starts with an assistant message. Sarvam's API (like strict
-    // OpenAI-compatible endpoints) rejects requests where the first
-    // non-system message is from the assistant — which happens when
-    // session.say() adds the greeting before any user turn exists.
-    session.history.addMessage({ role: "user", content: "__start__" })
+
+    // Prime agent._chatCtx with a dummy user turn before the session starts.
+    // Sarvam's API (and strict OpenAI-compatible endpoints) rejects LLM
+    // requests where the first non-system message is from the assistant.
+    // This happens because session.say() adds the greeting as an assistant
+    // turn before any user message exists. The fix must go on voice.Agent
+    // (not AgentSession) — agent._chatCtx is what agent_activity actually
+    // passes to the LLM; session._chatCtx is a separate, unused object.
+    const seedCtx = new llm.ChatContext()
+    seedCtx.addMessage({ role: 'user', content: '__start__' })
 
     // The agent object wraps the system prompt + pipeline. AgentSession
     // runs it against the room's audio — one-shot, ends when caller
     // hangs up or the SIP trunk closes the session.
     const agent = new voice.Agent({
       instructions: pipeline.instructions,
+      chatCtx: seedCtx,
     })
 
     await session.start({ agent, room: ctx.room })
