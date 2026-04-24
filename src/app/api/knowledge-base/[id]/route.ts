@@ -72,6 +72,9 @@ export async function PATCH(
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if ('name' in body) updates.name = body.name
   if ('description' in body) updates.description = body.description
+  // context = per-KB prompt hint used by the RAG pipeline; trim empty
+  // strings to null so the retrieval code can cleanly skip the hint.
+  if ('context' in body) updates.context = typeof body.context === 'string' && body.context.trim() ? body.context.trim() : null
   if ('agent_id' in body) updates.agent_id = body.agent_id
   if ('color' in body) updates.color = body.color
 

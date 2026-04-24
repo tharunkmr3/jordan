@@ -309,6 +309,10 @@ export async function processChatMessage(
     ? kbContext.map((s) => `[Source: ${s.documentName}]\n${s.content}`).join('\n\n')
     : ''
   const kbContextStr = [pinned.contextStr, retrievedContextStr].filter(Boolean).join('\n\n')
+  // Context-tree (ported from tobi/qmd): one-time KB description hints
+  // for the LLM, de-duplicated across hits. Helps the model distinguish
+  // authoritative docs (HR policies, SOPs) from reference material.
+  const kbContextHints = buildKbContextHints(kbContext)
   const kbSources = [...pinned.sources, ...buildMessageSources(kbContext)]
   const memoryContext = formatMemoryContext(memoryHits)
 
@@ -324,7 +328,7 @@ export async function processChatMessage(
   const effectiveModelName = baseModel
 
   const messages = await buildPrompt(
-    agent, history, input.message, kbContextStr, kbDocumentNames, memoryContext, input.channel, input.attachments,
+    agent, history, input.message, kbContextStr, kbContextHints, kbDocumentNames, memoryContext, input.channel, input.attachments,
     { provider: effectiveProvider, name: effectiveModelName },
   )
   const modelConfig: ModelConfig = {
@@ -540,6 +544,7 @@ export async function* streamChatMessage(
     ? kbContext.map((s) => `[Source: ${s.documentName}]\n${s.content}`).join('\n\n')
     : ''
   const kbContextStr = [pinned.contextStr, retrievedContextStr].filter(Boolean).join('\n\n')
+  const kbContextHints = buildKbContextHints(kbContext)
   const kbSources = [...pinned.sources, ...buildMessageSources(kbContext)]
   const memoryContext = formatMemoryContext(memoryHits)
 
@@ -552,7 +557,7 @@ export async function* streamChatMessage(
   const effectiveModelName = baseModel2
 
   const messages = await buildPrompt(
-    agent, history, input.message, kbContextStr, kbDocumentNames, memoryContext, input.channel, input.attachments,
+    agent, history, input.message, kbContextStr, kbContextHints, kbDocumentNames, memoryContext, input.channel, input.attachments,
     { provider: effectiveProvider, name: effectiveModelName },
   )
   const modelConfig: ModelConfig = {
@@ -953,6 +958,7 @@ async function buildPrompt(
   history: ChatMessage[],
   currentMessage: string,
   kbContext: string,
+  kbContextHints: string,
   kbDocumentNames: string[],
   memoryContext: string,
   channel: ChannelType | undefined,
@@ -983,7 +989,11 @@ async function buildPrompt(
   }
 
   if (kbContext) {
-    systemPrompt += `\n\n--- Reference Material ---\n${kbContext}\n--- End Reference ---\n\nAnswer the user's question using the material above when relevant. If it doesn't help, use your general knowledge.`
+    // Context hints (if the operator set a per-KB description) go
+    // ABOVE the chunks so the model reads them first and interprets
+    // the chunks through that lens. Borrowed from tobi/qmd.
+    const hintsBlock = kbContextHints ? `${kbContextHints}\n\n` : ''
+    systemPrompt += `\n\n--- Reference Material ---\n${hintsBlock}${kbContext}\n--- End Reference ---\n\nAnswer the user's question using the material above when relevant. If it doesn't help, use your general knowledge.`
   }
 
   // Ground-truth inventory of the agent's files. Without this the model
@@ -1275,6 +1285,29 @@ function wantsStructuredOutput(channel: ChannelType | undefined): boolean {
  *   3. Hard cap (MAX_SOURCES) — no question plausibly needs more than
  *      a handful of sources; more chips just add visual noise
  */
+/**
+ * Build a compact "here's what these sources are" block for the system
+ * prompt — one line per distinct KB that contributed a retrieved chunk,
+ * naming the KB and paraphrasing its operator-authored context field.
+ *
+ * Ported from tobi/qmd. Improves LLM calibration on authority: an SOP
+ * doc explicitly marked "authoritative company policy" carries more
+ * weight than a dumped helpdesk transcript marked "example resolutions".
+ * De-duplicated across hits so each KB appears at most once.
+ */
+function buildKbContextHints(chunks: KbSource[]): string {
+  if (chunks.length === 0) return ''
+  const byKb = new Map<string, { name: string; context: string }>()
+  for (const c of chunks) {
+    if (!c.kbContext || c.kbContext.trim().length === 0) continue
+    if (byKb.has(c.kbId)) continue
+    byKb.set(c.kbId, { name: c.kbName ?? 'Knowledge base', context: c.kbContext.trim() })
+  }
+  if (byKb.size === 0) return ''
+  const lines = [...byKb.values()].map((kb) => `- ${kb.name}: ${kb.context}`)
+  return `About the sources below:\n${lines.join('\n')}`
+}
+
 const MIN_ABS_SIMILARITY = 0.25
 const MIN_REL_RATIO = 0.6
 const MAX_SOURCES = 4

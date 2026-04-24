@@ -20,6 +20,15 @@ export interface KbSource {
   documentName: string
   /** fk to knowledge_bases.id — used by the knowledge page to navigate */
   kbId: string
+  /** Human-readable name of the parent KB — used when rendering context hints */
+  kbName?: string
+  /**
+   * Plain-English description of the KB this chunk came from. Borrowed
+   * from tobi/qmd's "context tree" idea — gives the LLM a hint about
+   * whether to treat this source as authoritative (policy docs) vs
+   * reference (general notes). Null if operator hasn't set one.
+   */
+  kbContext?: string | null
 }
 
 /**
@@ -77,6 +86,30 @@ export async function queryKnowledgeBase(
   }))
 
   if (pool.length === 0) return []
+
+  // Enrich each hit with its parent KB's name + context field. Borrowed
+  // from tobi/qmd: per-collection context gives the LLM a hint about
+  // authority (e.g. "HR policies, trust over general knowledge"). One
+  // SELECT for N unique kb_ids keeps this cheap — usually 1-3 KBs per
+  // agent.
+  const kbIds = [...new Set(pool.map((s) => s.kbId))]
+  if (kbIds.length > 0) {
+    const { data: kbMeta } = await supabase
+      .from('knowledge_bases')
+      .select('id, name, context')
+      .in('id', kbIds)
+    const byKb = new Map<string, { name: string; context: string | null }>()
+    for (const row of (kbMeta ?? []) as { id: string; name: string; context: string | null }[]) {
+      byKb.set(row.id, { name: row.name, context: row.context })
+    }
+    for (const hit of pool) {
+      const meta = byKb.get(hit.kbId)
+      if (meta) {
+        hit.kbName = meta.name
+        hit.kbContext = meta.context
+      }
+    }
+  }
 
   // Cross-encoder rerank: scores (query, chunk) jointly via Voyage
   // rerank-2.5 and returns a reordered top-K. When VOYAGE_API_KEY is

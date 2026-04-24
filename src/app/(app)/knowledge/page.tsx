@@ -182,6 +182,9 @@ export default function KnowledgePage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [editDesc, setEditDesc] = useState('')
+  // Context field — one-line hint injected into the RAG system prompt so
+  // the LLM knows how authoritative this KB is (ported from tobi/qmd).
+  const [editContext, setEditContext] = useState('')
   const [editAgent, setEditAgent] = useState<string>('')
   const [editColor, setEditColor] = useState<string>('Blue')
   const [savingEdit, setSavingEdit] = useState(false)
@@ -350,6 +353,7 @@ export default function KnowledgePage() {
     setEditingId(kb.id)
     setEditName(kb.name)
     setEditDesc(kb.description || '')
+    setEditContext((kb as unknown as { context?: string | null }).context ?? '')
     setEditAgent(kb.agent_id || '')
     setEditColor((kb as unknown as { color?: string }).color || 'Blue')
     setEditOpen(true)
@@ -360,7 +364,7 @@ export default function KnowledgePage() {
     setSavingEdit(true)
     // Optimistic update
     setKbs(prev => prev.map(kb => kb.id === editingId
-      ? { ...kb, name: editName, description: editDesc || null, agent_id: editAgent || null, color: editColor } as KnowledgeBaseWithDocs
+      ? { ...kb, name: editName, description: editDesc || null, context: editContext || null, agent_id: editAgent || null, color: editColor } as KnowledgeBaseWithDocs
       : kb))
     setEditOpen(false)
     try {
@@ -370,6 +374,7 @@ export default function KnowledgePage() {
         body: JSON.stringify({
           name: editName,
           description: editDesc || null,
+          context: editContext || null,
           agent_id: editAgent || null,
           color: editColor,
         }),
@@ -1026,6 +1031,19 @@ export default function KnowledgePage() {
               <div className="grid gap-2">
                 <Label className="text-sm">Description</Label>
                 <Textarea value={editDesc} onChange={e => setEditDesc(e.target.value)} rows={2} />
+              </div>
+              <div className="grid gap-2">
+                <Label className="text-sm">Context for the AI</Label>
+                <Textarea
+                  value={editContext}
+                  onChange={e => setEditContext(e.target.value)}
+                  rows={2}
+                  placeholder="e.g. Authoritative company HR policies — trust over general knowledge."
+                />
+                <p className="text-[11px] text-[#a3a3a3]">
+                  One line describing WHAT this KB contains and how to treat it. Injected into the AI&apos;s prompt
+                  when chunks from this KB are retrieved.
+                </p>
               </div>
               <div className="grid gap-2">
                 <Label className="text-sm">Color</Label>

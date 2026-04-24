@@ -104,23 +104,126 @@ function chunkTabular(text: string, maxChunkSize: number): string[] {
   return chunks
 }
 
-/** Classic sentence-boundary chunker for prose. */
-function chunkProse(text: string, maxChunkSize: number, overlap: number): string[] {
-  const sentences = text.split(/(?<=[.!?])\s+/)
-  const chunks: string[] = []
-  let current = ''
+/**
+ * Break-point-scored chunker (ported from tobi/qmd).
+ *
+ * Instead of splitting on the first sentence boundary after maxChunkSize,
+ * we pre-scan the document for break points weighted by semantic quality:
+ *   - h1..h6 markdown headings score 100..50
+ *   - code fence boundaries score 80
+ *   - horizontal rules score 60
+ *   - paragraph breaks score 20
+ *   - list items / single newlines score 5..1
+ *
+ * When we hit the target size, we look back within a window and pick the
+ * highest-scoring break point with a squared-distance decay — headings
+ * far back still beat low-quality breaks near the target. We also
+ * detect fenced code blocks and refuse to split inside them so code
+ * examples stay coherent.
+ *
+ * This matters for RAG quality: a chunk that starts mid-sentence or
+ * splits a code block retrieves poorly because its embedding averages
+ * an unfinished idea. Clean header-aligned chunks give the LLM clean
+ * semantic units to reason over.
+ */
+interface BreakPoint { pos: number; score: number }
+interface CodeFence { start: number; end: number }
 
-  for (const sentence of sentences) {
-    if ((current + sentence).length > maxChunkSize && current) {
-      chunks.push(current.trim())
-      // Keep overlap from end of previous chunk so cross-boundary
-      // context isn't lost on retrieval.
-      const words = current.split(' ')
-      current = words.slice(-Math.ceil(overlap / 5)).join(' ') + ' ' + sentence
-    } else {
-      current += (current ? ' ' : '') + sentence
+// (pattern, score) — matched against the source text. Higher = better.
+const BREAK_PATTERNS: Array<[RegExp, number]> = [
+  [/\n#{1}(?!#)/g, 100],                  // h1
+  [/\n#{2}(?!#)/g, 90],                   // h2
+  [/\n#{3}(?!#)/g, 80],                   // h3
+  [/\n#{4}(?!#)/g, 70],                   // h4
+  [/\n#{5}(?!#)/g, 60],                   // h5
+  [/\n#{6}/g, 50],                        // h6
+  [/\n```/g, 80],                         // code fence boundary
+  [/\n(?:---|\*\*\*|___)\s*\n/g, 60],     // horizontal rule
+  [/\n\n+/g, 20],                         // paragraph break
+  [/\n[-*]\s/g, 5],                       // unordered list item
+  [/\n\d+\.\s/g, 5],                      // ordered list item
+  [/\n/g, 1],                             // any newline
+]
+
+function scanBreakPoints(text: string): BreakPoint[] {
+  const seen = new Map<number, BreakPoint>()
+  for (const [pattern, score] of BREAK_PATTERNS) {
+    for (const match of text.matchAll(pattern)) {
+      const pos = match.index ?? 0
+      const existing = seen.get(pos)
+      if (!existing || score > existing.score) seen.set(pos, { pos, score })
     }
   }
-  if (current.trim()) chunks.push(current.trim())
+  return [...seen.values()].sort((a, b) => a.pos - b.pos)
+}
+
+function findCodeFences(text: string): CodeFence[] {
+  const out: CodeFence[] = []
+  const re = /\n```/g
+  let inFence = false
+  let start = 0
+  for (const m of text.matchAll(re)) {
+    if (!inFence) { start = m.index ?? 0; inFence = true }
+    else { out.push({ start, end: (m.index ?? 0) + m[0].length }); inFence = false }
+  }
+  if (inFence) out.push({ start, end: text.length })
+  return out
+}
+
+function insideFence(pos: number, fences: CodeFence[]): boolean {
+  return fences.some(f => pos > f.start && pos < f.end)
+}
+
+/**
+ * Pick the best break point to cut at for a target char position.
+ * Scans breaks within [target - window, target] and applies squared
+ * distance decay so close high-scoring points are preferred.
+ */
+function bestCutoff(breaks: BreakPoint[], target: number, windowChars: number, fences: CodeFence[]): number {
+  const windowStart = target - windowChars
+  let bestScore = -1
+  let bestPos = target
+  for (const bp of breaks) {
+    if (bp.pos < windowStart) continue
+    if (bp.pos > target) break
+    if (insideFence(bp.pos, fences)) continue
+    const dist = target - bp.pos
+    const norm = dist / windowChars
+    const mult = 1.0 - (norm * norm) * 0.7
+    const score = bp.score * mult
+    if (score > bestScore) { bestScore = score; bestPos = bp.pos }
+  }
+  return bestPos
+}
+
+function chunkProse(text: string, maxChunkSize: number, overlap: number): string[] {
+  if (text.length <= maxChunkSize) return text.trim() ? [text.trim()] : []
+
+  const breaks = scanBreakPoints(text)
+  const fences = findCodeFences(text)
+  const window = Math.min(Math.max(maxChunkSize * 0.25, 200), 600) // ~200-600 char lookback
+  const chunks: string[] = []
+  let pos = 0
+
+  while (pos < text.length) {
+    const target = pos + maxChunkSize
+    if (target >= text.length) {
+      const tail = text.slice(pos).trim()
+      if (tail) chunks.push(tail)
+      break
+    }
+    const cut = bestCutoff(breaks, target, window, fences)
+    // Guarantee forward progress even if no good break was found — fall
+    // through to the target so a pathological run of no-break text
+    // still chunks instead of infinite-looping.
+    const endPos = cut > pos ? cut : target
+    const chunk = text.slice(pos, endPos).trim()
+    if (chunk) chunks.push(chunk)
+    // Overlap from the end of the prior chunk → preserves cross-boundary
+    // context on retrieval. Back off a character-count overlap; smart-
+    // chunking breaks don't lose as much context so we keep it modest.
+    pos = Math.max(endPos - overlap, endPos)
+  }
+
   return chunks
 }
