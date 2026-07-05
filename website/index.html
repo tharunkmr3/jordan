@@ -1,0 +1,1843 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jordon — AI Chatbots & Voice Agents for Every Business | India</title>
+  <meta name="description" content="AI chatbots and voice agents for non-IT businesses. Set up once — works on WhatsApp, Facebook, your website, and phone calls. Powered by ChatGPT, Claude, Gemini & ElevenLabs. 10+ Indian languages.">
+  <meta name="keywords" content="AI chatbot India, AI voice agent, WhatsApp chatbot, Facebook chatbot, business automation, voice AI India, customer support AI, lead capture bot, appointment booking AI, HR chatbot, multilingual AI, ChatGPT chatbot, Claude AI">
+  <link rel="canonical" href="https://jordon.ai/">
+  <meta name="robots" content="index, follow">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <meta property="og:title" content="Jordon — AI Chatbots & Voice Agents">
+  <meta property="og:description" content="Set up one AI agent — it works on WhatsApp, Facebook, your website, and phone calls. Powered by ChatGPT, Claude, Gemini & ElevenLabs. Built for non-IT businesses.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://jordon.ai/">
+  <meta property="og:locale" content="en_IN">
+
+  <link rel="preconnect" href="https://api.fontshare.com">
+  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@300,400,500,700,900&display=swap" rel="stylesheet">
+
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #fafafa;
+      --bg-2: #f0f0f0;
+      --bg-3: #e5e5e5;
+      --bg-elevated: #ffffff;
+      --fg: #0a0a0a;
+      --fg-2: #404040;
+      --fg-3: #737373;
+      --fg-4: #a3a3a3;
+      --border: rgba(0,0,0,0.08);
+      --border-2: rgba(0,0,0,0.12);
+      --border-strong: rgba(0,0,0,0.2);
+      --card-bg: rgba(255,255,255,0.6);
+      --glow: rgba(0,0,0,0.04);
+    }
+
+    [data-theme="dark"] {
+      --bg: #0a0a0a;
+      --bg-2: #141414;
+      --bg-3: #1a1a1a;
+      --bg-elevated: #111111;
+      --fg: #fafafa;
+      --fg-2: #d4d4d4;
+      --fg-3: #a3a3a3;
+      --fg-4: #737373;
+      --border: rgba(255,255,255,0.07);
+      --border-2: rgba(255,255,255,0.1);
+      --border-strong: rgba(255,255,255,0.2);
+      --card-bg: rgba(255,255,255,0.03);
+      --glow: rgba(255,255,255,0.02);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Satoshi', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+      transition: background 0.4s, color 0.4s;
+    }
+
+    ::selection { background: var(--fg); color: var(--bg); }
+
+    .wrap { max-width: 100%; margin: 0 80px; padding: 0; }
+
+    /* ── BUTTONS ── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 13px 30px; border-radius: 9999px;
+      font-family: 'Satoshi', sans-serif; font-size: 0.9rem; font-weight: 500;
+      text-decoration: none; cursor: pointer; border: none;
+      transition: all 0.3s cubic-bezier(0.16,1,0.3,1);
+    }
+    .btn-primary { background: var(--fg); color: var(--bg); }
+    .btn-primary:hover { opacity: 0.85; transform: translateY(-1px); }
+    .btn-secondary {
+      background: var(--bg-2); color: var(--fg);
+    }
+    .btn-secondary:hover { background: var(--bg-3); }
+
+    /* ── NOISE TEXTURE ── */
+    .noise-overlay {
+      position: absolute; inset: 0; pointer-events: none; z-index: 2;
+      opacity: 0.35; mix-blend-mode: overlay;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      background-size: 200px;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      padding: 8px 80px 0;
+      transition: all 0.4s cubic-bezier(0.16,1,0.3,1);
+    }
+    .nav-inner {
+      max-width: 100%; margin: 0; padding: 14px 0;
+      transition: all 0.4s cubic-bezier(0.16,1,0.3,1);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    nav.scrolled {
+      padding-left: calc(50% - 420px); padding-right: calc(50% - 420px);
+    }
+    nav.scrolled .nav-inner {
+      background: var(--bg);
+      background: rgba(250,250,250,0.7);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-radius: 9999px; padding: 8px 24px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.06);
+    }
+    [data-theme="dark"] nav.scrolled .nav-inner {
+      background: rgba(20,20,20,0.7);
+    }
+    nav.scrolled .nav-links a { font-size: 0.82rem; }
+    nav.scrolled .btn-primary { padding: 7px 18px; font-size: 0.8rem; }
+    nav.scrolled .theme-toggle { }
+    .logo {
+      font-size: 1.1rem; font-weight: 700; color: var(--fg);
+      text-decoration: none; letter-spacing: -0.02em;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .logo-icon { width: 24px; height: 24px; }
+    [data-theme="dark"] .logo-icon { filter: invert(1); }
+    .nav-links { display: flex; align-items: center; gap: 28px; list-style: none; }
+    .nav-links a {
+      color: var(--fg); text-decoration: none; font-size: 0.88rem; font-weight: 500;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--fg); }
+    .nav-right { display: flex; align-items: center; gap: 12px; }
+    .theme-toggle {
+      background: none; border: none; cursor: pointer; display: grid; place-items: center;
+      color: var(--fg); transition: opacity 0.2s; padding: 4px;
+    }
+    .theme-toggle:hover { opacity: 0.6; }
+    .theme-toggle svg { width: 16px; height: 16px; }
+    [data-theme="dark"] .icon-sun { display: block; }
+    [data-theme="dark"] .icon-moon { display: none; }
+    [data-theme="light"] .icon-sun { display: none; }
+    [data-theme="light"] .icon-moon { display: block; }
+    .mobile-menu { display: none; background: none; border: none; color: var(--fg); cursor: pointer; }
+
+    /* ── HERO ── */
+    .hero {
+      display: flex; flex-direction: column; align-items: center;
+      position: relative; padding: 140px 0 0; overflow: hidden;
+      background: var(--bg); text-align: center;
+    }
+    #hero-canvas {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      pointer-events: none; opacity: 0.25; z-index: 0;
+    }
+    [data-theme="dark"] #hero-canvas { opacity: 0.15; }
+    .hero-content {
+      position: relative; z-index: 2; max-width: 800px;
+      padding: 0 32px; margin-bottom: 64px;
+    }
+    .hero-images {
+      position: relative; z-index: 2; width: 100%;
+      display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px;
+      padding: 0 80px;
+    }
+    .hero-img {
+      border-radius: 16px; overflow: hidden;
+    }
+    .hero-images { align-items: stretch; }
+    .hero-img img { height: 100%; }
+    .hero-img-main { position: relative; }
+
+    /* ── HERO INBOX UI (iPad) ── */
+    .hero-chat {
+      position: absolute; top: 20px; left: 20px; bottom: 20px; z-index: 2;
+      width: 60%; max-width: 60%;
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+      border-radius: 20px; border: 1px solid rgba(0,0,0,0.08);
+      box-shadow: 0 12px 48px rgba(0,0,0,0.15), 0 0 0 0.5px rgba(0,0,0,0.05);
+      display: flex; overflow: hidden;
+      pointer-events: none; text-align: left;
+    }
+    .inbox-sidebar {
+      width: 42%; border-right: 1px solid rgba(0,0,0,0.06);
+      display: flex; flex-direction: column;
+    }
+    .inbox-header {
+      padding: 12px 14px; border-bottom: 1px solid rgba(0,0,0,0.06);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .inbox-title { font-size: 0.72rem; font-weight: 700; color: #0a0a0a; }
+    .inbox-count {
+      font-size: 0.58rem; font-weight: 600; background: #0a0a0a; color: #fff;
+      padding: 2px 7px; border-radius: 8px;
+    }
+    .inbox-list { flex: 1; overflow: hidden; }
+    .inbox-contact {
+      padding: 10px 14px; display: flex; gap: 10px; align-items: center;
+      border-bottom: 1px solid rgba(0,0,0,0.04);
+    }
+    .inbox-contact.active { background: rgba(0,0,0,0.04); }
+    .inbox-avatar {
+      width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+      overflow: hidden; position: relative;
+    }
+    .inbox-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .ch-badge {
+      position: absolute; bottom: -1px; right: -1px;
+      width: 13px; height: 13px; border-radius: 3px;
+      display: grid; place-items: center;
+      font-size: 6px; font-weight: 700; color: #fff;
+      border: 1.5px solid #fff;
+    }
+    .ch-badge.wa { background: #25D366; }
+    .ch-badge.fb { background: #1877F2; }
+    .ch-badge.ph { background: #0a0a0a; }
+    .ch-badge.web { background: #737373; }
+    .inbox-info { flex: 1; min-width: 0; }
+    .inbox-name { font-size: 0.68rem; font-weight: 600; color: #0a0a0a; }
+    .inbox-preview {
+      font-size: 0.6rem; color: #999; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+    .inbox-meta { text-align: right; flex-shrink: 0; }
+    .inbox-time { font-size: 0.55rem; color: #bbb; }
+    .inbox-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #0a0a0a; margin: 4px 0 0 auto;
+    }
+    .inbox-convo { flex: 1; display: flex; flex-direction: column; }
+    .convo-header {
+      padding: 12px 16px; border-bottom: 1px solid rgba(0,0,0,0.06);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .convo-av { width: 26px; height: 26px; border-radius: 50%; overflow: hidden; }
+    .convo-av img { width: 100%; height: 100%; object-fit: cover; }
+    .convo-name { font-size: 0.7rem; font-weight: 600; }
+    .convo-via { font-size: 0.58rem; color: #999; }
+    .convo-msgs {
+      flex: 1; padding: 12px 14px; display: flex; flex-direction: column;
+      gap: 8px; overflow: hidden;
+    }
+    .cv-msg {
+      max-width: 82%;
+      animation: msgSlide 0.4s cubic-bezier(0.16,1,0.3,1) both;
+    }
+    .cv-msg:nth-child(1) { animation-delay: 0.6s; }
+    .cv-msg:nth-child(2) { animation-delay: 1.6s; }
+    .cv-msg:nth-child(3) { animation-delay: 2.6s; }
+    @keyframes msgSlide {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .m-in {
+      background: #f0f0f0; border-radius: 12px; border-top-left-radius: 4px;
+      padding: 8px 12px; align-self: flex-start;
+    }
+    .m-out {
+      background: #0a0a0a; color: #fff; border-radius: 12px;
+      border-top-right-radius: 4px; padding: 8px 12px; align-self: flex-end;
+    }
+    .m-who { font-size: 0.58rem; font-weight: 600; margin-bottom: 2px; display: flex; align-items: center; gap: 4px; }
+    .m-in .m-who { color: #999; }
+    .m-out .m-who { color: rgba(255,255,255,0.4); }
+    .m-tag {
+      font-size: 0.48rem; font-weight: 700; text-transform: uppercase;
+      background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.6);
+      padding: 1px 5px; border-radius: 3px;
+    }
+    .m-txt { font-size: 0.7rem; line-height: 1.4; }
+    .m-out .m-txt { color: rgba(255,255,255,0.9); }
+    .m-in .m-txt { color: #333; }
+    .convo-input {
+      padding: 10px 14px; border-top: 1px solid rgba(0,0,0,0.06);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .convo-field {
+      flex: 1; background: #f5f5f5; border: none; border-radius: 16px;
+      padding: 7px 12px; font-size: 0.65rem; color: #bbb;
+    }
+    .convo-send {
+      width: 26px; height: 26px; border-radius: 50%;
+      background: #0a0a0a; border: none; display: grid; place-items: center;
+    }
+    .convo-send svg { width: 11px; height: 11px; }
+    .hero-img img {
+      width: 100%; height: 100%; object-fit: cover; display: block;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 16px; border-radius: 9999px;
+      background: var(--bg-2);
+      font-size: 0.78rem; font-weight: 500; color: var(--fg);
+      margin-bottom: 28px; letter-spacing: 0.04em; text-transform: uppercase;
+    }
+    .hero-badge .pulse {
+      width: 6px; height: 6px; border-radius: 50%; background: var(--fg);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .hero h1 {
+      font-size: clamp(2.6rem, 5.5vw, 4.5rem);
+      font-weight: 900; line-height: 1.08; letter-spacing: -0.035em;
+      margin-bottom: 20px; color: var(--fg);
+    }
+    .hero-sub {
+      font-size: clamp(0.95rem, 1.5vw, 1.1rem);
+      color: var(--fg); max-width: 540px; margin: 0 auto 36px;
+      line-height: 1.7;
+    }
+    .hero-ctas { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+    /* ── STATS ── */
+    .stats-band {
+      padding: 64px 0;
+    }
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      text-align: center; gap: 0;
+      border: 1px solid var(--border); border-radius: 16px;
+      overflow: hidden;
+    }
+    .stat {
+      padding: 48px 32px;
+      border-left: 1px solid var(--border);
+    }
+    .stat:first-child { border-left: none; }
+    .stat-num {
+      font-size: clamp(2.5rem, 5vw, 4rem); font-weight: 900;
+      letter-spacing: -0.04em; line-height: 1;
+    }
+    .stat-label {
+      font-size: 0.82rem; color: var(--fg); margin-top: 8px;
+      text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500;
+    }
+
+    /* ── SECTIONS ── */
+    .section { padding: 80px 0; }
+    .section-lg { padding: 100px 0; }
+    .sec-label {
+      font-size: 0.78rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--fg); margin-bottom: 16px;
+    }
+    .sec-title {
+      font-size: clamp(2rem, 4vw, 3.2rem); font-weight: 400;
+      line-height: 1.1; letter-spacing: -0.03em; max-width: 700px;
+    }
+    .sec-sub {
+      font-size: 1.05rem; color: var(--fg); margin-top: 16px;
+      max-width: 520px; line-height: 1.7;
+    }
+    .sec-header { margin-bottom: 48px; }
+    .sec-header.centered { text-align: center; margin-left: auto; margin-right: auto; }
+    .sec-header.centered .sec-title,
+    .sec-header.centered .sec-sub { margin-left: auto; margin-right: auto; }
+
+    /* ── CHANNELS SPLIT ── */
+    .channels-split {
+      display: grid; grid-template-columns: 1.1fr 1fr; gap: 64px; align-items: stretch;
+    }
+    .channels-visual {
+      border-radius: 20px; overflow: hidden; position: relative;
+      aspect-ratio: 4/3; background: var(--bg-2);
+    }
+    .channels-visual .ch-slide {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      opacity: 0; transition: opacity 0.5s cubic-bezier(0.16,1,0.3,1);
+    }
+    .channels-visual .ch-slide.active { opacity: 1; }
+    .channels-visual .ch-slide video {
+      width: 100%; height: 100%; object-fit: cover;
+    }
+    .chat-overlay {
+      position: absolute; bottom: 20px; left: 20px; right: 20px; z-index: 3;
+      background: rgba(255,255,255,0.7);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-radius: 16px; padding: 16px 20px;
+      border: 1px solid rgba(255,255,255,0.4);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+    }
+    .chat-input-row {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .chat-icon {
+      width: 28px; height: 28px; flex-shrink: 0;
+      display: grid; place-items: center; color: #0a0a0a; opacity: 0.5;
+    }
+    .chat-icon svg { width: 16px; height: 16px; }
+    .chat-typing {
+      flex: 1; font-size: 0.9rem; color: #0a0a0a; font-family: 'Satoshi', sans-serif;
+      font-weight: 400; min-height: 20px;
+    }
+    .chat-typing .cursor {
+      display: inline-block; width: 1px; height: 16px;
+      background: #0a0a0a; margin-left: 1px;
+      animation: blink 1s step-end infinite; vertical-align: text-bottom;
+    }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+    .chat-send {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: #0a0a0a; border: none; display: grid; place-items: center;
+      cursor: pointer; flex-shrink: 0;
+    }
+    .chat-send svg { width: 14px; height: 14px; }
+    .chat-actions {
+      display: flex; gap: 16px; margin-top: 10px; padding-top: 10px;
+      border-top: 1px solid rgba(0,0,0,0.06);
+    }
+    .chat-action {
+      font-size: 0.75rem; font-weight: 500; color: rgba(0,0,0,0.45);
+      display: flex; align-items: center; gap: 4px;
+      font-family: 'Satoshi', sans-serif;
+    }
+    /* ── CHANNELS LIST (Sana-style) ── */
+    .channels-list { display: flex; flex-direction: column; justify-content: space-between; }
+    .ch-item {
+      cursor: pointer; transition: all 0.3s;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .ch-item:last-child { border-bottom: none; }
+    .ch-item-title {
+      font-size: clamp(1.4rem, 2.5vw, 1.8rem); font-weight: 700;
+      letter-spacing: -0.02em; color: var(--fg-4);
+      transition: color 0.3s; line-height: 1.4;
+    }
+    .ch-item.active .ch-item-title {
+      color: var(--fg);
+    }
+    .ch-item.active .ch-item-title::before {
+      content: '→ ';
+    }
+    .ch-item:hover .ch-item-title { color: var(--fg-2); }
+    .ch-item-body { display: none; }
+    .ch-desc-area {
+      font-size: 0.88rem; color: var(--fg); line-height: 1.6;
+      max-width: 380px; margin-top: auto; padding-top: 16px;
+      transition: opacity 0.3s, transform 0.3s;
+    }
+    .ch-desc-area.fading {
+      opacity: 0; transform: translateY(6px);
+    }
+    .ch-item-link {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 22px; border-radius: 9999px;
+      background: var(--fg); color: var(--bg);
+      font-size: 0.85rem; font-weight: 500; text-decoration: none;
+      transition: opacity 0.2s; width: fit-content; margin-top: 16px;
+    }
+    .ch-item-link:hover { opacity: 0.85; }
+
+    /* ── LIQUID GRADIENT BLOBS ── */
+    .liquid-gradient {
+      position: relative; overflow: hidden; border-radius: 12px;
+      width: 100%; aspect-ratio: 4/3;
+    }
+    .liquid-gradient .blob {
+      position: absolute; border-radius: 50%; filter: blur(50px);
+      animation: liquidDrift 10s ease-in-out infinite alternate;
+    }
+    .liquid-gradient .blob:nth-child(1) { width: 70%; height: 70%; top: -10%; left: -10%; }
+    .liquid-gradient .blob:nth-child(2) { width: 60%; height: 60%; bottom: -15%; right: -10%; animation-delay: -3s; animation-duration: 12s; }
+    .liquid-gradient .blob:nth-child(3) { width: 50%; height: 50%; top: 30%; left: 30%; animation-delay: -6s; animation-duration: 14s; }
+    @keyframes liquidDrift {
+      0% { transform: translate(0, 0) rotate(0deg) scale(1); }
+      33% { transform: translate(10px, -15px) rotate(5deg) scale(1.05); }
+      66% { transform: translate(-8px, 10px) rotate(-3deg) scale(0.95); }
+      100% { transform: translate(5px, -5px) rotate(2deg) scale(1.02); }
+    }
+
+    /* warm sunset */
+    .gradient-warm .blob:nth-child(1) { background: #ff6b35; }
+    .gradient-warm .blob:nth-child(2) { background: #f7c948; }
+    .gradient-warm .blob:nth-child(3) { background: #e84393; }
+    /* ocean */
+    .gradient-ocean .blob:nth-child(1) { background: #0ea5e9; }
+    .gradient-ocean .blob:nth-child(2) { background: #06b6d4; }
+    .gradient-ocean .blob:nth-child(3) { background: #8b5cf6; }
+    /* aurora */
+    .gradient-aurora .blob:nth-child(1) { background: #10b981; }
+    .gradient-aurora .blob:nth-child(2) { background: #06b6d4; }
+    .gradient-aurora .blob:nth-child(3) { background: #8b5cf6; }
+
+    /* ── CAPABILITIES TABS ── */
+    .cap-tabs {
+      display: flex; gap: 0; margin-bottom: 48px;
+    }
+    .cap-tab {
+      flex: 1; padding: 20px 24px; cursor: pointer;
+      border-top: 2px solid var(--border); transition: all 0.3s;
+    }
+    .cap-tab.active { border-top-color: var(--fg); }
+    .cap-tab h3 {
+      font-size: 1rem; font-weight: 700; letter-spacing: -0.01em;
+      color: var(--fg-4); transition: color 0.3s; margin-bottom: 6px;
+    }
+    .cap-tab.active h3 { color: var(--fg); }
+    .cap-tab p {
+      font-size: 0.82rem; color: var(--fg-4); line-height: 1.5;
+      transition: color 0.3s;
+    }
+    .cap-tab.active p { color: var(--fg); }
+    .cap-tab .cap-dot { display: none; }
+    .cap-visual {
+      width: 100%; border-radius: 20px; overflow: hidden;
+      background: var(--bg-2); position: relative; aspect-ratio: 16/8;
+    }
+    .cap-visual-img {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      object-fit: cover; opacity: 0;
+      transition: opacity 0.5s cubic-bezier(0.16,1,0.3,1);
+    }
+    .cap-visual-img.active { opacity: 1; }
+    .cap-logos {
+      display: flex; gap: 20px; align-items: center; margin-top: 32px;
+      flex-wrap: wrap;
+    }
+    .cap-logos span { font-size: 0.72rem; font-weight: 500; color: var(--fg); text-transform: uppercase; letter-spacing: 0.05em; }
+    .cap-logos img { height: 20px; width: auto; opacity: 0.5; }
+    [data-theme="dark"] .cap-logos img { filter: brightness(0) invert(1); }
+
+    /* ── DEMO ── */
+    .demo-section { }
+    .demo-section .sec-label { color: var(--fg); }
+    .demo-section .sec-title { color: var(--fg); }
+    .demo-section .sec-sub { color: var(--fg); }
+    .demo-section .lang-tag { background: var(--bg-2); color: var(--fg); }
+    .demo-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center;
+      direction: rtl;
+    }
+    .demo-grid > * { direction: ltr; }
+    .demo-box {
+      background: url('images/logos/live_agent_bg.jpg') center center / cover no-repeat;
+      border-radius: 20px; padding: 48px; aspect-ratio: 1;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 24px; position: relative; overflow: hidden;
+    }
+    .demo-status {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 0.75rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.08em; color: rgba(255,255,255,0.7);
+    }
+    .demo-cta-text { color: rgba(255,255,255,0.6); }
+    .demo-status .pulse { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; animation: pulse 2s ease-in-out infinite; }
+    .voice-wave { display: flex; align-items: center; gap: 3px; height: 80px; }
+    .vbar {
+      width: 3px; border-radius: 9999px; background: rgba(255,255,255,0.8);
+      animation: vwave 1.2s ease-in-out infinite;
+    }
+    .vbar:nth-child(1) { height: 20px; animation-delay: 0s; }
+    .vbar:nth-child(2) { height: 35px; animation-delay: 0.1s; }
+    .vbar:nth-child(3) { height: 55px; animation-delay: 0.2s; }
+    .vbar:nth-child(4) { height: 70px; animation-delay: 0.15s; }
+    .vbar:nth-child(5) { height: 45px; animation-delay: 0.3s; }
+    .vbar:nth-child(6) { height: 60px; animation-delay: 0.05s; }
+    .vbar:nth-child(7) { height: 35px; animation-delay: 0.25s; }
+    .vbar:nth-child(8) { height: 50px; animation-delay: 0.1s; }
+    .vbar:nth-child(9) { height: 25px; animation-delay: 0.35s; }
+    .vbar:nth-child(10) { height: 40px; animation-delay: 0.2s; }
+    @keyframes vwave {
+      0%, 100% { transform: scaleY(0.4); opacity: 0.4; }
+      50% { transform: scaleY(1); opacity: 1; }
+    }
+    .lang-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .lang-tag {
+      padding: 5px 14px; border-radius: 9999px; font-size: 0.78rem; font-weight: 500;
+      background: var(--bg-2); color: var(--fg);
+    }
+
+    /* ── USE CASES CAROUSEL ── */
+    .carousel-header {
+      display: flex; justify-content: space-between; align-items: flex-end;
+      margin-bottom: 40px;
+    }
+    .carousel-nav { display: flex; gap: 8px; }
+    .carousel-btn {
+      width: 40px; height: 40px; border-radius: 9999px;
+      background: var(--bg-2);
+      display: grid; place-items: center; cursor: pointer;
+      color: var(--fg); transition: all 0.2s;
+    }
+    .carousel-btn:hover { background: var(--bg-3); color: var(--fg); }
+    .carousel-btn svg { width: 16px; height: 16px; }
+    .carousel-track-wrapper {
+      overflow: hidden;
+    }
+    .carousel-track {
+      display: flex; gap: 16px; cursor: grab;
+      transition: transform 0.5s cubic-bezier(0.16,1,0.3,1);
+      user-select: none;
+    }
+    .carousel-track.dragging { cursor: grabbing; transition: none; }
+    .carousel-card {
+      flex: 0 0 calc(25% - 12px); border-radius: 16px; overflow: hidden;
+      position: relative; aspect-ratio: 3/4;
+    }
+    .carousel-card img {
+      width: 100%; height: 100%; object-fit: cover;
+      transition: transform 0.6s cubic-bezier(0.16,1,0.3,1);
+    }
+    .carousel-card:hover img { transform: scale(1.05); }
+    .carousel-card .card-label {
+      position: absolute; top: 20px; left: 20px;
+      font-size: 1rem; font-weight: 700; color: white;
+      text-shadow: 0 1px 8px rgba(0,0,0,0.3);
+    }
+    .carousel-card .card-overlay {
+      position: absolute; inset: 0;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, transparent 50%);
+      pointer-events: none;
+    }
+    .carousel-card .card-bottom { display: none; }
+    .carousel-progress {
+      display: flex; gap: 4px; justify-content: center; margin-top: 32px;
+    }
+    .carousel-dot {
+      width: 32px; height: 3px; border-radius: 2px;
+      background: var(--border-2); transition: background 0.3s;
+    }
+    .carousel-dot.active { background: var(--fg); }
+
+    /* ── HOW IT WORKS ── */
+    .steps-row {
+      display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: start; gap: 0;
+    }
+    .step-item { padding: 0 24px; }
+    .step-connector {
+      width: 1px; background: var(--border); height: 100%; min-height: 120px;
+      margin-top: 8px;
+    }
+    .step-num {
+      font-size: clamp(3rem, 6vw, 5rem); font-weight: 900; letter-spacing: -0.04em;
+      color: var(--bg-3); line-height: 1; margin-bottom: 16px;
+    }
+    .step-item h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; }
+    .step-item p { font-size: 0.88rem; line-height: 1.6; }
+
+    /* ── COMPARISON SPLIT ── */
+    .compare-split {
+      display: grid; grid-template-columns: 1fr 1.2fr; gap: 64px; align-items: start;
+    }
+    .compare-left { position: sticky; top: 120px; }
+    .compare-table {
+      background: var(--bg-2); border-radius: 16px; overflow: hidden;
+    }
+    .compare-header-row {
+      display: grid; grid-template-columns: 1.4fr 1fr 1fr;
+      padding: 16px 24px; font-size: 0.75rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .compare-h { text-align: right; }
+    .compare-h-ai { text-align: right; }
+    .compare-data-row {
+      display: grid; grid-template-columns: 1.4fr 1fr 1fr;
+      padding: 14px 24px; font-size: 0.88rem;
+      border-top: 1px solid var(--border);
+    }
+    .compare-data-row span:nth-child(1) { font-weight: 500; }
+    .compare-data-row span:nth-child(2) { text-align: right; opacity: 0.4; }
+    .compare-data-row span:nth-child(3) { text-align: right; font-weight: 600; }
+    .compare-data-row .win { color: #16a34a; }
+
+    /* ── PRICING ── */
+    .pricing-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+    }
+    .price-card { background: var(--bg-2); border-radius: 16px; padding: 44px 36px; display: flex; flex-direction: column; }
+    .price-card.featured { background: var(--fg); color: var(--bg); }
+    .price-card.featured .price-desc,
+    .price-card.featured .price-period,
+    .price-card.featured .price-list li { color: var(--bg); }
+    .price-card.featured .price-list li::before { background: var(--bg); }
+    .price-card.featured .price-btn-fill { background: var(--bg); color: var(--fg); }
+    .price-name { font-size: 1.05rem; font-weight: 700; margin-bottom: 4px; }
+    .price-desc { font-size: 0.82rem; color: var(--fg); margin-bottom: 24px; }
+    .price-amount { font-size: 2.5rem; font-weight: 900; letter-spacing: -0.03em; }
+    .price-period { font-size: 0.82rem; color: var(--fg); margin-bottom: 28px; }
+    .price-list { list-style: none; margin-bottom: 32px; flex-grow: 1; }
+    .price-list li {
+      font-size: 0.88rem; color: var(--fg); padding: 7px 0;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .price-list li::before {
+      content: ''; width: 4px; height: 4px; border-radius: 50%;
+      background: var(--fg); flex-shrink: 0;
+    }
+    .price-btn {
+      display: block; width: 100%; text-align: center; padding: 13px;
+      border-radius: 9999px; font-size: 0.9rem; font-weight: 500;
+      text-decoration: none; cursor: pointer; font-family: 'Satoshi', sans-serif;
+      transition: all 0.25s;
+    }
+    .price-btn-fill { background: var(--fg); color: var(--bg); border: none; }
+    .price-btn-fill:hover { opacity: 0.85; }
+    .price-btn-outline {
+      background: var(--bg); color: var(--fg);
+    }
+    .price-btn-outline:hover { background: var(--bg-3); }
+
+    /* ── FAQ ── */
+    .faq-grid { display: grid; grid-template-columns: 1fr 1.2fr; gap: 80px; align-items: start; }
+    .faq-title {
+      font-size: clamp(2rem, 4vw, 3rem); font-weight: 400;
+      line-height: 1.1; letter-spacing: -0.03em;
+      position: sticky; top: 120px;
+    }
+    .faq-list { }
+    .faq-item { }
+    .faq-item summary {
+      list-style: none; padding: 22px 0;
+      font-size: 0.95rem; font-weight: 600; cursor: pointer;
+      display: flex; justify-content: space-between; align-items: center;
+      transition: color 0.2s;
+    }
+    .faq-item summary:hover { color: var(--fg); }
+    .faq-item summary::-webkit-details-marker { display: none; }
+    .faq-item summary::after {
+      content: '+'; font-size: 1.2rem; font-weight: 300; color: var(--fg);
+      transition: transform 0.3s;
+    }
+    .faq-item[open] summary::after { content: '\2212'; }
+    .faq-item .faq-body { padding: 0 0 22px; font-size: 0.9rem; color: var(--fg); line-height: 1.7; }
+
+    /* ── CTA ── */
+    .cta-footer-wrap {
+      background: #fafafa url('images/logos/footer_bg.png') top center / cover no-repeat;
+      color: #0a0a0a !important;
+    }
+    .cta-footer-wrap * { color: #0a0a0a; }
+    .cta-footer-wrap .sec-title { color: #0a0a0a !important; }
+    .cta-footer-wrap .sec-label { color: #0a0a0a !important; }
+    .cta-footer-wrap .sec-sub { color: #0a0a0a !important; }
+    .cta-footer-wrap .btn-primary { background: #0a0a0a !important; color: #fafafa !important; }
+    .cta-section { padding: 100px 0 200px; border-top: 1px solid var(--border); }
+    .cta-inner {
+      text-align: center; max-width: 600px; margin: 0 auto;
+    }
+    .cta-inner .sec-title { margin-bottom: 16px; margin-left: auto; margin-right: auto; }
+
+    /* ── FOOTER ── */
+    footer { padding: 32px 0; color: #0a0a0a; }
+    footer a, .foot-left, .foot-links a { color: #0a0a0a !important; }
+    .foot-inner {
+      display: flex; justify-content: space-between; align-items: center;
+      flex-wrap: wrap; gap: 16px;
+    }
+    .foot-left { font-size: 0.8rem; color: #0a0a0a !important; }
+    .foot-links { display: flex; gap: 24px; list-style: none; }
+    .foot-links a { color: #0a0a0a !important; text-decoration: none; font-size: 0.8rem; transition: opacity 0.2s; }
+    .foot-links a:hover { opacity: 0.6; }
+
+    /* ── LOGO BAR ── */
+    .logo-bar {
+      padding: 64px 0 40px; overflow: hidden;
+    }
+    .logo-bar-label {
+      text-align: center; font-size: 0.78rem; font-weight: 500;
+      color: var(--fg); text-transform: uppercase; letter-spacing: 0.06em;
+      margin-bottom: 24px;
+    }
+    .logo-scroll {
+      display: flex; align-items: center; gap: 48px;
+      animation: logoScroll 30s linear infinite;
+      width: max-content;
+    }
+    .logo-scroll span {
+      font-size: 1.05rem; font-weight: 700; color: var(--fg);
+      white-space: nowrap; letter-spacing: -0.01em;
+      opacity: 0.5; transition: opacity 0.3s;
+    }
+    .logo-scroll span:hover { opacity: 1; }
+    @keyframes logoScroll {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+
+    /* ── PROBLEM SECTION ── */
+    .problems-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+    }
+    .problem-card {
+      padding: 0;
+    }
+    .problem-img { width: 100%; aspect-ratio: 4/3; border-radius: 16px; overflow: hidden; margin-bottom: 24px; }
+    .problem-img img { width: 100%; height: 100%; object-fit: cover; }
+    .problem-card h3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 8px; }
+    .problem-card p { font-size: 0.88rem; color: var(--fg); line-height: 1.6; }
+
+    /* ── PRICING DUO ── */
+    .pricing-duo {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+    }
+    .price-desc-line { font-size: 0.85rem; margin-bottom: 24px; line-height: 1.5; }
+    .enterprise-line {
+      text-align: center; font-size: 0.9rem; margin-top: 32px;
+    }
+    .enterprise-line a { color: var(--fg); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+
+    /* ── TRUST STRIP ── */
+    .trust-strip {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 48px;
+    }
+    #trust, #trust * { color: #fff !important; }
+    .trust-item p { font-size: 0.88rem; line-height: 1.6; color: rgba(255,255,255,0.7) !important; }
+    .trust-item h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; }
+
+    /* ── MODELS GRID ── */
+    .models-grid {
+      display: flex; justify-content: center; gap: 16px;
+      max-width: 700px; margin: 0 auto;
+    }
+    .model-card {
+      background: var(--bg-2); border-radius: 12px; flex: 1; padding: 32px 24px;
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      transition: background 0.3s;
+    }
+    .model-card:hover { background: var(--bg-3); }
+    .model-card img { width: 32px; height: 32px; object-fit: contain; }
+    [data-theme="dark"] .model-card img { filter: brightness(0) invert(1); }
+    .model-name { font-size: 0.78rem; font-weight: 600; color: var(--fg); letter-spacing: -0.01em; }
+
+    /* ── SCROLL REVEAL ── */
+    .sr {
+      opacity: 0; filter: blur(8px); transform: translateY(24px);
+      transition: opacity 1s cubic-bezier(0.16,1,0.3,1),
+                  filter 1s cubic-bezier(0.16,1,0.3,1),
+                  transform 1s cubic-bezier(0.16,1,0.3,1);
+    }
+    .sr.vis { opacity: 1; filter: blur(0px); transform: none; }
+
+    /* Stagger children with blur */
+    .stagger > * {
+      opacity: 0; filter: blur(6px); transform: translateY(16px);
+      transition: opacity 0.8s cubic-bezier(0.16,1,0.3,1),
+                  filter 0.8s cubic-bezier(0.16,1,0.3,1),
+                  transform 0.8s cubic-bezier(0.16,1,0.3,1);
+    }
+    .stagger.vis > *:nth-child(1) { transition-delay: 0s; }
+    .stagger.vis > *:nth-child(2) { transition-delay: 0.1s; }
+    .stagger.vis > *:nth-child(3) { transition-delay: 0.2s; }
+    .stagger.vis > *:nth-child(4) { transition-delay: 0.3s; }
+    .stagger.vis > *:nth-child(5) { transition-delay: 0.4s; }
+    .stagger.vis > *:nth-child(6) { transition-delay: 0.5s; }
+    .stagger.vis > *:nth-child(7) { transition-delay: 0.6s; }
+    .stagger.vis > *:nth-child(8) { transition-delay: 0.7s; }
+    .stagger.vis > * { opacity: 1; filter: blur(0px); transform: none; }
+
+    /* Scale in variant */
+    .sr-scale {
+      opacity: 0; transform: scale(0.95);
+      transition: opacity 0.8s cubic-bezier(0.16,1,0.3,1), transform 0.8s cubic-bezier(0.16,1,0.3,1);
+    }
+    .sr-scale.vis { opacity: 1; transform: scale(1); }
+
+    /* Slide from left */
+    .sr-left {
+      opacity: 0; filter: blur(6px); transform: translateX(-32px);
+      transition: opacity 1s cubic-bezier(0.16,1,0.3,1),
+                  filter 1s cubic-bezier(0.16,1,0.3,1),
+                  transform 1s cubic-bezier(0.16,1,0.3,1);
+    }
+    .sr-left.vis { opacity: 1; filter: blur(0px); transform: none; }
+
+    /* Slide from right */
+    .sr-right {
+      opacity: 0; filter: blur(6px); transform: translateX(32px);
+      transition: opacity 1s cubic-bezier(0.16,1,0.3,1),
+                  filter 1s cubic-bezier(0.16,1,0.3,1),
+                  transform 1s cubic-bezier(0.16,1,0.3,1);
+    }
+    .sr-right.vis { opacity: 1; filter: blur(0px); transform: none; }
+
+    /* Image parallax on scroll */
+    .parallax-img { transition: transform 0.1s linear; }
+
+    /* Section-level staggered fade */
+    .section-fade > * {
+      opacity: 0; filter: blur(6px); transform: translateY(20px);
+      transition: opacity 0.8s cubic-bezier(0.16,1,0.3,1),
+                  filter 0.8s cubic-bezier(0.16,1,0.3,1),
+                  transform 0.8s cubic-bezier(0.16,1,0.3,1);
+    }
+    .section-fade.vis > *:nth-child(1) { transition-delay: 0s; }
+    .section-fade.vis > *:nth-child(2) { transition-delay: 0.15s; }
+    .section-fade.vis > *:nth-child(3) { transition-delay: 0.3s; }
+    .section-fade.vis > *:nth-child(4) { transition-delay: 0.45s; }
+    .section-fade.vis > * { opacity: 1; filter: blur(0px); transform: none; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .sr, .sr-scale, .sr-left, .sr-right, .stagger > *, .section-fade > * { opacity: 1; filter: none; transform: none; transition: none; }
+    }
+
+    /* ── BLUR REVEAL ANIMATION ── */
+    .blur-reveal {
+      opacity: 0; filter: blur(12px); transform: translateY(12px);
+      animation: blurIn 1s cubic-bezier(0.16,1,0.3,1) forwards;
+    }
+    .blur-reveal:nth-child(1) { animation-delay: 0.1s; }
+    .blur-reveal:nth-child(2) { animation-delay: 0.2s; }
+    .blur-reveal:nth-child(3) { animation-delay: 0.35s; }
+    .blur-reveal:nth-child(4) { animation-delay: 0.5s; }
+    @keyframes blurIn {
+      to { opacity: 1; filter: blur(0px); transform: translateY(0); }
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 900px) {
+      .nav-links { display: none; }
+      .mobile-menu { display: block; }
+      .nav-links.open {
+        display: flex; flex-direction: column; position: absolute;
+        top: 100%; left: 0; right: 0; background: var(--bg);
+        padding: 20px 24px; gap: 14px;
+      }
+      .wrap { margin: 0 24px; }
+      nav { padding-left: 16px; padding-right: 16px; }
+      nav.scrolled { padding-left: 16px; padding-right: 16px; }
+      nav.scrolled .nav-inner { border-radius: 16px; }
+      .hero { padding: 120px 0 0; }
+      .hero h1 { font-size: 2.2rem; }
+      .hero-images { grid-template-columns: 1fr; padding: 0 24px; }
+      .hero-images .hero-img:nth-child(2) { display: none; }
+      .stats-grid { grid-template-columns: 1fr; text-align: center; }
+      .stat { border-left: none; border-bottom: 1px solid var(--border); padding: 32px 24px; }
+      .stat:last-child { border-bottom: none; }
+      .channels-split, .compare-split, .pricing-duo, .trust-strip { grid-template-columns: 1fr; }
+      .steps-row { grid-template-columns: 1fr; gap: 32px; }
+      .step-connector { display: none; }
+      .compare-left { position: static; }
+      .cap-tabs { flex-direction: column; gap: 0; }
+      .cap-visual { aspect-ratio: 4/3; }
+      .channels-visual { aspect-ratio: 4/3; }
+      .carousel-card { flex: 0 0 calc(50% - 8px); }
+      .models-grid { flex-wrap: wrap; }
+      .problems-grid { grid-template-columns: 1fr; }
+      .bento-card.span-2 { grid-column: span 1; }
+      .demo-grid { grid-template-columns: 1fr; gap: 40px; }
+      .faq-grid { grid-template-columns: 1fr; gap: 32px; }
+      .faq-title { position: static; }
+      .foot-inner { flex-direction: column; text-align: center; }
+    }
+    @media (max-width: 480px) {
+      .hero-ctas { flex-direction: column; width: 100%; }
+      .hero-ctas .btn { width: 100%; justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <div class="nav-inner">
+      <a href="#" class="logo">
+        <img src="images/logos/Jordon_logo_black.svg" alt="Jordon" class="logo-icon">
+        Jordon
+      </a>
+      <ul class="nav-links">
+        <li><a href="#channels">Channels</a></li>
+        <li><a href="#capabilities">Capabilities</a></li>
+        <li><a href="#demo">Demo</a></li>
+        <li><a href="#pricing">Pricing</a></li>
+        <li><a href="#faq">FAQ</a></li>
+      </ul>
+      <div class="nav-right">
+        <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <a href="https://calendly.com/tharunkmr3/30min" target="_blank" class="btn btn-primary" style="padding:9px 22px; font-size:0.84rem;">Book a Call</a>
+      </div>
+      <button class="mobile-menu" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+      </button>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <canvas id="hero-canvas"></canvas>
+    <div class="hero-content">
+      <h1 id="hero-title" class="blur-reveal">Set up once. Works everywhere.</h1>
+      <p class="hero-sub blur-reveal">One AI agent that works on WhatsApp, Facebook, your website, and phone calls. Customer support, lead capture, appointments — in 10+ Indian languages.</p>
+      <div class="hero-ctas blur-reveal">
+        <a href="https://calendly.com/tharunkmr3/30min" target="_blank" class="btn btn-primary">Request a demo</a>
+        <a href="#channels" class="btn btn-secondary">Explore channels</a>
+      </div>
+    </div>
+    <div class="hero-images">
+      <div class="hero-img hero-img-main">
+        <img src="images/logos/hero.png" alt="Jordon AI Dashboard" class="parallax-img">
+      </div>
+      <div class="hero-img">
+        <img src="https://images.pexels.com/photos/8374295/pexels-photo-8374295.jpeg?auto=compress&w=1200" alt="Customer support">
+      </div>
+    </div>
+  </section>
+
+  <!-- THE PROBLEM -->
+  <section class="section" id="problem" style="min-height:100vh; display:flex; align-items:center;">
+    <div class="wrap section-fade">
+      <div class="sec-header centered sr">
+        <h2 class="sec-title">Your customers are waiting. Your team can't keep up.</h2>
+      </div>
+      <div class="problems-grid stagger sr">
+        <div class="problem-card">
+          <div class="problem-img"><img src="images/logos/calls.jpg" alt="Missed calls"></div>
+          <h3>Missed calls, lost customers</h3>
+          <p>Customers call after hours, on weekends, during lunch. Every missed call is a lost sale, a frustrated customer, or a bad review.</p>
+        </div>
+        <div class="problem-card">
+          <div class="problem-img"><img src="images/logos/money.jpg" alt="Expensive support"></div>
+          <h3>Support teams are expensive</h3>
+          <p>₹20-40K per person, per month. Training takes weeks. Attrition is 30-40%. And they still can only handle one conversation at a time.</p>
+        </div>
+        <div class="problem-card">
+          <div class="problem-img"><img src="images/logos/social.jpg" alt="Multiple channels"></div>
+          <h3>Customers are everywhere</h3>
+          <p>Some call, some WhatsApp, some message on Facebook, some use your website. You can't be on all channels 24/7 — but your competitors are.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STATS -->
+  <div class="stats-band">
+    <div class="wrap">
+      <div class="stats-grid sr">
+        <div class="stat">
+          <div class="stat-num" data-count="10">10x</div>
+          <div class="stat-label">Cheaper than human agents</div>
+        </div>
+        <div class="stat">
+          <div class="stat-num">24/7</div>
+          <div class="stat-label">Always on, zero downtime</div>
+        </div>
+        <div class="stat">
+          <div class="stat-num" data-count="10">10+</div>
+          <div class="stat-label">Indian languages supported</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHANNELS -->
+  <section class="section section-lg" id="channels">
+    <div class="wrap">
+      <div class="sec-header sr" style="margin-bottom:48px;">
+        <p class="sec-label">Channels</p>
+        <h2 class="sec-title">One agent. Every channel.</h2>
+      </div>
+      <div class="channels-split sr-scale">
+        <div class="channels-visual">
+          <div class="ch-slide active" data-channel="phone">
+            <video muted loop playsinline preload="auto">
+              <source src="https://videos.pexels.com/video-files/4391435/4391435-hd_1920_1080_25fps.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="ch-slide" data-channel="whatsapp">
+            <video muted loop playsinline preload="auto">
+              <source src="https://videos.pexels.com/video-files/3250231/3250231-hd_1920_1080_25fps.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="ch-slide" data-channel="facebook">
+            <video muted loop playsinline preload="auto">
+              <source src="https://videos.pexels.com/video-files/12692099/12692099-sd_640_360_30fps.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="ch-slide" data-channel="website">
+            <video muted loop playsinline preload="auto">
+              <source src="https://videos.pexels.com/video-files/5734040/5734040-hd_1920_1080_30fps.mp4" type="video/mp4">
+            </video>
+          </div>
+          <div class="chat-overlay">
+            <div class="chat-input-row">
+              <div class="chat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
+              <div class="chat-typing" id="chat-typing"><span class="cursor"></span></div>
+              <button class="chat-send"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+            </div>
+            <div class="chat-actions">
+              <span class="chat-action">✦ Create</span>
+              <span class="chat-action">+ Sources</span>
+              <span class="chat-action" style="margin-left:auto;">⊞ Auto</span>
+            </div>
+          </div>
+        </div>
+        <div class="channels-list">
+          <div>
+            <div class="ch-item active" data-channel="phone">
+              <div class="ch-item-title">Phone Calls</div>
+              <div class="ch-item-body">
+                <p class="ch-item-desc">Customers call your number — AI picks up, answers questions, books appointments, and transfers to your team when needed. No hold music, no missed calls.</p>
+              </div>
+            </div>
+            <div class="ch-item" data-channel="whatsapp">
+              <div class="ch-item-title">WhatsApp</div>
+              <div class="ch-item-body">
+                <p class="ch-item-desc">Your AI replies on WhatsApp instantly — answers queries, sends updates, collects leads. Customers message you anytime, in their language.</p>
+              </div>
+            </div>
+            <div class="ch-item" data-channel="facebook">
+              <div class="ch-item-title">Facebook Messenger</div>
+              <div class="ch-item-body">
+                <p class="ch-item-desc">AI handles your Facebook inbox automatically. Responds to inquiries, qualifies leads, and books appointments — 24/7 without any manual effort.</p>
+              </div>
+            </div>
+            <div class="ch-item" data-channel="website">
+              <div class="ch-item-title">Website Chat</div>
+              <div class="ch-item-body">
+                <p class="ch-item-desc">Add a chat widget to your website. Visitors ask questions, get instant answers, and become leads — without you lifting a finger.</p>
+              </div>
+            </div>
+          </div>
+          <div>
+            <p class="ch-desc-area" id="ch-desc">Customers call your number — AI picks up, answers questions, books appointments, and transfers to your team when needed. No hold music, no missed calls.</p>
+            <a href="https://calendly.com/tharunkmr3/30min" target="_blank" class="ch-item-link">Book an intro</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CAPABILITIES -->
+  <section class="section" id="capabilities">
+    <div class="wrap">
+      <div class="sec-header centered sr">
+        <p class="sec-label">Capabilities</p>
+        <h2 class="sec-title">Customer-facing or internal.<br>It handles both.</h2>
+      </div>
+      <div class="cap-tabs sr">
+        <div class="cap-tab active" data-cap="leads">
+          <h3><span class="cap-dot"></span>Lead Capture</h3>
+          <p>AI calls or chats with new leads — collects requirements, qualifies, and books meetings automatically.</p>
+        </div>
+        <div class="cap-tab" data-cap="multilingual">
+          <h3><span class="cap-dot"></span>Multilingual</h3>
+          <p>Hindi, Tamil, Telugu, Kannada, Bengali, Marathi and more. The AI understands and responds naturally.</p>
+        </div>
+        <div class="cap-tab" data-cap="knowledge">
+          <h3><span class="cap-dot"></span>Knowledge Base</h3>
+          <p>Trained on your products, policies, and FAQs. Answers accurately from your data on any channel.</p>
+        </div>
+        <div class="cap-tab" data-cap="escalation">
+          <h3><span class="cap-dot"></span>Smart Escalation</h3>
+          <p>When the AI can't answer, it transfers to your team with full context. Nothing falls through.</p>
+        </div>
+      </div>
+      <div class="cap-visual sr">
+        <img class="cap-visual-img active" data-cap="leads" src="https://images.pexels.com/photos/8470792/pexels-photo-8470792.jpeg?auto=compress&w=1200" alt="Lead capture">
+        <img class="cap-visual-img" data-cap="multilingual" src="https://images.pexels.com/photos/7682350/pexels-photo-7682350.jpeg?auto=compress&w=1200" alt="Multilingual">
+        <img class="cap-visual-img" data-cap="knowledge" src="https://images.pexels.com/photos/925786/pexels-photo-925786.jpeg?auto=compress&w=1200" alt="Knowledge base">
+        <img class="cap-visual-img" data-cap="escalation" src="https://images.pexels.com/photos/5215013/pexels-photo-5215013.jpeg?auto=compress&w=1200" alt="Escalation">
+      </div>
+      <div class="cap-logos sr">
+        <span>Powered by</span>
+        <img src="https://cdn.worldvectorlogo.com/logos/openai-2.svg" alt="OpenAI">
+        <img src="https://cdn.simpleicons.org/anthropic/000000" alt="Claude">
+        <img src="https://cdn.simpleicons.org/googlegemini/000000" alt="Gemini">
+        <img src="https://cdn.simpleicons.org/elevenlabs/000000" alt="ElevenLabs">
+        <img src="https://cdn.simpleicons.org/meta/000000" alt="Meta AI">
+      </div>
+    </div>
+  </section>
+
+  <!-- DEMO -->
+  <section class="section section-lg demo-section" id="demo">
+    <div class="wrap">
+      <div class="demo-grid">
+        <div class="sr-right">
+          <p class="sec-label">Live Demo</p>
+          <h2 class="sec-title">Talk to our AI. Right now.</h2>
+          <p class="sec-sub">Click the mic and have a real conversation. This is exactly what your customers will experience — whether they call you, WhatsApp you, or message you on Facebook.</p>
+          <div class="lang-tags">
+            <span class="lang-tag">English</span>
+            <span class="lang-tag">Hindi</span>
+            <span class="lang-tag">Telugu</span>
+            <span class="lang-tag">Tamil</span>
+            <span class="lang-tag">Kannada</span>
+            <span class="lang-tag">Bengali</span>
+            <span class="lang-tag">Marathi</span>
+          </div>
+        </div>
+        <div class="demo-box sr-left">
+          <div class="demo-status"><span class="pulse"></span> Live Agent</div>
+          <div class="voice-wave">
+            <div class="vbar"></div><div class="vbar"></div><div class="vbar"></div>
+            <div class="vbar"></div><div class="vbar"></div><div class="vbar"></div>
+            <div class="vbar"></div><div class="vbar"></div><div class="vbar"></div>
+            <div class="vbar"></div>
+          </div>
+          <button class="btn" onclick="startDemo()" style="margin-top:8px; background:#fff; color:#0a0a0a;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+            Start Conversation
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- USE CASES CAROUSEL -->
+  <section class="section section-lg" id="usecases">
+    <div class="wrap">
+      <div class="carousel-header sr">
+        <div>
+          <p class="sec-label">Use Cases</p>
+          <h2 class="sec-title">Works across industries.</h2>
+        </div>
+        <div class="carousel-nav">
+          <button class="carousel-btn" onclick="carouselScroll(-1)" aria-label="Previous"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></button>
+          <button class="carousel-btn" onclick="carouselScroll(1)" aria-label="Next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
+        </div>
+      </div>
+      <div class="carousel-track-wrapper">
+        <div class="carousel-track" id="carousel-track">
+          <div class="carousel-card">
+            <img src="https://images.pexels.com/photos/7682350/pexels-photo-7682350.jpeg?auto=compress&w=1200" alt="Customer Support" loading="lazy">
+            <div class="card-overlay"></div>
+            <span class="card-label">Customer Support</span>
+          </div>
+          <div class="carousel-card">
+            <img src="https://images.pexels.com/photos/8470792/pexels-photo-8470792.jpeg?auto=compress&w=1200" alt="Sales" loading="lazy">
+            <div class="card-overlay"></div>
+            <span class="card-label">Sales & Leads</span>
+          </div>
+          <div class="carousel-card">
+            <img src="https://images.pexels.com/photos/925786/pexels-photo-925786.jpeg?auto=compress&w=1200" alt="HR" loading="lazy">
+            <div class="card-overlay"></div>
+            <span class="card-label">HR & Internal</span>
+          </div>
+          <div class="carousel-card">
+            <img src="https://images.pexels.com/photos/18568174/pexels-photo-18568174.jpeg?auto=compress&w=1200" alt="Manufacturing" loading="lazy">
+            <div class="card-overlay"></div>
+            <span class="card-label">Manufacturing</span>
+          </div>
+          <div class="carousel-card">
+            <img src="https://images.pexels.com/photos/5215013/pexels-photo-5215013.jpeg?auto=compress&w=1200" alt="Healthcare" loading="lazy">
+            <div class="card-overlay"></div>
+            <span class="card-label">Healthcare</span>
+          </div>
+          <div class="carousel-card">
+            <img src="https://images.pexels.com/photos/6207729/pexels-photo-6207729.jpeg?auto=compress&w=1200" alt="E-commerce" loading="lazy">
+            <div class="card-overlay"></div>
+            <span class="card-label">E-commerce</span>
+          </div>
+          <div class="carousel-card">
+            <img src="https://images.pexels.com/photos/18774966/pexels-photo-18774966.jpeg?auto=compress&w=1200" alt="Real Estate" loading="lazy">
+            <div class="card-overlay"></div>
+            <span class="card-label">Real Estate</span>
+          </div>
+          <div class="carousel-card">
+            <img src="https://images.pexels.com/photos/5306476/pexels-photo-5306476.jpeg?auto=compress&w=1200" alt="Education" loading="lazy">
+            <div class="card-overlay"></div>
+            <span class="card-label">Education</span>
+          </div>
+        </div>
+      </div>
+      <div class="carousel-progress" id="carousel-progress"></div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="section" id="how">
+    <div class="wrap">
+      <div class="sec-header centered sr">
+        <p class="sec-label">How It Works</p>
+        <h2 class="sec-title">Live in 48 hours. Not 48 days.</h2>
+        <p class="sec-sub">We handle setup, training, and deployment. You just share your knowledge.</p>
+      </div>
+      <div class="steps-row sr-scale">
+        <div class="step-item">
+          <div class="step-num">01</div>
+          <h3>Share your knowledge</h3>
+          <p>Send your FAQs, product docs, policies, and call scripts. We train the AI on your specific business context.</p>
+        </div>
+        <div class="step-connector"></div>
+        <div class="step-item">
+          <div class="step-num">02</div>
+          <h3>We build & test</h3>
+          <p>We set up your AI agent on every channel — phone, WhatsApp, Facebook, website. You test with real questions before going live.</p>
+        </div>
+        <div class="step-connector"></div>
+        <div class="step-item">
+          <div class="step-num">03</div>
+          <h3>Go live & iterate</h3>
+          <p>Customers start getting instant responses. We monitor and improve continuously.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- COMPARISON -->
+  <section class="section section-lg" id="compare">
+    <div class="wrap">
+      <div class="compare-split sr-scale">
+        <div class="compare-left">
+          <p class="sec-label">Why Switch</p>
+          <h2 class="sec-title">Save 10x on customer support.</h2>
+          <p style="font-size:0.95rem; line-height:1.6; margin-top:16px; max-width:400px;">Replace ₹20-40K/month human agents with an AI that works 24/7, speaks 10+ languages, and handles unlimited conversations across every channel.</p>
+          <a href="https://calendly.com/tharunkmr3/30min" target="_blank" class="btn btn-primary" style="margin-top:32px;">See it in action</a>
+        </div>
+        <div class="compare-table">
+          <div class="compare-header-row">
+            <span></span><span class="compare-h">Human</span><span class="compare-h compare-h-ai">AI Agent</span>
+          </div>
+          <div class="compare-data-row"><span>Monthly cost</span><span>₹20-40K</span><span class="win">₹15K</span></div>
+          <div class="compare-data-row"><span>Availability</span><span>8-10 hrs</span><span class="win">24/7</span></div>
+          <div class="compare-data-row"><span>Languages</span><span>1-2</span><span class="win">10+</span></div>
+          <div class="compare-data-row"><span>Channels</span><span>Phone</span><span class="win">All</span></div>
+          <div class="compare-data-row"><span>Concurrent</span><span>1</span><span class="win">∞</span></div>
+          <div class="compare-data-row"><span>Setup time</span><span>2-4 wks</span><span class="win">48 hrs</span></div>
+          <div class="compare-data-row"><span>Attrition</span><span>30-40%</span><span class="win">Zero</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SAFE & FLEXIBLE -->
+  <section id="trust" style="min-height:100vh; display:flex; align-items:flex-end; background: linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.85) 100%), url('images/logos/safe_secure.png') top center / cover no-repeat, #0a0a0a; color:var(--bg); padding:0 0 80px;">
+    <div class="wrap">
+      <h2 class="sec-title sr" style="color:#fff; margin-bottom:48px; font-size:clamp(2.2rem,5vw,3.8rem);">Safe. Flexible.<br>Built for business.</h2>
+      <div class="trust-strip sr">
+        <div class="trust-item">
+          <h3>Security</h3>
+          <p>Data stays in India. End-to-end encryption, GDPR compliant, enterprise-grade access controls.</p>
+        </div>
+        <div class="trust-item">
+          <h3>Integrations</h3>
+          <p>Zoho, HubSpot, Salesforce, Shopify, Google Calendar, Zapier, Slack — plug into your workflow.</p>
+        </div>
+        <div class="trust-item">
+          <h3>Customization</h3>
+          <p>Trained on your products, policies, and brand voice. Every business gets a unique agent.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRICING -->
+  <section class="section" id="pricing">
+    <div class="wrap">
+      <div class="sec-header sr">
+        <p class="sec-label">Pricing</p>
+        <h2 class="sec-title">Simple, transparent pricing.</h2>
+      </div>
+      <div class="pricing-duo sr-scale">
+        <div class="price-card">
+          <div class="price-name">Starter</div>
+          <div class="price-amount">&#8377;15,000<span class="price-period"> /mo</span></div>
+          <p class="price-desc-line">For small businesses getting started with one channel.</p>
+          <ul class="price-list">
+            <li>Up to 500 conversations/month</li>
+            <li>1 AI agent (any channel)</li>
+            <li>Knowledge base setup</li>
+            <li>English + 2 Indian languages</li>
+            <li>Human escalation</li>
+            <li>Email support</li>
+          </ul>
+          <a href="https://calendly.com/tharunkmr3/30min" target="_blank" class="price-btn price-btn-outline">Get Started</a>
+        </div>
+        <div class="price-card featured">
+          <div class="price-name">Growth</div>
+          <div class="price-amount">&#8377;35,000<span class="price-period"> /mo</span></div>
+          <p class="price-desc-line">All channels — phone, WhatsApp, Facebook, website.</p>
+          <ul class="price-list">
+            <li>Up to 2,000 conversations/month</li>
+            <li>Phone + WhatsApp + Facebook + Website</li>
+            <li>Knowledge base + ongoing updates</li>
+            <li>All Indian languages</li>
+            <li>Lead capture & meeting booking</li>
+            <li>Analytics dashboard</li>
+            <li>Priority support</li>
+          </ul>
+          <a href="https://calendly.com/tharunkmr3/30min" target="_blank" class="price-btn price-btn-fill">Get Started</a>
+        </div>
+      </div>
+      <p class="enterprise-line sr">Need more? <a href="https://calendly.com/tharunkmr3/30min" target="_blank">Talk to us about Enterprise plans</a> — unlimited conversations, custom integrations, SLA guarantee.</p>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="section section-lg" id="faq">
+    <div class="wrap">
+      <div class="faq-grid">
+        <h2 class="faq-title sr">Your questions,<br>answered.</h2>
+        <div class="faq-list sr">
+          <details class="faq-item"><summary>What channels do you support?</summary><div class="faq-body">Phone calls (inbound & outbound), WhatsApp, Facebook Messenger, and website chat widget. Set up once — your AI agent works across all of them from one knowledge base.</div></details>
+          <details class="faq-item"><summary>Which languages are supported?</summary><div class="faq-body">English, Hindi, Telugu, Tamil, Kannada, Bengali, Marathi, Gujarati, Malayalam, and Punjabi — across voice and chat. The AI detects the language automatically.</div></details>
+          <details class="faq-item"><summary>How long does setup take?</summary><div class="faq-body">48 hours from when you share your knowledge base. We handle configuration, testing, and deployment across all channels. You just share your FAQs and docs.</div></details>
+          <details class="faq-item"><summary>Can the AI book meetings and follow up?</summary><div class="faq-body">Yes. It collects requirements, checks availability, books meetings, sends confirmations, and follows up — across voice, chat, and WhatsApp.</div></details>
+          <details class="faq-item"><summary>Is this just a basic chatbot?</summary><div class="faq-body">No. We use the world's best AI models — ChatGPT, Claude, Gemini, and ElevenLabs for voice. Your agent has real conversations, understands context, and sounds human on calls. Nothing like old-school chatbots.</div></details>
+          <details class="faq-item"><summary>Can we use this for internal teams too?</summary><div class="faq-body">Absolutely. Many companies use it for employee queries — leave policies, reimbursements, IT tickets. Set it up on WhatsApp or your internal portal. Customer-facing and internal — same platform.</div></details>
+          <details class="faq-item"><summary>Do we need a tech team to manage this?</summary><div class="faq-body">No. We handle everything — setup, training, deployment. You just share your FAQs and docs. Built specifically for businesses without IT teams.</div></details>
+          <details class="faq-item"><summary>What happens when the AI can't answer?</summary><div class="faq-body">It transfers to your team with full context — what was discussed, customer details, and why it's escalating. Works the same across phone, WhatsApp, Facebook, and web chat.</div></details>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="cta-footer-wrap">
+  <!-- CTA -->
+  <section class="cta-section">
+    <div class="wrap">
+      <div class="cta-inner sr">
+        <p class="sec-label">Get Started</p>
+        <h2 class="sec-title">Ready to deploy your AI agent?</h2>
+        <p class="sec-sub" style="margin: 16px auto 36px;">Book a 30-minute call. We'll build a working demo for your business — no tech skills needed. We handle everything.</p>
+        <a href="https://calendly.com/tharunkmr3/30min" target="_blank" class="btn btn-primary">Book a Free Demo Call &rarr;</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="wrap">
+      <div class="foot-inner">
+        <div class="foot-left">&copy; 2026 Jordon &mdash; India</div>
+        <ul class="foot-links">
+          <li><a href="mailto:tharunkmr3@gmail.com">Contact</a></li>
+          <li><a href="https://calendly.com/tharunkmr3/30min" target="_blank">Book a Call</a></li>
+          <li><a href="https://linkedin.com/in/tharunjosh" target="_blank">LinkedIn</a></li>
+          <li><a href="/privacy">Privacy</a></li>
+          <li><a href="/terms">Terms</a></li>
+        </ul>
+      </div>
+    </div>
+  </footer>
+  </div>
+
+  <!-- THREE.JS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script>
+    // ── THREE.JS ASCII DOT FIELD ──
+    (function() {
+      const canvas = document.getElementById('hero-canvas');
+      if (!canvas) return;
+      const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+      camera.position.z = 28;
+
+      const cols = 70, rows = 35;
+      const count = cols * rows;
+      const positions = new Float32Array(count * 3);
+      const randoms = new Float32Array(count);
+
+      for (let i = 0; i < count; i++) {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        positions[i * 3]     = (col - cols / 2) * 0.55;
+        positions[i * 3 + 1] = (row - rows / 2) * 0.55;
+        positions[i * 3 + 2] = 0;
+        randoms[i] = Math.random();
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geo.setAttribute('aRandom', new THREE.BufferAttribute(randoms, 1));
+
+      function getColor() {
+        return document.documentElement.getAttribute('data-theme') === 'dark'
+          ? new THREE.Color(0xfafafa)
+          : new THREE.Color(0x0a0a0a);
+      }
+
+      const mat = new THREE.ShaderMaterial({
+        uniforms: {
+          uTime: { value: 0 },
+          uColor: { value: getColor() },
+          uSize: { value: 2.5 * Math.min(window.devicePixelRatio, 2) }
+        },
+        vertexShader: `
+          attribute float aRandom;
+          uniform float uTime;
+          uniform float uSize;
+          varying float vAlpha;
+          void main() {
+            vec3 pos = position;
+            float w1 = sin(pos.x * 0.18 + uTime * 0.4) * 1.8;
+            float w2 = cos(pos.y * 0.22 + uTime * 0.3) * 1.2;
+            float w3 = sin((pos.x + pos.y) * 0.12 + uTime * 0.35 + aRandom * 3.14) * 0.9;
+            pos.z += (w1 + w2 + w3) * 0.4;
+            vAlpha = 0.08 + 0.55 * smoothstep(-1.5, 2.0, pos.z);
+            vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+            gl_PointSize = uSize * (1.0 + pos.z * 0.12) * (18.0 / -mv.z);
+            gl_Position = projectionMatrix * mv;
+          }
+        `,
+        fragmentShader: `
+          uniform vec3 uColor;
+          varying float vAlpha;
+          void main() {
+            float d = length(gl_PointCoord - 0.5);
+            if (d > 0.5) discard;
+            float a = vAlpha * smoothstep(0.5, 0.1, d);
+            gl_FragColor = vec4(uColor, a);
+          }
+        `,
+        transparent: true,
+        depthWrite: false
+      });
+
+      const points = new THREE.Points(geo, mat);
+      scene.add(points);
+
+      function resize() {
+        const w = canvas.clientWidth, h = canvas.clientHeight;
+        renderer.setSize(w, h, false);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+      }
+      resize();
+      window.addEventListener('resize', resize);
+
+      let time = 0;
+      function animate() {
+        time += 0.01;
+        mat.uniforms.uTime.value = time;
+        points.rotation.x = Math.sin(time * 0.15) * 0.05;
+        points.rotation.y = Math.cos(time * 0.12) * 0.04;
+        renderer.render(scene, camera);
+        requestAnimationFrame(animate);
+      }
+      animate();
+
+      // Expose color update for theme toggle
+      window._updateParticleColor = function() {
+        mat.uniforms.uColor.value = getColor();
+      };
+    })();
+
+    // ── THEME TOGGLE ──
+    function toggleTheme() {
+      const html = document.documentElement;
+      const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      html.setAttribute('data-theme', next);
+      localStorage.setItem('theme', next);
+      if (window._updateParticleColor) window._updateParticleColor();
+    }
+    // Restore saved theme (default: dark)
+    (function() {
+      const saved = localStorage.getItem('theme') || 'light';
+      document.documentElement.setAttribute('data-theme', saved);
+      if (window._updateParticleColor) setTimeout(window._updateParticleColor, 100);
+    })();
+
+    // ── NAV SCROLL EFFECT ──
+    (function() {
+      const nav = document.querySelector('nav');
+      window.addEventListener('scroll', () => {
+        if (window.scrollY > 50) {
+          nav.classList.add('scrolled');
+        } else {
+          nav.classList.remove('scrolled');
+        }
+      });
+    })();
+
+    // ── SCROLL REVEAL ──
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          e.target.classList.add('vis');
+          io.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.06, rootMargin: '0px 0px -40px 0px' });
+    document.querySelectorAll('.sr, .sr-scale, .sr-left, .sr-right, .section-fade').forEach(el => io.observe(el));
+
+    // Auto-add section-fade to all section > .wrap
+    document.querySelectorAll('.section > .wrap, .stats-band > .wrap, .cta-section > .wrap').forEach(el => {
+      if (!el.classList.contains('section-fade')) el.classList.add('section-fade');
+      io.observe(el);
+    });
+
+    // Fallback
+    setTimeout(() => document.querySelectorAll('.sr, .sr-scale, .sr-left, .sr-right, .section-fade').forEach(el => el.classList.add('vis')), 2500);
+
+    // ── PARALLAX ON SCROLL ──
+    (function() {
+      const imgs = document.querySelectorAll('.parallax-img');
+      if (!imgs.length) return;
+      window.addEventListener('scroll', () => {
+        const scrollY = window.scrollY;
+        imgs.forEach(img => {
+          const rect = img.getBoundingClientRect();
+          const speed = 0.05;
+          const yPos = (rect.top - window.innerHeight / 2) * speed;
+          img.style.transform = 'translateY(' + yPos + 'px)';
+        });
+      }, { passive: true });
+    })();
+
+    // ── COUNTER ANIMATION ──
+    (function() {
+      const counters = document.querySelectorAll('.stat-num');
+      const counterIO = new IntersectionObserver((entries) => {
+        entries.forEach(e => {
+          if (e.isIntersecting) {
+            const el = e.target;
+            const final = el.textContent;
+            // Only animate simple numbers like "10x" or "10+"
+            const match = final.match(/^(\d+)(.+)$/);
+            if (match && !final.includes('/')) {
+              const num = parseInt(match[1]);
+              const suffix = match[2];
+              let current = 0;
+              const step = Math.ceil(num / 25);
+              const interval = setInterval(() => {
+                current += step;
+                if (current >= num) { current = num; clearInterval(interval); }
+                el.textContent = current + suffix;
+              }, 40);
+            }
+            counterIO.unobserve(el);
+          }
+        });
+      }, { threshold: 0.5 });
+      counters.forEach(c => counterIO.observe(c));
+    })();
+
+    // Text decode removed — using blur-reveal CSS animation
+
+    // ── CAPABILITIES TABS ──
+    (function() {
+      const tabs = document.querySelectorAll('.cap-tab');
+      const imgs = document.querySelectorAll('.cap-visual-img');
+      tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+          const cap = tab.dataset.cap;
+          tabs.forEach(t => t.classList.remove('active'));
+          imgs.forEach(i => i.classList.remove('active'));
+          tab.classList.add('active');
+          document.querySelector('.cap-visual-img[data-cap="' + cap + '"]').classList.add('active');
+        });
+      });
+    })();
+
+    // ── CHAT TYPING EFFECT ──
+    (function() {
+      const el = document.getElementById('chat-typing');
+      if (!el) return;
+      const prompts = [
+        'What is the status of my order #4521?',
+        'Book an appointment for tomorrow at 3 PM',
+        'I need to speak with someone about my refund',
+        'What are your working hours on weekends?',
+        'How do I reset my password?',
+        'Schedule a site visit for the 3BHK flat',
+        'Check my leave balance for this quarter',
+        'When will my shipment arrive?',
+      ];
+      let promptIdx = 0, charIdx = 0, isDeleting = false;
+
+      function tick() {
+        const current = prompts[promptIdx];
+        if (!isDeleting) {
+          el.innerHTML = current.substring(0, charIdx) + '<span class="cursor"></span>';
+          charIdx++;
+          if (charIdx > current.length) {
+            setTimeout(() => { isDeleting = true; tick(); }, 2200);
+            return;
+          }
+          setTimeout(tick, 40 + Math.random() * 30);
+        } else {
+          el.innerHTML = current.substring(0, charIdx) + '<span class="cursor"></span>';
+          charIdx--;
+          if (charIdx < 0) {
+            isDeleting = false; charIdx = 0;
+            promptIdx = (promptIdx + 1) % prompts.length;
+            setTimeout(tick, 400);
+            return;
+          }
+          setTimeout(tick, 20);
+        }
+      }
+      setTimeout(tick, 1000);
+    })();
+
+    // ── CHANNELS TABS ──
+    (function() {
+      const items = document.querySelectorAll('.ch-item');
+      const slides = document.querySelectorAll('.ch-slide');
+      const descArea = document.getElementById('ch-desc');
+      // Play the first video
+      const firstVid = document.querySelector('.ch-slide.active video');
+      if (firstVid) firstVid.play().catch(() => {});
+
+      items.forEach(item => {
+        item.addEventListener('click', () => {
+          const ch = item.dataset.channel;
+          // Pause all videos
+          slides.forEach(s => {
+            s.classList.remove('active');
+            const v = s.querySelector('video');
+            if (v) v.pause();
+          });
+          items.forEach(i => i.classList.remove('active'));
+          item.classList.add('active');
+          const activeSlide = document.querySelector('.ch-slide[data-channel="' + ch + '"]');
+          activeSlide.classList.add('active');
+          // Play the new active video
+          const vid = activeSlide.querySelector('video');
+          if (vid) { vid.currentTime = 0; vid.play().catch(() => {}); }
+          // Animate description change
+          const desc = item.querySelector('.ch-item-desc');
+          if (desc && descArea) {
+            descArea.classList.add('fading');
+            setTimeout(() => {
+              descArea.textContent = desc.textContent;
+              descArea.classList.remove('fading');
+            }, 250);
+          }
+        });
+      });
+    })();
+
+    // ── CAROUSEL ──
+    (function() {
+      const track = document.getElementById('carousel-track');
+      const progress = document.getElementById('carousel-progress');
+      if (!track) return;
+      const cards = track.querySelectorAll('.carousel-card');
+      const cardWidth = 340; // 320 + 20 gap
+      const totalPages = Math.ceil(cards.length / 3);
+      let currentPage = 0;
+
+      // Build progress dots
+      for (let i = 0; i < totalPages; i++) {
+        const dot = document.createElement('div');
+        dot.className = 'carousel-dot' + (i === 0 ? ' active' : '');
+        progress.appendChild(dot);
+      }
+
+      function updateCarousel() {
+        const maxScroll = track.scrollWidth - track.parentElement.clientWidth;
+        const offset = Math.min(currentPage * cardWidth * 3, maxScroll);
+        track.style.transform = 'translateX(-' + offset + 'px)';
+        progress.querySelectorAll('.carousel-dot').forEach((d, i) => {
+          d.classList.toggle('active', i === currentPage);
+        });
+      }
+
+      window.carouselScroll = function(dir) {
+        currentPage = Math.max(0, Math.min(totalPages - 1, currentPage + dir));
+        updateCarousel();
+      };
+
+      // Drag support
+      let isDragging = false, startX = 0, scrollStart = 0;
+      track.addEventListener('mousedown', e => {
+        isDragging = true; startX = e.pageX;
+        const transform = getComputedStyle(track).transform;
+        const matrix = new DOMMatrix(transform);
+        scrollStart = matrix.m41;
+        track.classList.add('dragging');
+      });
+      window.addEventListener('mousemove', e => {
+        if (!isDragging) return;
+        const dx = e.pageX - startX;
+        track.style.transform = 'translateX(' + (scrollStart + dx) + 'px)';
+      });
+      window.addEventListener('mouseup', e => {
+        if (!isDragging) return;
+        isDragging = false;
+        track.classList.remove('dragging');
+        const dx = e.pageX - startX;
+        if (dx < -60) carouselScroll(1);
+        else if (dx > 60) carouselScroll(-1);
+        else updateCarousel();
+      });
+
+      // Touch support
+      track.addEventListener('touchstart', e => {
+        startX = e.touches[0].pageX;
+        const transform = getComputedStyle(track).transform;
+        const matrix = new DOMMatrix(transform);
+        scrollStart = matrix.m41;
+      }, { passive: true });
+      track.addEventListener('touchmove', e => {
+        const dx = e.touches[0].pageX - startX;
+        track.style.transform = 'translateX(' + (scrollStart + dx) + 'px)';
+      }, { passive: true });
+      track.addEventListener('touchend', e => {
+        const dx = e.changedTouches[0].pageX - startX;
+        if (dx < -40) carouselScroll(1);
+        else if (dx > 40) carouselScroll(-1);
+        else updateCarousel();
+      });
+    })();
+
+    // ── DEMO PLACEHOLDER ──
+    function startDemo() {
+      // Try multiple approaches to open the ElevenLabs widget
+      const widget = document.querySelector('elevenlabs-convai');
+      if (widget) {
+        // Try setting attribute
+        widget.setAttribute('expanded', 'true');
+        // Try clicking the widget's shadow DOM button
+        const shadow = widget.shadowRoot;
+        if (shadow) {
+          const btn = shadow.querySelector('button');
+          if (btn) btn.click();
+        }
+        // Try dispatching click on the widget itself
+        widget.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      }
+    }
+  </script>
+
+  <!-- JSON-LD -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "Jordon",
+    "url": "https://jordon.ai",
+    "description": "AI chatbots and voice agents for non-IT businesses in India. Set up once — works on phone, WhatsApp, Facebook, and your website. Powered by ChatGPT, Claude, Gemini, and ElevenLabs. Customer-facing or internal use.",
+    "founder": { "@type": "Person", "name": "Tharun Josh", "url": "https://linkedin.com/in/tharunjosh" },
+    "areaServed": { "@type": "Country", "name": "India" },
+    "contactPoint": { "@type": "ContactPoint", "contactType": "sales", "email": "tharunkmr3@gmail.com", "url": "https://calendly.com/tharunkmr3/30min" }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      { "@type": "Question", "name": "What channels do Jordon support?", "acceptedAnswer": { "@type": "Answer", "text": "Voice calls (inbound & outbound), website chatbots, and WhatsApp bots — all from one platform." }},
+      { "@type": "Question", "name": "Which languages are supported?", "acceptedAnswer": { "@type": "Answer", "text": "English, Hindi, Telugu, Tamil, Kannada, Bengali, Marathi, Gujarati, Malayalam, and Punjabi — across voice and chat." }},
+      { "@type": "Question", "name": "How long does setup take?", "acceptedAnswer": { "@type": "Answer", "text": "48 hours from when you share your knowledge base materials." }},
+      { "@type": "Question", "name": "How much do AI chatbots and voice agents cost?", "acceptedAnswer": { "@type": "Answer", "text": "Starter plans from 15,000 INR/month. Growth plans at 35,000 INR/month for voice + chatbot + WhatsApp with all Indian languages." }}
+    ]
+  }
+  </script>
+  <elevenlabs-convai agent-id="agent_2101kp50kb71f5nst6g3vjtxef6g"></elevenlabs-convai>
+  <script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async type="text/javascript"></script>
+</body>
+</html>

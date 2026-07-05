@@ -1,0 +1,30 @@
+User-agent: *
+Allow: /
+Disallow: /images/logos/
+
+Sitemap: https://aiforbusinesses.in/sitemap.xml
+
+# AI Chatbot Optimization
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Amazonbot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: cohere-ai
+Allow: /

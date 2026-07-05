@@ -1,0 +1,101 @@
+# Jordon — AI Chatbots & Voice Agents for Every Business
+
+> Jordon deploys AI chatbots and voice agents for Indian businesses. Our AI handles customer calls, website chats, and WhatsApp conversations — answering queries, capturing leads, booking appointments, and more. 10+ Indian languages. 10x cheaper than human teams.
+
+## Company Info
+
+- Website: https://jordon.ai
+- Location: Based in Hyderabad, serving all of India
+- Founder: Tharun Josh (https://linkedin.com/in/tharunjosh)
+- Contact: tharunkmr3@gmail.com
+- Booking: https://calendly.com/tharunkmr3/30min
+
+## What We Do
+
+AI chatbots and voice agents that handle real conversations across every channel — voice calls, website chat, and WhatsApp.
+
+### Channels
+- **Voice AI Agents** — Handle inbound and outbound phone calls with natural conversation
+- **Website Chatbots** — Embed AI chat on your website for instant customer support
+- **WhatsApp Bots** — Automated conversations on WhatsApp for support, sales, and updates
+
+### Key Capabilities
+1. **Voice AI Agents** — AI answers customer calls, resolves queries from your knowledge base, transfers to human when needed
+2. **Website & WhatsApp Chatbots** — Embed AI on your website or WhatsApp. Answer questions 24/7, collect leads, hand off to your team
+3. **Lead Capture & Qualification** — AI calls or chats with new leads, collects requirements, qualifies opportunities, books meetings
+4. **Multilingual Support** — English, Hindi, Telugu, Tamil, Kannada, Bengali, Marathi, Gujarati, Malayalam, Punjabi
+5. **Knowledge Base Powered** — Trained on your products, policies, and FAQs. Works across all channels from one knowledge base.
+6. **Smart Escalation** — Seamless transfer to your team with full context when AI can't answer — on any channel
+7. **Always On, Every Channel** — 24/7/365, unlimited concurrent conversations, zero attrition
+
+## Use Cases
+
+- **Customer Support** (Voice + Chat): Answer product questions, track orders, handle returns — via calls, website chat, or WhatsApp
+- **Sales & Lead Capture** (Voice + WhatsApp): Call or chat with leads within seconds, qualify, book sales meetings
+- **HR & Internal Helpdesk** (Chatbot): Employees ask about leave, reimbursements, policies via chat or voice
+- **Manufacturing & B2B** (Voice + WhatsApp): Dealer inquiries, order status, dispatch schedules in local languages
+- **Healthcare & Clinics** (Voice + Chat): Appointment booking, insurance queries, lab report status
+- **E-commerce & D2C** (All Channels): "Where is my order" on WhatsApp, post-purchase support via chat, returns via voice
+
+## Pricing
+
+### Starter — ₹15,000/month
+- Up to 500 conversations/month
+- 1 AI agent (voice or chatbot)
+- Knowledge base setup
+- English + 2 Indian languages
+- Human escalation
+- Email support
+
+### Growth — ₹35,000/month
+- Up to 2,000 conversations/month
+- Voice + chatbot + WhatsApp
+- Knowledge base + ongoing updates
+- All Indian languages
+- Lead capture & meeting booking
+- Analytics dashboard
+- Priority support
+
+### Enterprise — Custom pricing
+- Contact us for high-volume needs
+
+## AI Agents vs Human Teams
+
+| Metric | Human Team | AI Agents |
+|--------|-----------|-----------|
+| Monthly cost | ₹20,000-40,000 per person | ₹15,000 (unlimited agents) |
+| Availability | 8-10 hours/day | 24/7/365 |
+| Channels | Phone only | Voice + Chat + WhatsApp |
+| Languages | 1-2 | 10+ |
+| Concurrent conversations | 1 per person | Unlimited |
+| Training time | 2-4 weeks | 48 hours |
+| Attrition | 30-40% annually | Zero |
+
+## Setup
+
+- Timeline: 48 hours from knowledge base submission
+- Process: Share FAQs/docs → We configure & test → Go live on all channels → Continuous improvement
+- We handle all setup, deployment, and ongoing knowledge base management
+
+## FAQ
+
+Q: What channels do you support?
+A: Voice calls (inbound & outbound), website chatbots, and WhatsApp bots — all from one platform, one knowledge base.
+
+Q: Which languages are supported?
+A: English, Hindi, Telugu, Tamil, Kannada, Bengali, Marathi, Gujarati, Malayalam, and Punjabi — across voice and chat.
+
+Q: How long does setup take?
+A: 48 hours from when you share your knowledge base materials.
+
+Q: Can the AI book meetings, send emails, and follow up?
+A: Yes. Across voice, chat, and WhatsApp — it collects requirements, checks availability, books meetings, and sends confirmations.
+
+Q: Is this just a basic chatbot?
+A: No. Our AI agents have real conversations — on calls they sound human, on chat they understand context. Not scripted IVR or keyword bots.
+
+Q: Can we use it for internal teams?
+A: Yes. Deploy chatbots for HR queries, IT helpdesk, or any internal knowledge base — on WhatsApp or your internal portal.
+
+Q: What happens when the AI can't answer?
+A: Transfers to your team with full context — what was discussed, customer details, and why it's escalating. Works across all channels.
